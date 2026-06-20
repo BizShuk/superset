@@ -1,0 +1,79 @@
+{
+    "name": "superset",
+    "displayName": "Superset",
+    "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視。",
+    "version": "0.0.1",
+    "publisher": "shuk",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/BizShuk/superset"
+    },
+    "license": "Apache-2.0",
+    "icon": "images/icon.png",
+    "engines": {
+        "vscode": "^1.85.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "main": "./out/extension.js",
+    "activationEvents": [
+        "onStartupFinished"
+    ],
+    "contributes": {
+        "commands": [
+            {
+                "command": "superset.focusView",
+                "title": "Superset: Show Panel"
+            },
+            {
+                "command": "superset.focus",
+                "title": "Superset: Focus Terminal"
+            },
+            {
+                "command": "superset.delete",
+                "title": "Superset: Close Terminal",
+                "icon": "$(close)"
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "superset",
+                    "title": "Terminals",
+                    "icon": "images/icon.png"
+                }
+            ]
+        },
+        "views": {
+            "superset": [
+                {
+                    "id": "superset.terminals",
+                    "name": "Terminals",
+                    "contextualTitle": "Superset"
+                }
+            ]
+        },
+        "menus": {
+            "view/item/context": [
+                {
+                    "command": "superset.delete",
+                    "when": "viewItem == terminal",
+                    "group": "inline"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc --watch",
+        "package": "vsce package",
+        "test": "vitest run",
+        "test:watch": "vitest"
+    },
+    "devDependencies": {
+        "@types/vscode": "^1.85.0",
+        "typescript": "^5.4.0",
+        "vitest": "^1.6.1"
+    }
+}

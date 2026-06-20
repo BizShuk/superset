@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build output (compiled JS + sourcemaps)
+out/
+*.map
+
+# Packaged extension
+*.vsix
+
+# Editor / Claude config
+.vscode/
+.claude/
+
+# OS metadata
+.DS_Store
+
+# Test coverage
+coverage/
