@@ -55,7 +55,7 @@ npm run build
 npm run watch
 ```
 
-執行單元測試 (Vitest,28 個 case):
+執行單元測試 (Vitest,29 個 case):
 
 ```bash
 npm test
@@ -138,7 +138,7 @@ code --uninstall-extension shuk.superset
 - 監聽終端機開關與切換
 - 解析命令列內容 (`commandLine`)、工作目錄 (`cwd`)
 - 偵測背景終端機的新輸出並在三處高亮
-- 後續可延伸為 WebView 儀表板、或與 `log_doctor` 串接做去重冷卻
+- 後續可延伸為 WebView 儀表板
 
 ---
 
@@ -211,7 +211,7 @@ flowchart TD
 | 偵測「使用者下了什麼命令」 | `onDidStartTerminalShellExecution` | 拿 `commandLine`,可同時拿 `cwd` |
 | 偵測「命令是否成功 / 拿到 exit code」 | `onDidEndTerminalShellExecution` | payload 含 `exitCode` 與 `durationMs` |
 | 偵測「命令輸出內容」 | `TerminalShellExecution.read` | 需自行 parse ANSI/CRLF |
-| 需要去重與冷卻的場景 (如 Log Doctor) | Shell Integration 完整鏈 | start + read + end 三段式最清楚 |
+| 需要去重與冷卻的場景 | Shell Integration 完整鏈 | start + read + end 三段式最清楚 |
 | 只要追蹤「誰開了幾個分頁」 | `onDidOpenTerminal` / `onDidCloseTerminal` | 不需要 shell 整合 |
 | 切換到某個 terminal 時做事 | `onDidChangeActiveTerminal` | 可拿到 `undefined` (全部關閉時) |
 
@@ -256,22 +256,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
 ---
 
-## 與專案其他模組的關聯
-
-- `md-tree-highlight` (子模組):同為 VSCode extension,但本專案以「終端機事件流」為核心,與其 Markdown Preview 渲染正交。
-- `log_doctor` (子模組) 0.3.0:目前走 Output Channel Listener (被動接收 `logDoctor.publish` 指令)。`superset` 若要「自動偵測終端機輸出 → 觸發 Log Doctor 偵錯」,可用 `onDidStartTerminalShellExecution` + `onEnd` 串接,沿用 Log Doctor 的 dedup / cooldown 基礎建設。
-- 上層父專案 [`../CLAUDE.md`](../CLAUDE.md) 收錄了本專案的建置指令與專案結構。
-
----
-
 ## 測試 (Testing)
 
 ```bash
-npm test            # 單次跑全部 28 個 case
+npm test            # 單次跑全部 29 個 case
 npm run test:watch  # watch 模式
 ```
 
-測試覆蓋 `TerminalRegistry` 純狀態機 (10)、`OutputWatcher` shell execution 訂閱 (5)、`buildTreeItemSpec` 面板渲染 (4)、`HighlightPresenter` 前綴 + 狀態列 (8),加 1 個 smoke test。`TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/treeSpec.ts` 的純函式。
+測試覆蓋 `TerminalRegistry` 純狀態機 (10)、`OutputWatcher` shell execution 訂閱 (5)、`buildTreeItemSpec` 面板渲染 (5)、`HighlightPresenter` 前綴 + 狀態列 (8),加 1 個 smoke test。`TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/treeSpec.ts` 的純函式。
 
 ---
 
@@ -291,8 +283,6 @@ npm run test:watch  # watch 模式
 
 - [VSCode Extension Manifest 官方文件](https://code.visualstudio.com/api/references/extension-manifest)
 - [VSCode Shell Integration 官方文件](https://code.visualstudio.com/docs/terminal/shell-integration)
-- [`log_doctor`](../log_doctor/) 兄弟專案,提供 esbuild 打包的更激進瘦身範例
-- [`md-tree-highlight`](../md-tree-highlight/) 兄弟專案,純語法高亮 (Markdown preview)
 - 設計規格: [`plans/2026-06-20-terminal-dashboard-panel.md`](plans/2026-06-20-terminal-dashboard-panel.md)
 - 實作計畫: [`plans/2026-06-20-terminal-dashboard-panel.md`](plans/2026-06-20-terminal-dashboard-panel.md)
 
@@ -300,4 +290,4 @@ npm run test:watch  # watch 模式
 
 ## 授權 (License)
 
-`Apache-2.0`,見專案根目錄 [`../LICENSE`](../LICENSE)。
+`Apache-2.0`,見 [`LICENSE`](LICENSE)。
