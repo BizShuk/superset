@@ -34,6 +34,22 @@
                 "command": "superset.delete",
                 "title": "Superset: Close Terminal",
                 "icon": "$(close)"
+            },
+            {
+                "command": "superset.copyName",
+                "title": "Superset: Copy Terminal Name"
+            },
+            {
+                "command": "superset.rename",
+                "title": "Superset: Rename Terminal"
+            },
+            {
+                "command": "superset.showLogs",
+                "title": "Superset: Show Diagnostic Logs"
+            },
+            {
+                "command": "superset.openTuiTerminal",
+                "title": "Superset: Open TUI Terminal"
             }
         ],
         "viewsContainers": {
@@ -60,9 +76,36 @@
                     "command": "superset.delete",
                     "when": "viewItem == terminal",
                     "group": "inline"
+                },
+                {
+                    "command": "superset.focus",
+                    "when": "viewItem == terminal",
+                    "group": "1_focus"
+                },
+                {
+                    "command": "superset.delete",
+                    "when": "viewItem == terminal",
+                    "group": "1_focus"
+                },
+                {
+                    "command": "superset.copyName",
+                    "when": "viewItem == terminal",
+                    "group": "5_copy"
+                },
+                {
+                    "command": "superset.rename",
+                    "when": "viewItem == terminal",
+                    "group": "2_rename"
                 }
             ]
-        }
+        },
+        "keybindings": [
+            {
+                "command": "superset.rename",
+                "key": "F2",
+                "when": "focusedView == superset.terminals && !inputFocus"
+            }
+        ]
     },
     "scripts": {
         "build": "tsc",
@@ -72,8 +115,12 @@
         "test:watch": "vitest"
     },
     "devDependencies": {
+        "@types/node": "^26.0.0",
         "@types/vscode": "^1.85.0",
         "typescript": "^5.4.0",
         "vitest": "^1.6.1"
+    },
+    "dependencies": {
+        "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1"
     }
 }

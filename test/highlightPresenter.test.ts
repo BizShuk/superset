@@ -147,4 +147,42 @@ describe("HighlightPresenter", () => {
 
         expect(rec.setNameCalls).toHaveLength(0);
     });
+
+    it("degrades silently when terminal.name setter throws (VSCode 1.90+)", () => {
+        // Simulate the runtime case where `terminal.name` is a getter-only
+        // property. The presenter must catch the throw, log once, and
+        // continue updating the panel + status bar channels.
+        const registry = new TerminalRegistry();
+        const a = fakeTerminal("a");
+        registry.add(a);
+
+        const rec = recorder();
+        const log = vi.fn();
+        const presenter = new HighlightPresenter({
+            registry,
+            setTerminalName: () => {
+                throw new TypeError(
+                    "Cannot set property name of #<Object> which has only a getter"
+                );
+            },
+            setStatusBarText: (text) => rec.statusBarTexts.push(text),
+            showStatusBar: () => rec.statusShown++,
+            hideStatusBar: () => rec.statusHidden++,
+            log,
+        });
+        presenter.start();
+
+        // Should not throw even though setTerminalName always throws.
+        expect(() => registry.markUnseen(a)).not.toThrow();
+
+        // The presenter logged the degradation exactly once.
+        const degradationLogs = log.mock.calls.filter((c) =>
+            String(c[0]).includes("tab-name prefix disabled")
+        );
+        expect(degradationLogs).toHaveLength(1);
+
+        // Panel + status bar channels are still updated.
+        expect(rec.statusBarTexts).toContain("1 個終端機有新輸出");
+        expect(rec.statusShown).toBe(1);
+    });
 });

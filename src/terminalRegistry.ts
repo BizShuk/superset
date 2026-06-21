@@ -28,6 +28,10 @@ export class TerminalRegistry {
         return this.entries.has(terminal);
     }
 
+    isUnseen(terminal: TerminalHandle): boolean {
+        return this.entries.get(terminal)?.hasUnseenOutput ?? false;
+    }
+
     markUnseen(terminal: TerminalHandle): void {
         const entry = this.entries.get(terminal);
         if (!entry || entry.hasUnseenOutput) {

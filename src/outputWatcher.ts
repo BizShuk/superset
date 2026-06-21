@@ -16,6 +16,12 @@ export interface OutputWatcherDeps {
     onShellExecution: (
         cb: (event: ShellExecutionStartEvent) => void
     ) => () => void;
+    /**
+     * Optional diagnostic sink. Receives one human-readable line per
+     * meaningful decision the watcher makes, used to trace why the
+     * unseen-highlight chain failed in a user's environment.
+     */
+    log?: (msg: string) => void;
 }
 
 export class OutputWatcher {
@@ -29,14 +35,28 @@ export class OutputWatcher {
         }
         this.dispose = this.deps.onShellExecution((event) => {
             const { terminal, execution } = event;
-            // Defensive: ignore terminals the registry doesn't know about.
+            const log = this.deps.log;
             if (!this.deps.registry.has(terminal)) {
+                log?.(`[watcher] skip "${terminal.name}": not in registry`);
                 return;
             }
+            log?.(`[watcher] wire data listener for "${terminal.name}"`);
+            let firstChunk = true;
             execution.onData(() => {
-                if (this.deps.getActiveTerminal() === terminal) {
+                const active = this.deps.getActiveTerminal();
+                if (active === terminal) {
+                    if (firstChunk) {
+                        log?.(
+                            `[watcher] skip "${terminal.name}": is active terminal`
+                        );
+                    }
                     return;
                 }
+                firstChunk = false;
+                log?.(
+                    `[watcher] markUnseen("${terminal.name}") ` +
+                        `active="${active?.name ?? "<none>"}"`
+                );
                 this.deps.registry.markUnseen(terminal);
             });
         });

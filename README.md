@@ -20,6 +20,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 新增「Termina
     - 狀態列顯示 `N 個終端機有新輸出`。
 - 重新聚焦該終端機時,所有高亮自動解除。
 - 若使用者在高亮期間手動改了終端機名稱,清除時 Presenter 只剝 `● ` 前綴、不還原舊名,避免覆蓋使用者意圖。
+- 命令 `Superset: Open TUI Terminal` 開啟 PTY-backed terminal,內部用 `node-pty` 100% 攔截 TUI app (`claude`、`vim`、`htop`) 的所有輸出。建議在跑 TUI app 前用此命令開新 terminal。
 
 ---
 
@@ -105,6 +106,8 @@ superset-0.0.1.vsix
     3. 選剛剛的 `.vsix` 檔。
 
 重新啟動 VSCode 後即可生效。
+
+> **TUI 偵測**:本擴充用 `node-pty` 自己握 PTY 來 100% 攔截 TUI app 的輸出。需要透過命令 `Superset: Open TUI Terminal` 開啟新的 terminal 才能使用此功能(命令面板搜尋 `Superset: Open`)。在裡面跑 `claude`、`vim` 等 TUI 都能正確觸發面板高亮。
 
 #### 方法 B: 從原始碼 symlink (開發用)
 

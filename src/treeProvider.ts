@@ -69,6 +69,14 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TerminalHan
         }
     }
 
+    /**
+     * Force a full tree refresh. Used after side-channel mutations
+     * (e.g., rename) that don't go through the registry.
+     */
+    refresh(): void {
+        this.emitter.fire(undefined);
+    }
+
     getTreeItem(element: TerminalHandle): vscode.TreeItem {
         const spec = buildTreeItemSpec(element, {
             isUnseen: this.unseen.has(element),

@@ -10,10 +10,23 @@ export interface HighlightPresenterDeps {
     setStatusBarText: (text: string) => void;
     showStatusBar: () => void;
     hideStatusBar: () => void;
+    /**
+     * Optional diagnostic sink. Used to surface the tab-name prefix
+     * fallback decision (see applyPrefix), since the failure is silent
+     * at the user-facing level once we degrade.
+     */
+    log?: (msg: string) => void;
 }
 
 export class HighlightPresenter {
     private unsubscribe?: () => void;
+    /**
+     * In VSCode 1.90+ `Terminal.name` is a getter-only property and the
+     * `(terminal as unknown as { name: string })` cast throws at runtime.
+     * Detect this on the first failed write and fall back to the panel +
+     * status-bar channels for the rest of the session.
+     */
+    private nameWriteSupported = true;
 
     constructor(private readonly deps: HighlightPresenterDeps) {}
 
@@ -50,13 +63,26 @@ export class HighlightPresenter {
     }
 
     private applyPrefix(terminal: TerminalHandle, isUnseen: boolean): void {
+        // Once we've seen a setter throw, stop trying — the rest of the
+        // highlight chain (panel + status bar) still works.
+        if (!this.nameWriteSupported) {
+            return;
+        }
         const current = terminal.name;
         const bare = stripUnseenPrefix(current);
         const target = isUnseen ? `${UNSEEN_PREFIX}${bare}` : bare;
         if (current === target) {
             return;
         }
-        this.deps.setTerminalName(terminal, target);
+        try {
+            this.deps.setTerminalName(terminal, target);
+        } catch (err) {
+            this.nameWriteSupported = false;
+            this.deps.log?.(
+                `[presenter] terminal.name is read-only in this VSCode; ` +
+                    `tab-name prefix disabled (panel + status bar still active): ${err}`
+            );
+        }
     }
 
     private refreshStatusBar(): void {

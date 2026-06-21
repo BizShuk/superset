@@ -136,4 +136,34 @@ describe("TerminalRegistry", () => {
 
         expect(listener).not.toHaveBeenCalled();
     });
+
+    it("isUnseen returns false for unknown terminal", () => {
+        const r = new TerminalRegistry();
+        const t = fakeTerminal("a");
+        expect(r.isUnseen(t)).toBe(false);
+    });
+
+    it("isUnseen returns false for added but not marked unseen", () => {
+        const r = new TerminalRegistry();
+        const t = fakeTerminal("a");
+        r.add(t);
+        expect(r.isUnseen(t)).toBe(false);
+    });
+
+    it("isUnseen returns true after markUnseen", () => {
+        const r = new TerminalRegistry();
+        const t = fakeTerminal("a");
+        r.add(t);
+        r.markUnseen(t);
+        expect(r.isUnseen(t)).toBe(true);
+    });
+
+    it("isUnseen returns false again after clearUnseen", () => {
+        const r = new TerminalRegistry();
+        const t = fakeTerminal("a");
+        r.add(t);
+        r.markUnseen(t);
+        r.clearUnseen(t);
+        expect(r.isUnseen(t)).toBe(false);
+    });
 });
