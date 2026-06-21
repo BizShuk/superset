@@ -21,6 +21,12 @@ export interface OutputWatcherDeps {
      * meaningful decision the watcher makes, used to trace why the
      * unseen-highlight chain failed in a user's environment.
      */
+    isRecentlyActive?: (terminal: TerminalHandle) => boolean;
+    /**
+     * Optional diagnostic sink. Receives one human-readable line per
+     * meaningful decision the watcher makes, used to trace why the
+     * unseen-highlight chain failed in a user's environment.
+     */
     log?: (msg: string) => void;
 }
 
@@ -48,6 +54,14 @@ export class OutputWatcher {
                     if (firstChunk) {
                         log?.(
                             `[watcher] skip "${terminal.name}": is active terminal`
+                        );
+                    }
+                    return;
+                }
+                if (this.deps.isRecentlyActive?.(terminal)) {
+                    if (firstChunk) {
+                        log?.(
+                            `[watcher] skip "${terminal.name}": was recently active`
                         );
                     }
                     return;

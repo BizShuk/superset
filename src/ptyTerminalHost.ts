@@ -48,6 +48,7 @@ export interface PtyTerminalHostDeps {
     args: string[];
     cwd: string;
     env: NodeJS.ProcessEnv;
+    isRecentlyActive?: (terminal: TerminalHandle) => boolean;
     log?: (msg: string) => void;
 }
 
@@ -193,6 +194,9 @@ export class PtyTerminalHost {
         }
         const active = this.deps.getActiveTerminal();
         if (active === terminal) {
+            return;
+        }
+        if (this.deps.isRecentlyActive?.(terminal)) {
             return;
         }
         this.deps.log?.(

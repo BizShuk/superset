@@ -110,6 +110,19 @@ describe("OutputWatcher", () => {
         exec.fireData("hello\n");
     });
 
+    it("does NOT mark terminal unseen if it was recently active", () => {
+        const { watcher, fire, a, registry } = setup();
+        // Mock isRecentlyActive to return true for a
+        watcher["deps"].isRecentlyActive = (terminal) => terminal === a;
+        watcher.start();
+
+        const exec = fakeExecution();
+        fire({ terminal: a, execution: exec.execution });
+        exec.fireData("hello\n");
+
+        expect(registry.getUnseen()).not.toContain(a);
+    });
+
     it("stop() unsubscribes from onShellExecution", () => {
         const { watcher } = setup();
         watcher.start();

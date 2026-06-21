@@ -7,12 +7,41 @@ import type { PtyProcess, PtySpawner } from "./ptyTerminalHost";
 import { TerminalTreeProvider } from "./treeProvider";
 import { HighlightPresenter } from "./highlightPresenter";
 import { stripUnseenPrefix } from "./treeSpec";
+import { decideAutoReplace } from "./autoReplace";
 
 export function activate(context: vscode.ExtensionContext): void {
     console.log("[superset] activated");
 
     const registry = new TerminalRegistry();
     const subscriptions: vscode.Disposable[] = [];
+
+    // PTY-backed terminals created by this extension. onDidOpenTerminal uses
+    // this to skip auto-replacement for terminals we already own.
+    const ptyBackedTerminals = new Set<vscode.Terminal>();
+
+    // Reliable "is the user watching this terminal?" source of truth.
+    // vscode.window.activeTerminal can remain stale (still pointing at a
+    // terminal) after the user clicks into an editor, and
+    // onDidChangeActiveTerminal does NOT reliably fire undefined in that case.
+    // We therefore drive this ref from BOTH onDidChangeActiveTerminal (terminal
+    // gained focus) AND onDidChangeActiveTextEditor (editor gained focus →
+    // clear to undefined). PtyTerminalHost / OutputWatcher read it via
+    // getActiveTerminal(); keeping it accurate is what makes markUnseen fire
+    // once the user has left the terminal.
+    let watchedTerminal: vscode.Terminal | undefined =
+        vscode.window.activeTerminal;
+
+    // Track when each terminal was last watched/focused, so we can ignore trailing focus-loss output.
+    const lastActiveTime = new Map<vscode.Terminal, number>();
+
+    function setWatchedTerminal(newVal: vscode.Terminal | undefined) {
+        if (watchedTerminal !== newVal) {
+            if (watchedTerminal !== undefined) {
+                lastActiveTime.set(watchedTerminal, Date.now());
+            }
+            watchedTerminal = newVal;
+        }
+    }
 
     // Diagnostic channel. We log to BOTH `console.log` (visible in
     // `View → Output → Extension Host` — easy to find) AND a dedicated
@@ -91,7 +120,11 @@ export function activate(context: vscode.ExtensionContext): void {
     // OutputWatcher: subscribe to Shell Integration events.
     const watcher = new OutputWatcher({
         registry,
-        getActiveTerminal: () => vscode.window.activeTerminal,
+        getActiveTerminal: () => watchedTerminal,
+        isRecentlyActive: (terminal) => {
+            const t = lastActiveTime.get(terminal as vscode.Terminal);
+            return t !== undefined && Date.now() - t < 250;
+        },
         log,
         onShellExecution: (cb) => {
             const disposable = vscode.window.onDidStartTerminalShellExecution(
@@ -114,7 +147,8 @@ export function activate(context: vscode.ExtensionContext): void {
                                             dataCb(chunk);
                                             log(
                                                 `shell-exec.chunk ${chunk.length}B ` +
-                                                    `for "${event.terminal.name}"`
+                                                    `for "${event.terminal.name}": ` +
+                                                    `data=${JSON.stringify(chunk)}`
                                             );
                                         }
                                         log(`shell-exec.stream closed for "${event.terminal.name}"`);
@@ -190,7 +224,70 @@ export function activate(context: vscode.ExtensionContext): void {
     // Lifecycle: open / close / active-change events.
     subscriptions.push(
         vscode.window.onDidOpenTerminal((terminal) => {
-            registry.add(terminal);
+            if (ptyBackedTerminals.has(terminal)) {
+                // Terminal we spawned — add to registry and let PtyTerminalHost
+                // handle TUI detection via node-pty onData.
+                registry.add(terminal);
+                return;
+            }
+            // Decide whether this terminal is a "plain panel terminal" we can
+            // faithfully reproduce. Terminals with a custom location (editor
+            // area / split), custom shell, hidden flag, an existing pty, or an
+            // agent-owned name are left untouched — disposing-and-cloning them
+            // loses options we cannot read back (the editor-area-relocation
+            // and Antigravity-breakage bugs). Those fall back to OutputWatcher.
+            //
+            // Diagnostic: log the raw creationOptions so a repro can confirm
+            // whether `location` is actually populated for editor-area
+            // terminals (the one field whose presence we cannot verify
+            // without a real VSCode instance).
+            const opts = (terminal.creationOptions ?? {}) as Record<
+                string,
+                unknown
+            >;
+            log(
+                `[auto-pty] onOpen "${terminal.name}" ` +
+                    `creationOptions=${JSON.stringify({
+                        location: opts.location,
+                        shellPath: opts.shellPath,
+                        shellArgs: opts.shellArgs,
+                        hideFromUser: opts.hideFromUser,
+                        hasPty: Boolean(opts.pty),
+                    })}`
+            );
+            const decision = decideAutoReplace(
+                {
+                    location: opts.location,
+                    shellPath: opts.shellPath as string | undefined,
+                    shellArgs: opts.shellArgs as string | string[] | undefined,
+                    hideFromUser: opts.hideFromUser as boolean | undefined,
+                    pty: opts.pty,
+                },
+                terminal.name
+            );
+            if (!decision.replace) {
+                log(
+                    `[auto-pty] skip "${terminal.name}": ${decision.reason} ` +
+                        `(OutputWatcher fallback)`
+                );
+                registry.add(terminal);
+                return;
+            }
+
+            // Plain panel terminal — auto-replace with a PTY-backed terminal
+            // so TUI apps are detectable without requiring proposed APIs.
+            log(
+                `[auto-pty] replacing "${terminal.name}" ` +
+                    `(${decision.reason}) with PTY-backed terminal`
+            );
+            const cwd =
+                vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+                process.cwd();
+            const pterm = spawnPtyTerminal(terminal.name, cwd);
+            pterm.show();
+            // Defer dispose: give the PTY terminal's onDidOpenTerminal a tick
+            // to fire first so the panel never shows zero terminals.
+            setTimeout(() => terminal.dispose(), 150);
         })
     );
 
@@ -205,11 +302,66 @@ export function activate(context: vscode.ExtensionContext): void {
             log(
                 `active-changed: "${terminal?.name ?? "<none>"}"`
             );
-            // Spec §7: undefined means "all closed" — do not clear flags.
+            // Update watchedTerminal. Editor-focus is handled separately by
+            // onDidChangeActiveTextEditor below, since this event does not
+            // reliably fire when focus moves from a terminal to an editor.
+            setWatchedTerminal(terminal);
+            // Spec §7: undefined means no terminal focused — do not clear flags.
             if (!terminal) {
                 return;
             }
             registry.clearUnseen(terminal);
+        })
+    );
+
+    // VSCode does NOT reliably fire onDidChangeActiveTerminal(undefined) when
+    // the user switches from a terminal to an editor tab — activeTerminal can
+    // remain stale, causing detectActivity to skip markUnseen indefinitely.
+    // Clearing watchedTerminal on any editor-focus event ensures the guard
+    // `active === terminal` is false while the user is not in the terminal.
+    subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            if (editor !== undefined) {
+                // A text editor gained focus -> clear watchedTerminal.
+                if (watchedTerminal !== undefined) {
+                    log(
+                        `[watcher] editor focused — clearing watchedTerminal ` +
+                            `was="${watchedTerminal.name}"`
+                    );
+                    setWatchedTerminal(undefined);
+                }
+                return;
+            }
+
+            // activeTextEditor is undefined. This could mean a terminal tab, a webview,
+            // or another non-text editor gained focus.
+            // Check if the currently active tab is a terminal tab in the editor group.
+            const activeTabInput = vscode.window.tabGroups?.activeTabGroup?.activeTab?.input;
+            const isTerminalTab = activeTabInput instanceof vscode.TabInputTerminal;
+
+            if (isTerminalTab) {
+                // The user focused a terminal tab in the editor area!
+                // Restore watchedTerminal to activeTerminal if it was cleared.
+                if (vscode.window.activeTerminal !== undefined) {
+                    if (watchedTerminal !== vscode.window.activeTerminal) {
+                        log(
+                            `[watcher] terminal tab focused — restoring watchedTerminal ` +
+                                `to="${vscode.window.activeTerminal.name}"`
+                        );
+                        setWatchedTerminal(vscode.window.activeTerminal);
+                    }
+                    registry.clearUnseen(vscode.window.activeTerminal);
+                }
+            } else {
+                // Focus moved to a non-terminal tab (e.g. webview, settings, etc.) -> clear watchedTerminal.
+                if (watchedTerminal !== undefined) {
+                    log(
+                        `[watcher] non-terminal editor focused — clearing watchedTerminal ` +
+                            `was="${watchedTerminal.name}"`
+                    );
+                    setWatchedTerminal(undefined);
+                }
+            }
         })
     );
 
@@ -315,43 +467,57 @@ export function activate(context: vscode.ExtensionContext): void {
         )
     );
 
-    // Open a PTY-backed terminal whose host captures every byte the
-    // shell produces, including TUI redraws. This is the only way to
-    // reliably detect output from full-screen apps (claude, vim, htop)
-    // running interactively inside the terminal — shell integration's
-    // execution.read() drops TUI-style output.
-    //
-    // Existing VSCode-built terminals (the ones you get from the + menu)
-    // are NOT converted; the user opts in by running this command. The
-    // `onDidOpenTerminal` listener above still adds the new terminal to
-    // the registry, so it shows up in the panel like any other.
+    // Spawn a PTY-backed terminal. Every byte from the shell goes through
+    // node-pty, so TUI redraws (claude, vim, htop) are captured in full.
+    // The returned terminal is pre-registered in ptyBackedTerminals so that
+    // the onDidOpenTerminal handler knows NOT to replace it again.
+    function spawnPtyTerminal(name: string, cwd: string): vscode.Terminal {
+        let terminalRef: vscode.Terminal | undefined;
+        const host = new PtyTerminalHost({
+            getTerminal: () => terminalRef,
+            registry,
+            getActiveTerminal: () => watchedTerminal,
+            isRecentlyActive: (terminal) => {
+                const t = lastActiveTime.get(terminal as vscode.Terminal);
+                return t !== undefined && Date.now() - t < 250;
+            },
+            spawn: ptySpawner,
+            shell: process.env.SHELL || "/bin/bash",
+            args: ["-i"],
+            cwd,
+            env: process.env,
+            log,
+        });
+        const pty = createPtyPseudoterminal(host);
+        terminalRef = vscode.window.createTerminal({ name, pty });
+        ptyBackedTerminals.add(terminalRef);
+        log(`spawnPtyTerminal: "${name}" cwd=${cwd}`);
+        return terminalRef;
+    }
+
+    // Legacy command kept for backwards compatibility / keybinding.
     subscriptions.push(
         vscode.commands.registerCommand(
             "superset.openTuiTerminal",
             () => {
-                // Deferred ref: the host must provide the Pseudoterminal
-                // BEFORE createTerminal returns, but the terminal object
-                // doesn't exist until after. The closure lets the host
-                // resolve it later when markUnseen needs to fire.
-                let terminalRef: vscode.Terminal | undefined;
-                const host = new PtyTerminalHost({
-                    getTerminal: () => terminalRef,
-                    registry,
-                    getActiveTerminal: () => vscode.window.activeTerminal,
-                    spawn: ptySpawner,
-                    shell: process.env.SHELL || "/bin/bash",
-                    args: ["-i"],
-                    cwd: process.cwd(),
-                    env: process.env,
-                    log,
-                });
-                const pty = createPtyPseudoterminal(host);
-                terminalRef = vscode.window.createTerminal({
-                    name: "Superset TUI",
-                    pty,
-                });
-                terminalRef.show();
-                log(`openTuiTerminal: spawned pty-backed terminal`);
+                const cwd =
+                    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+                    process.cwd();
+                spawnPtyTerminal("Superset TUI", cwd).show();
+            }
+        )
+    );
+
+    // Primary "new terminal" command. Registered so users can bind it and
+    // so the toolbar button in package.json points here.
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.newTerminal",
+            () => {
+                const cwd =
+                    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+                    process.cwd();
+                spawnPtyTerminal("bash", cwd).show();
             }
         )
     );

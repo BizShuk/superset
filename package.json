@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視。",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -50,6 +50,11 @@
             {
                 "command": "superset.openTuiTerminal",
                 "title": "Superset: Open TUI Terminal"
+            },
+            {
+                "command": "superset.newTerminal",
+                "title": "Superset: New Terminal",
+                "icon": "$(add)"
             }
         ],
         "viewsContainers": {
@@ -71,6 +76,13 @@
             ]
         },
         "menus": {
+            "view/title": [
+                {
+                    "command": "superset.newTerminal",
+                    "when": "view == superset.terminals",
+                    "group": "navigation"
+                }
+            ],
             "view/item/context": [
                 {
                     "command": "superset.delete",
@@ -104,6 +116,12 @@
                 "command": "superset.rename",
                 "key": "F2",
                 "when": "focusedView == superset.terminals && !inputFocus"
+            },
+            {
+                "command": "superset.newTerminal",
+                "key": "ctrl+shift+`",
+                "mac": "ctrl+shift+`",
+                "when": "terminalFocus || !terminalFocus"
             }
         ]
     },
@@ -118,7 +136,7 @@
         "@types/node": "^26.0.0",
         "@types/vscode": "^1.85.0",
         "typescript": "^5.4.0",
-        "vitest": "^1.6.1"
+        "vitest": "^4.1.9"
     },
     "dependencies": {
         "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1"

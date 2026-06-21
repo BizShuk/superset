@@ -274,4 +274,26 @@ describe("PtyTerminalHost", () => {
         expect(writeSpy).not.toHaveBeenCalled();
         expect(closeSpy).not.toHaveBeenCalled();
     });
+
+    it("does NOT mark host unseen on PTY data if it was recently active", () => {
+        const ctx = setup();
+        const active = ctx.other;
+        // Mock isRecentlyActive to return true for host
+        const host_instance = new PtyTerminalHost({
+            getTerminal: () => ctx.host,
+            registry: ctx.registry,
+            getActiveTerminal: () => active,
+            isRecentlyActive: (terminal) => terminal === ctx.host,
+            spawn: ctx.spawner,
+            shell: "/bin/zsh",
+            args: ["-i"],
+            cwd: "/tmp",
+            env: {},
+        });
+        host_instance.open({ columns: 80, rows: 24 });
+
+        ctx.fake.fireData("hello");
+
+        expect(ctx.registry.getUnseen()).not.toContain(ctx.host);
+    });
 });
