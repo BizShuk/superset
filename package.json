@@ -55,6 +55,27 @@
                 "command": "superset.newTerminal",
                 "title": "Superset: New Terminal",
                 "icon": "$(add)"
+            },
+            {
+                "command": "superset.newGroup",
+                "title": "Superset: New Group",
+                "icon": "$(add)"
+            },
+            {
+                "command": "superset.renameGroup",
+                "title": "Superset: Rename Group"
+            },
+            {
+                "command": "superset.setGroupColor",
+                "title": "Superset: Set Group Color"
+            },
+            {
+                "command": "superset.deleteGroup",
+                "title": "Superset: Delete Group"
+            },
+            {
+                "command": "superset.toggleGroupCollapsed",
+                "title": "Superset: Toggle Group"
             }
         ],
         "viewsContainers": {
@@ -79,6 +100,11 @@
             "view/title": [
                 {
                     "command": "superset.newTerminal",
+                    "when": "view == superset.terminals",
+                    "group": "navigation"
+                },
+                {
+                    "command": "superset.newGroup",
                     "when": "view == superset.terminals",
                     "group": "navigation"
                 }
@@ -108,6 +134,21 @@
                     "command": "superset.rename",
                     "when": "viewItem == terminal",
                     "group": "2_rename"
+                },
+                {
+                    "command": "superset.renameGroup",
+                    "when": "viewItem == group",
+                    "group": "1_group"
+                },
+                {
+                    "command": "superset.setGroupColor",
+                    "when": "viewItem == group",
+                    "group": "1_group"
+                },
+                {
+                    "command": "superset.deleteGroup",
+                    "when": "viewItem == group",
+                    "group": "9_group"
                 }
             ]
         },
