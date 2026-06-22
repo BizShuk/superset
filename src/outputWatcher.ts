@@ -17,9 +17,8 @@ export interface OutputWatcherDeps {
         cb: (event: ShellExecutionStartEvent) => void
     ) => () => void;
     /**
-     * Optional diagnostic sink. Receives one human-readable line per
-     * meaningful decision the watcher makes, used to trace why the
-     * unseen-highlight chain failed in a user's environment.
+     * If true for a terminal, the watcher suppresses markUnseen — the user
+     * was just in that terminal and trailing output is expected.
      */
     isRecentlyActive?: (terminal: TerminalHandle) => boolean;
     /**

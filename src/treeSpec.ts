@@ -1,6 +1,8 @@
-import type { TerminalHandle, WindowGroupNode } from "./types";
+import type { Group, GroupColor } from "./groupStore";
+import type { TerminalHandle } from "./types";
 
 export type TreeIconKind = "default" | "highlighted";
+export type GroupIconKind = "group" | "groupHighlighted";
 
 export interface TreeItemSpec {
     label: string;
@@ -14,22 +16,37 @@ export interface TreeItemSpec {
     contextValue: "terminal";
 }
 
-/**
- * Spec for the parent (window group) node. Carries no command — clicking
- * the header just toggles expansion. Kept as a separate interface so the
- * terminal and window specs don't share a discriminator accidentally.
- */
-export interface WindowGroupSpec {
+export interface GroupSpec {
+    /** Stable id for `TreeItem.id` so collapse/expand survives refresh. */
+    id: string;
     label: string;
-    iconKind: "window";
+    iconKind: GroupIconKind;
+    description: string;
     collapsibleState: "expanded" | "collapsed";
-    contextValue: "windowGroup";
+    contextValue: "group";
+    color: GroupColor;
 }
 
 export const UNSEEN_PREFIX = "● ";
 
+/** Color glyphs rendered as the first character of the group label. */
+export const COLOR_GLYPH: Record<GroupColor, string> = {
+    red: "🟥",
+    orange: "🟧",
+    yellow: "🟨",
+    green: "🟩",
+    blue: "🟦",
+    purple: "🟪",
+    magenta: "🟪",
+    gray: "⬜",
+};
+
 export interface BuildTreeItemSpecOptions {
     isUnseen: boolean;
+}
+
+export interface BuildGroupSpecOptions {
+    unseenCount: number;
 }
 
 /**
@@ -58,17 +75,20 @@ export function buildTreeItemSpec(
     };
 }
 
-/**
- * Build the parent window-group spec. The 8-char tag is a short session
- * id (see extension.ts) — enough to disambiguate on a single machine.
- */
-export function buildWindowGroupSpec(node: WindowGroupNode): WindowGroupSpec {
+export function buildGroupSpec(
+    group: Group,
+    opts: BuildGroupSpecOptions
+): GroupSpec {
     return {
-        label: `Window: ${node.tag}`,
-        iconKind: "window",
-        // Default expanded: user opens the panel to see terminals; an
-        // extra click to unfold would be friction.
-        collapsibleState: "expanded",
-        contextValue: "windowGroup",
+        id: `group:${group.id}`,
+        label: `${COLOR_GLYPH[group.color]}  ${group.name}`,
+        iconKind: opts.unseenCount > 0 ? "groupHighlighted" : "group",
+        description:
+            opts.unseenCount > 0
+                ? `● ${opts.unseenCount} 個新輸出`
+                : "",
+        collapsibleState: group.collapsed ? "collapsed" : "expanded",
+        contextValue: "group",
+        color: group.color,
     };
 }

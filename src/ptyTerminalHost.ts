@@ -73,6 +73,9 @@ export class PtyTerminalHost {
     private writeListeners = new Set<(data: string) => void>();
     private closeListeners = new Set<(code: number | void) => void>();
     private opened = false;
+    /** Track which terminals we have already logged markUnseen for, so the
+     *  diagnostic channel is not flooded during high-rate TUI redraws. */
+    private unseenLogged = new WeakSet<import("./types").TerminalHandle>();
 
     constructor(private readonly deps: PtyTerminalHostDeps) {}
 
@@ -199,10 +202,15 @@ export class PtyTerminalHost {
         if (this.deps.isRecentlyActive?.(terminal)) {
             return;
         }
-        this.deps.log?.(
-            `[pty] markUnseen("${terminal.name}") ` +
-                `bytes=${data.length} active="${active?.name ?? "<none>"}"`
-        );
+        // Only log diagnostic on first unseen flip; markUnseen is idempotent
+        // so subsequent chunks from the same terminal are no-ops.
+        if (!this.unseenLogged.has(terminal)) {
+            this.deps.log?.(
+                `[pty] markUnseen("${terminal.name}") ` +
+                    `bytes=${data.length} active="${active?.name ?? "<none>"}"`
+            );
+            this.unseenLogged.add(terminal);
+        }
         this.deps.registry.markUnseen(terminal);
     }
 }

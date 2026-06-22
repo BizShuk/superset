@@ -4,15 +4,23 @@ import { TerminalRegistry } from "./terminalRegistry";
 import { OutputWatcher } from "./outputWatcher";
 import { PtyTerminalHost } from "./ptyTerminalHost";
 import type { PtyProcess, PtySpawner } from "./ptyTerminalHost";
-import { TerminalTreeProvider } from "./treeProvider";
+import { TerminalTreeProvider, isGroup } from "./treeProvider";
 import { HighlightPresenter } from "./highlightPresenter";
 import { stripUnseenPrefix } from "./treeSpec";
 import { decideAutoReplace } from "./autoReplace";
+import {
+    GroupStore,
+    UNGROUPED_ID,
+    type Group,
+    type GroupColor,
+} from "./groupStore";
+import type { TerminalHandle } from "./types";
 
 export function activate(context: vscode.ExtensionContext): void {
     console.log("[superset] activated");
 
     const registry = new TerminalRegistry();
+    const groupStore = new GroupStore();
     const subscriptions: vscode.Disposable[] = [];
 
     // PTY-backed terminals created by this extension. onDidOpenTerminal uses
@@ -55,14 +63,15 @@ export function activate(context: vscode.ExtensionContext): void {
     };
     log(`activate session=${vscode.env.sessionId.slice(0, 8)}`);
 
-    // Pre-populate registry with already-open terminals (e.g., reload window).
+    // Pre-populate registry and group store with already-open terminals.
     for (const terminal of vscode.window.terminals) {
         registry.add(terminal);
+        groupStore.assignDefaultGroup(terminal);
     }
     log(`pre-populated ${vscode.window.terminals.length} terminal(s)`);
 
     // Wire TerminalTreeProvider to a TreeView.
-    const treeProvider = new TerminalTreeProvider(registry);
+    const treeProvider = new TerminalTreeProvider(registry, groupStore);
     treeProvider.start();
     subscriptions.push({ dispose: () => treeProvider.stop() });
 
@@ -79,9 +88,72 @@ export function activate(context: vscode.ExtensionContext): void {
         }
     });
 
+    // Drag-and-drop: terminals move between groups; groups reorder.
+    const dragAndDropController: vscode.TreeDragAndDropController<
+        Group | TerminalHandle
+    > = {
+        dragMimeTypes: [
+            "application/vnd.code.tree.superset.terminals/dnd",
+        ],
+        dropMimeTypes: [
+            "application/vnd.code.tree.superset.terminals/dnd",
+        ],
+        handleDrag: (source, dataTransfer) => {
+            for (const item of source) {
+                if (isGroup(item)) {
+                    dataTransfer.set(
+                        "application/vnd.code.tree.superset.terminals/dnd",
+                        new vscode.DataTransferItem({
+                            kind: "group",
+                            id: item.id,
+                        })
+                    );
+                } else {
+                    dataTransfer.set(
+                        "application/vnd.code.tree.superset.terminals/dnd",
+                        new vscode.DataTransferItem({
+                            kind: "terminal",
+                            terminal: item,
+                        })
+                    );
+                }
+            }
+        },
+        handleDrop: (target, dataTransfer) => {
+            const dropped: vscode.DataTransferItem[] = [];
+            dataTransfer.forEach((item) => dropped.push(item));
+            for (const item of dropped) {
+                const value = item.value as {
+                    kind: "group" | "terminal";
+                    id?: string;
+                    terminal?: TerminalHandle;
+                };
+                if (value.kind === "terminal" && value.terminal) {
+                    const targetGroupId = isGroup(target)
+                        ? target.id
+                        : UNGROUPED_ID;
+                    groupStore.moveTerminalToGroup(
+                        value.terminal,
+                        targetGroupId
+                    );
+                } else if (value.kind === "group" && value.id) {
+                    groupStore.moveGroup(
+                        value.id,
+                        groupStore.getGroups().length - 1
+                    );
+                }
+            }
+            treeProvider.refresh();
+        },
+    };
+
     const treeView = vscode.window.createTreeView(
         "superset.terminals",
-        { treeDataProvider: treeProvider }
+        {
+            treeDataProvider: treeProvider,
+            dragAndDropController,
+            showCollapseAll: true,
+        }
     );
     // Tag the panel with a short session id so users running multiple
     // VSCode windows can tell which window this dashboard belongs to.
@@ -463,6 +535,95 @@ export function activate(context: vscode.ExtensionContext): void {
                     "workbench.action.terminal.rename"
                 );
                 treeProvider.refresh();
+            }
+        )
+    );
+
+    // ── Group commands ────────────────────────────────────
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.newGroup",
+            async () => {
+                const name = await vscode.window.showInputBox({
+                    prompt: "群組名稱",
+                    value: "",
+                });
+                if (!name) {
+                    return;
+                }
+                groupStore.createGroup(name);
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.renameGroup",
+            async (group: Group | undefined) => {
+                if (!group) {
+                    return;
+                }
+                const name = await vscode.window.showInputBox({
+                    prompt: "新名稱",
+                    value: group.name,
+                });
+                if (!name) {
+                    return;
+                }
+                groupStore.renameGroup(group.id, name);
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.setGroupColor",
+            async (group: Group | undefined) => {
+                if (!group) {
+                    return;
+                }
+                const color = await vscode.window.showQuickPick(
+                    [
+                        "red",
+                        "orange",
+                        "yellow",
+                        "green",
+                        "blue",
+                        "purple",
+                        "magenta",
+                        "gray",
+                    ] as GroupColor[],
+                    { placeHolder: "選擇顏色" }
+                );
+                if (!color) {
+                    return;
+                }
+                groupStore.setGroupColor(group.id, color as GroupColor);
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.deleteGroup",
+            (group: Group | undefined) => {
+                if (!group || group.id === UNGROUPED_ID) {
+                    return;
+                }
+                groupStore.deleteGroup(group.id);
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.toggleGroupCollapsed",
+            (group: Group | undefined) => {
+                if (!group) {
+                    return;
+                }
+                groupStore.toggleGroupCollapsed(group.id);
             }
         )
     );
