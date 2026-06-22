@@ -9,7 +9,6 @@ out/
 *.vsix
 
 # Editor / Claude config
-.vscode/
 .claude/
 
 # OS metadata
