@@ -167,7 +167,8 @@
         ]
     },
     "scripts": {
-        "build": "npm install && tsc && npx @vscode/vsce package",
+        "clean": "rm -f *.vsix",
+        "build": "npm run clean && npm install && tsc && npx @vscode/vsce package",
         "watch": "tsc --watch",
         "package": "vsce package",
         "test": "vitest run",
