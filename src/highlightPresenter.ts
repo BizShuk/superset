@@ -42,9 +42,11 @@ export class HighlightPresenter {
         // Reapply prefixes to match the registry's current state. We do
         // not touch the status bar here — it's already hidden by default
         // and a freshly-populated registry has no unseen entries.
-        const unseen = new Set(this.deps.registry.getUnseen());
-        for (const terminal of this.deps.registry.getAll()) {
-            this.applyPrefix(terminal, unseen.has(terminal));
+        const unseen = new Set(
+            this.deps.registry.getUnseen().map((e) => e.terminal)
+        );
+        for (const entry of this.deps.registry.getAll()) {
+            this.applyPrefix(entry.terminal, unseen.has(entry.terminal));
         }
         this.unsubscribe = this.deps.registry.onDidChange((change) => {
             if (change.type === "added") {

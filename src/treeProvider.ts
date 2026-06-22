@@ -178,7 +178,9 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
     }
 
     private refreshUnseenSet(): void {
-        this.unseen = new Set(this.registry.getUnseen());
+        this.unseen = new Set(
+            this.registry.getUnseen().map((e) => e.terminal)
+        );
     }
 }
 

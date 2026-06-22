@@ -1,6 +1,13 @@
-import type { RegistryChange, RegistryListener, TerminalHandle } from "./types";
+import type {
+    RegistryChange,
+    RegistryListener,
+    TerminalEntry,
+    TerminalHandle,
+    TerminalId,
+} from "./types";
 
 interface Entry {
+    id: TerminalId;
     terminal: TerminalHandle;
     hasUnseenOutput: boolean;
 }
@@ -13,7 +20,12 @@ export class TerminalRegistry {
         if (this.entries.has(terminal)) {
             return;
         }
-        this.entries.set(terminal, { terminal, hasUnseenOutput: false });
+        const procId = (terminal as unknown as { processId?: number }).processId;
+        const id: TerminalId =
+            procId !== undefined
+                ? String(procId)
+                : `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        this.entries.set(terminal, { id, terminal, hasUnseenOutput: false });
         this.emit({ type: "added", terminal });
     }
 
@@ -50,18 +62,36 @@ export class TerminalRegistry {
         this.emit({ type: "unseenChanged", terminal, hasUnseenOutput: false });
     }
 
-    getAll(): TerminalHandle[] {
-        return Array.from(this.entries.keys());
+    getAll(): TerminalEntry[] {
+        return Array.from(this.entries.values()).map((e) => ({
+            id: e.id,
+            terminal: e.terminal,
+            hasUnseenOutput: e.hasUnseenOutput,
+        }));
     }
 
-    getUnseen(): TerminalHandle[] {
-        const result: TerminalHandle[] = [];
-        for (const entry of this.entries.values()) {
-            if (entry.hasUnseenOutput) {
-                result.push(entry.terminal);
+    getUnseen(): TerminalEntry[] {
+        const result: TerminalEntry[] = [];
+        for (const e of this.entries.values()) {
+            if (e.hasUnseenOutput) {
+                result.push({ id: e.id, terminal: e.terminal, hasUnseenOutput: true });
             }
         }
         return result;
+    }
+
+    getById(id: TerminalId): TerminalEntry | undefined {
+        for (const e of this.entries.values()) {
+            if (e.id === id) {
+                return { id: e.id, terminal: e.terminal, hasUnseenOutput: e.hasUnseenOutput };
+            }
+        }
+        return undefined;
+    }
+
+    getEntryByTerminal(terminal: TerminalHandle): TerminalEntry | undefined {
+        const e = this.entries.get(terminal);
+        return e ? { id: e.id, terminal: e.terminal, hasUnseenOutput: e.hasUnseenOutput } : undefined;
     }
 
     onDidChange(listener: RegistryListener): () => void {

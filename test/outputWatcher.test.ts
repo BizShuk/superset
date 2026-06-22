@@ -83,7 +83,7 @@ describe("OutputWatcher", () => {
         exec.fireData("hello\n");
 
         // a is non-active (active=b), so a should be unseen.
-        expect(registry.getUnseen()).toContain(a);
+        expect(registry.getUnseen().map((e) => e.terminal)).toContain(a);
     });
 
     it("does NOT mark active terminal unseen", () => {
@@ -94,7 +94,7 @@ describe("OutputWatcher", () => {
         fire({ terminal: b, execution: exec.execution });
         exec.fireData("hello\n");
 
-        expect(registry.getUnseen()).not.toContain(b);
+        expect(registry.getUnseen().map((e) => e.terminal)).not.toContain(b);
     });
 
     it("ignores data from terminal not in registry", () => {
@@ -120,7 +120,7 @@ describe("OutputWatcher", () => {
         fire({ terminal: a, execution: exec.execution });
         exec.fireData("hello\n");
 
-        expect(registry.getUnseen()).not.toContain(a);
+        expect(registry.getUnseen().map((e) => e.terminal)).not.toContain(a);
     });
 
     it("stop() unsubscribes from onShellExecution", () => {

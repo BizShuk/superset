@@ -5,6 +5,14 @@ export interface TerminalHandle {
     dispose(): void;
 }
 
+export type TerminalId = string;
+
+export interface TerminalEntry {
+    readonly id: TerminalId;
+    readonly terminal: TerminalHandle;
+    readonly hasUnseenOutput: boolean;
+}
+
 export type RegistryChange =
     | { type: "added"; terminal: TerminalHandle }
     | { type: "removed"; terminal: TerminalHandle }

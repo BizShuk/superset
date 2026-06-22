@@ -175,8 +175,8 @@ describe("PtyTerminalHost", () => {
 
         fake.fireData("hello");
 
-        expect(registry.getUnseen()).toContain(host);
-        expect(registry.getUnseen()).not.toContain(ctx.other);
+        expect(registry.getUnseen().map((e) => e.terminal)).toContain(host);
+        expect(registry.getUnseen().map((e) => e.terminal)).not.toContain(ctx.other);
     });
 
     it("does NOT mark host unseen when it is the active terminal", () => {
@@ -187,7 +187,7 @@ describe("PtyTerminalHost", () => {
 
         fake.fireData("hello");
 
-        expect(registry.getUnseen()).not.toContain(host);
+        expect(registry.getUnseen().map((e) => e.terminal)).not.toContain(host);
     });
 
     it("does NOT mark host unseen when no terminal is active", () => {
@@ -206,7 +206,7 @@ describe("PtyTerminalHost", () => {
         // undefined active terminal means the user has no terminal
         // focused — the host is non-active from the host's perspective,
         // so it should be marked unseen (matches OutputWatcher path).
-        expect(registry.getUnseen()).toContain(host);
+        expect(registry.getUnseen().map((e) => e.terminal)).toContain(host);
     });
 
     it("high-frequency PTY data is idempotent (single unseenChanged event)", () => {
@@ -294,6 +294,6 @@ describe("PtyTerminalHost", () => {
 
         ctx.fake.fireData("hello");
 
-        expect(ctx.registry.getUnseen()).not.toContain(ctx.host);
+        expect(ctx.registry.getUnseen().map((e) => e.terminal)).not.toContain(ctx.host);
     });
 });

@@ -11,9 +11,7 @@ describe("TerminalRegistry", () => {
         const r = new TerminalRegistry();
         expect(r.getAll()).toEqual([]);
         expect(r.getUnseen()).toEqual([]);
-    });
-
-    it("emits added on add()", () => {
+    });    it("emits added on add()", () => {
         const r = new TerminalRegistry();
         const t = fakeTerminal("a");
         const listener = vi.fn();
@@ -122,7 +120,7 @@ describe("TerminalRegistry", () => {
 
         const unseen = r.getUnseen();
         expect(unseen).toHaveLength(1);
-        expect(unseen[0]).toBe(a);
+        expect(unseen[0].terminal).toBe(a);
     });
 
     it("unsubscribe stops further events", () => {
@@ -165,5 +163,34 @@ describe("TerminalRegistry", () => {
         r.markUnseen(t);
         r.clearUnseen(t);
         expect(r.isUnseen(t)).toBe(false);
+    });
+
+    it("assigns a stable string id on add()", () => {
+        const r = new TerminalRegistry();
+        const t = { name: "bash", show: () => {}, dispose: () => {} } as any;
+        r.add(t);
+        const all = r.getAll();
+        expect(typeof all[0].id).toBe("string");
+        expect(all[0].id.length).toBeGreaterThan(0);
+    });
+
+    it("keeps the same id across markUnseen", () => {
+        const r = new TerminalRegistry();
+        const t = { name: "bash", show: () => {}, dispose: () => {} } as any;
+        r.add(t);
+        const idBefore = r.getAll()[0].id;
+        r.markUnseen(t);
+        const idAfter = r.getAll()[0].id;
+        expect(idAfter).toBe(idBefore);
+    });
+
+    it("different terminals get different ids", () => {
+        const r = new TerminalRegistry();
+        const a = { name: "a", show: () => {}, dispose: () => {} } as any;
+        const b = { name: "b", show: () => {}, dispose: () => {} } as any;
+        r.add(a);
+        r.add(b);
+        const ids = r.getAll().map((e) => e.id);
+        expect(ids[0]).not.toBe(ids[1]);
     });
 });
