@@ -117,8 +117,13 @@
                 "title": "Superset: Toggle Todo"
             },
             {
-                "command": "superset.todoFilter",
-                "title": "Superset: Filter Todos",
+                "command": "superset.todoFilterHideCompleted",
+                "title": "Superset: Hide Completed",
+                "icon": "$(filter-filled)"
+            },
+            {
+                "command": "superset.todoFilterShowAll",
+                "title": "Superset: Show All",
                 "icon": "$(filter)"
             }
         ],
@@ -188,8 +193,13 @@
                     "group": "navigation"
                 },
                 {
-                    "command": "superset.todoFilter",
-                    "when": "view == superset.todo",
+                    "command": "superset.todoFilterHideCompleted",
+                    "when": "view == superset.todo && superset.todo.filtering != true",
+                    "group": "navigation"
+                },
+                {
+                    "command": "superset.todoFilterShowAll",
+                    "when": "view == superset.todo && superset.todo.filtering == true",
                     "group": "navigation"
                 }
             ],

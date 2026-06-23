@@ -227,16 +227,48 @@ export function activate(context: vscode.ExtensionContext): void {
         treeDataProvider: todoProvider,
         showCollapseAll: true,
     });
-    // Let the filter command flip the toolbar icon between "filter"
-    // (hiding completed) and "filter-filled" (showing all). The view
-    // starts in the "show all" state to preserve the previous
-    // default behavior; the title reflects the current intent.
-    const updateTodoFilterBadge = (showing: boolean) => {
-        todoView.title = showing
-            ? `${TODO_VIEW_TITLE}  $(filter-filled)`
-            : `${TODO_VIEW_TITLE}  $(filter)`;
+    // Context key + TreeView title reflect the current filter state.
+    // The menu toolbar uses `when: "superset.todo.filtering == true"`
+    // / `!= true` to swap which filter button is shown — see
+    // package.json's menus.view/title. setContext must run once at
+    // startup so the menu's first render sees the right value
+    // (default is "show all", so filtering=false).
+    const updateTodoFilterBadge = (filtering: boolean, hidden: number) => {
+        // vscode.commands.executeCommand('setContext', ...) is the
+        // supported way to push a value into the when-clause engine.
+        void vscode.commands.executeCommand(
+            "setContext",
+            "superset.todo.filtering",
+            filtering
+        );
+        todoView.title = filtering
+            ? `${TODO_VIEW_TITLE}  (已隱藏 ${hidden} 個已完成)`
+            : TODO_VIEW_TITLE;
     };
-    updateTodoFilterBadge(todoProvider.isShowingCompleted());
+    const refreshTodoFilterBadge = () => {
+        const filtering = !todoProvider.isShowingCompleted();
+        const total = todoStore.getCompletedCount();
+        // When filter is ON we hide the "fully completed" subtree, so
+        // the reported hidden count is approximate: it's the number of
+        // top-level items whose checkbox+descendants are all checked
+        // (a conservative upper bound — non-checkbox items don't
+        // count). We compute it by asking the provider for the full
+        // list under showCompleted=true and comparing to the
+        // showCompleted=false list length.
+        if (!filtering) {
+            updateTodoFilterBadge(false, 0);
+            return;
+        }
+        const all = todoProvider.getChildren() as
+            | { line: number; text: string; kind: "checkbox" | "list"; checked: boolean; children?: unknown[] }[]
+            | undefined;
+        const shown = all?.length ?? 0;
+        const totalTop = todoStore.getItems().length;
+        const hidden = Math.max(0, totalTop - shown);
+        updateTodoFilterBadge(true, hidden);
+    };
+    // Push initial state so the menu's first render is correct.
+    refreshTodoFilterBadge();
     subscriptions.push(todoView);
 
     // Load initial data; re-load on README.todo file changes
@@ -244,8 +276,11 @@ export function activate(context: vscode.ExtensionContext): void {
     const todoFileWatcher = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(workspaceFolder, "README.todo")
     );
-    todoFileWatcher.onDidChange(() => todoStore.load());
-    todoFileWatcher.onDidCreate(() => todoStore.load());
+    const onTodoFileChanged = () => {
+        todoStore.load().then(() => refreshTodoFilterBadge());
+    };
+    todoFileWatcher.onDidChange(onTodoFileChanged);
+    todoFileWatcher.onDidCreate(onTodoFileChanged);
     subscriptions.push(todoFileWatcher);
 
     // Wire HighlightPresenter against a status bar item.
@@ -896,18 +931,38 @@ export function activate(context: vscode.ExtensionContext): void {
     subscriptions.push(
         vscode.commands.registerCommand(
             "superset.todoToggle",
-            async (item: { line: number; checked: boolean; text: string } | undefined) => {
+            async (item: { line: number; checked: boolean; text: string; kind: "checkbox" | "list" } | undefined) => {
                 if (!item) return;
+                // List-only nodes are not actionable — clicking them
+                // in the tree is wired to no command, but guard here
+                // so a future caller can't accidentally toggle a
+                // line that has no `[ ]` marker in the file.
+                if (item.kind === "list") return;
                 await todoStore.toggle(item);
             }
         )
     );
 
+    // Two commands + one shared handler: the menu shows whichever
+    // button reflects the *opposite* of the current state (i.e. when
+    // filtering is off, the "Hide Completed" button is shown, and
+    // vice versa). package.json uses `superset.todo.filtering` to
+    // swap the visible button.
+    const applyFilterToggle = () => {
+        todoProvider.toggleShowCompleted();
+        refreshTodoFilterBadge();
+    };
     subscriptions.push(
-        vscode.commands.registerCommand("superset.todoFilter", async () => {
-            const nowShowing = todoProvider.toggleShowCompleted();
-            updateTodoFilterBadge(nowShowing);
-        })
+        vscode.commands.registerCommand(
+            "superset.todoFilterHideCompleted",
+            applyFilterToggle
+        )
+    );
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.todoFilterShowAll",
+            applyFilterToggle
+        )
     );
 
     // Spawn a PTY-backed terminal. Every byte from the shell goes through

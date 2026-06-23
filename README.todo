@@ -10,3 +10,12 @@
     - [ ] Support user-configurable service types for mDNS browsing
 
     - [x] Add local network host scanner
+
+
+
+- [ ] Add mDNS service expiration (auto-remove stale services)
+- [ ] Add keyboard shortcut for panel cycling (Ctrl+Shift+P)
+- test
+    - [ ] Add mDNS service expiration (auto-remove stale services)
+    - [ ] Add keyboard shortcut for panel cycling (Ctrl+Shift+P)
+    - test

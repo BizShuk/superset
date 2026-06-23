@@ -54,9 +54,10 @@ import type { TodoItem } from "../src/types";
 function item(
     text: string,
     checked: boolean,
-    children?: TodoItem[]
+    children?: TodoItem[],
+    kind: "checkbox" | "list" = "checkbox"
 ): TodoItem {
-    return { line: 0, text, checked, children };
+    return { line: 0, text, checked, children, kind };
 }
 
 // ── filterCompleted (pure) ─────────────────────────────
@@ -233,5 +234,82 @@ describe("TodoTreeProvider filter", () => {
 
         expect(provider.toggleShowCompleted()).toBe(false);
         expect(visibleTexts(provider)).toEqual(["lone-pending"]);
+    });
+});
+
+// ── List-only nodes ───────────────────────────────────
+//
+// `kind: "list"` nodes (a `- foo` / `* bar` / `+ baz` line without
+// the `[ ]` checkbox marker) are kept in the panel as a non-togglable
+// sibling. They have no completion state, so the "hide completed"
+// filter never touches them, and mixing them with checkbox siblings
+// forces the document order to be preserved (the pending-first sort
+// would be meaningless for them).
+
+describe("TodoTreeProvider list nodes", () => {
+    it("renders list nodes with no toggle command and contextValue 'todoList'", () => {
+        const store = makeStore([item("note", false, undefined, "list")]);
+        const provider = new TodoTreeProvider(store);
+        const ti = provider.getTreeItem(store.getItems()[0]);
+        expect(ti.command).toBeUndefined();
+        expect(ti.contextValue).toBe("todoList");
+    });
+
+    it("keeps list nodes visible even when filtering hides completed", () => {
+        const store = makeStore([
+            item("note", false, undefined, "list"),
+            item("Done leaf", true),
+            item("Pending leaf", false),
+        ]);
+        const provider = new TodoTreeProvider(store);
+        provider.onDidChangeTreeData(() => {});
+
+        expect(provider.toggleShowCompleted()).toBe(false);
+        // The note survives; the completed leaf is hidden. Document
+        // order is preserved because of the list sibling.
+        expect(visibleTexts(provider)).toEqual(["note", "Pending leaf"]);
+    });
+
+    it("preserves document order when list is mixed with checkboxes", () => {
+        // pending-first / completed-last sort only applies when ALL
+        // siblings are checkboxes. Once a list node is present, sort
+        // is a no-op and the original file order wins.
+        const store = makeStore([
+            item("note", false, undefined, "list"),
+            item("done", true),
+            item("pending", false),
+        ]);
+        const provider = new TodoTreeProvider(store);
+        expect(visibleTexts(provider)).toEqual([
+            "note",
+            "done",
+            "pending",
+        ]);
+    });
+
+    it("still sorts pending-first when all siblings are checkboxes", () => {
+        const store = makeStore([item("done", true), item("pending", false)]);
+        const provider = new TodoTreeProvider(store);
+        expect(visibleTexts(provider)).toEqual(["pending", "done"]);
+    });
+
+    it("filter still hides a checkbox with all-checked descendants under a list node", () => {
+        // List node stays; its all-done checkbox child is filtered.
+        const store = makeStore([
+            item(
+                "section",
+                false,
+                [item("all-done", true, [item("child-1", true)])],
+                "list"
+            ),
+        ]);
+        const provider = new TodoTreeProvider(store);
+        provider.onDidChangeTreeData(() => {});
+
+        expect(provider.toggleShowCompleted()).toBe(false);
+        const top = provider.getChildren() as TodoItem[];
+        expect(top).toHaveLength(1);
+        expect(top[0].text).toBe("section");
+        expect(top[0].children).toEqual([]);
     });
 });

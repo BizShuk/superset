@@ -46,35 +46,93 @@ export class TodoStore {
 
         const lines = content.split("\n");
         const items: TodoItem[] = [];
-        const re = /^(\s*)[-*+]\s+\[(\s|x|X)\]\s+(.*)$/;
+        // `- [ ]` / `- [x]` — actionable checkbox.
+        const checkboxRe = /^(\s*)[-*+]\s+\[(\s|x|X)\]\s+(.*)$/;
+        // `- foo` / `* bar` / `+ baz` (without `[ ]`). Capture group 1
+        // is the leading list marker so we can strip it from the
+        // visible text. Use a negative lookahead to avoid matching
+        // checkbox lines (those are already handled above).
+        const listRe = /^(\s*)[-*+]\s+(\[[^\]]\s*[^\]]*\](.*))?$/;
         const stack: { item: TodoItem; indent: number }[] = [];
 
         for (let i = 0; i < lines.length; i++) {
-            const m = lines[i].match(re);
-            if (m) {
-                const indent = m[1].length;
+            const line = lines[i];
+
+            // 1. Checkbox line?
+            const cm = line.match(checkboxRe);
+            if (cm) {
+                const indent = cm[1].length;
                 const item: TodoItem = {
                     line: i,
-                    text: m[3].trim(),
-                    checked: m[2].toLowerCase() === "x",
+                    text: cm[3].trim(),
+                    kind: "checkbox",
+                    checked: cm[2].toLowerCase() === "x",
                 };
 
-                while (stack.length > 0 && stack[stack.length - 1].indent >= indent) {
+                while (
+                    stack.length > 0 &&
+                    stack[stack.length - 1].indent >= indent
+                ) {
                     stack.pop();
                 }
 
                 if (stack.length > 0) {
                     const parent = stack[stack.length - 1].item;
-                    if (!parent.children) {
-                        parent.children = [];
-                    }
+                    if (!parent.children) parent.children = [];
                     parent.children.push(item);
                 } else {
                     items.push(item);
                 }
 
                 stack.push({ item, indent });
+                continue;
             }
+
+            // 2. Bare list marker? A line that starts with `- ` / `* `
+            // /    `+ ` and is NOT followed by a checkbox is treated
+            // as a list-only node. Headings (`#`), quotes (`>`), and
+            // plain text are all skipped.
+            //
+            // The regex intentionally rejects `[` after the marker so
+            // we never re-match a checkbox line we already handled.
+            const lm = line.match(/^(\s*)[-*+]\s+(\S.*)$/);
+            if (lm) {
+                const indent = lm[1].length;
+                // Strip the leading list marker from the text shown
+                // in the panel (a `- foo` line should read as "foo",
+                // matching how a real checkbox line's text is just
+                // the words after the `[ ]`).
+                const item: TodoItem = {
+                    line: i,
+                    text: lm[2].trim(),
+                    kind: "list",
+                    checked: false,
+                };
+
+                while (
+                    stack.length > 0 &&
+                    stack[stack.length - 1].indent >= indent
+                ) {
+                    stack.pop();
+                }
+
+                if (stack.length > 0) {
+                    const parent = stack[stack.length - 1].item;
+                    if (!parent.children) parent.children = [];
+                    parent.children.push(item);
+                } else {
+                    items.push(item);
+                }
+
+                // Push the list node into the stack using a strictly
+                // positive indent so a *less* indented checkbox
+                // below still pops it off (preserving the file's
+                // visual nesting). We use indent+1 so a same-indent
+                // checkbox doesn't get nested under the list node.
+                stack.push({ item, indent: indent + 1 });
+            }
+            // 3. Anything else (heading, quote, plain text, blank)
+            //    is ignored.
         }
         this.items = items;
         this.emit({ type: "loaded", items });

@@ -66,6 +66,9 @@ export class TodoTreeProvider
     }
 
     getTreeItem(element: TodoItem): vscode.TreeItem {
+        if (element.kind === "list") {
+            return this.buildListItem(element);
+        }
         const item = new vscode.TreeItem(element.text);
         item.iconPath = new vscode.ThemeIcon(
             element.checked ? "pass" : "circle-large-outline",
@@ -90,17 +93,51 @@ export class TodoTreeProvider
         return item;
     }
 
+    /**
+     * Render a `- foo` / `* bar` / `+ baz` line that has no checkbox
+     * marker. The node is structurally a list item (so it can nest
+     * children) but is not actionable: no toggle command, a muted
+     * dash icon, and a `todoList` contextValue so menu `when` clauses
+     * can target it if needed in the future.
+     */
+    private buildListItem(element: TodoItem): vscode.TreeItem {
+        const item = new vscode.TreeItem(element.text);
+        item.iconPath = new vscode.ThemeIcon(
+            "dash",
+            new vscode.ThemeColor("descriptionForeground")
+        );
+        item.tooltip = element.text;
+        item.collapsibleState =
+            element.children && element.children.length > 0
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.None;
+        // No command → click does nothing for list items.
+        item.contextValue = "todoList";
+        return item;
+    }
+
     getChildren(element?: TodoItem): vscode.ProviderResult<TodoItem[]> {
         const raw = element ? element.children || [] : this.store.getItems();
-        const filtered = this.showCompleted
-            ? raw
-            : filterCompleted(raw);
-        // Pending first, completed last
-        return [
-            ...filtered.filter((t) => !t.checked),
-            ...filtered.filter((t) => t.checked),
-        ];
+        const filtered = this.showCompleted ? raw : filterCompleted(raw);
+        return sortSiblings(filtered);
     }
+}
+
+/**
+ * Sort siblings for display. The "pending first, completed last"
+ * heuristic only makes sense when every sibling is a checkbox; once
+ * a `list` node is mixed in (a free-form note interleaved with
+ * tasks) we preserve the original document order — list items have
+ * no completion status so the sort has no meaning for them.
+ */
+function sortSiblings(items: TodoItem[]): TodoItem[] {
+    if (items.length === 0) return items;
+    const allCheckboxes = items.every((t) => t.kind === "checkbox");
+    if (!allCheckboxes) return items;
+    return [
+        ...items.filter((t) => !t.checked),
+        ...items.filter((t) => t.checked),
+    ];
 }
 
 /**
@@ -127,7 +164,9 @@ function filterItem(item: TodoItem): TodoItem | null {
     // "Fully completed" = self checked AND no surviving child to act on.
     // We treat "no children at all" the same as "children all filtered
     // out" — both mean there is nothing left to do under this node.
-    if (item.checked && !hasSurvivingChild) {
+    // List-only nodes have no `checked` state, so the rule is N/A
+    // for them: they always survive (the user wrote them intentionally).
+    if (item.kind === "checkbox" && item.checked && !hasSurvivingChild) {
         return null;
     }
     return {
