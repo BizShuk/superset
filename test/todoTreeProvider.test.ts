@@ -1,0 +1,237 @@
+import { describe, it, expect, vi } from "vitest";
+
+// Minimal vscode mock — the provider only uses EventEmitter (for
+// `onDidChangeTreeData` refresh) and TreeItem / ThemeIcon / ThemeColor
+// inside `getTreeItem`, which the filter tests never call.
+vi.mock("vscode", () => {
+    class EventEmitter<T> {
+        private listeners = new Set<(e: T) => void>();
+        event = (listener: (e: T) => void) => {
+            this.listeners.add(listener);
+            return { dispose: () => this.listeners.delete(listener) };
+        };
+        fire(e: T) {
+            for (const l of this.listeners) l(e);
+        }
+        dispose() {
+            this.listeners.clear();
+        }
+    }
+    class ThemeIcon {
+        constructor(public id: string, public color?: unknown) {}
+    }
+    class ThemeColor {
+        constructor(public id: string) {}
+    }
+    const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
+    return {
+        EventEmitter,
+        ThemeIcon,
+        ThemeColor,
+        TreeItemCollapsibleState,
+        TreeItem: class {
+            command?: unknown;
+            contextValue?: string;
+            description?: string;
+            iconPath?: unknown;
+            label: string;
+            tooltip?: string;
+            collapsibleState?: number;
+            constructor(label: string) {
+                this.label = label;
+            }
+        },
+    };
+});
+
+import {
+    TodoTreeProvider,
+    filterCompleted,
+} from "../src/todoTreeProvider";
+import { TodoStore } from "../src/todoStore";
+import type { TodoItem } from "../src/types";
+
+function item(
+    text: string,
+    checked: boolean,
+    children?: TodoItem[]
+): TodoItem {
+    return { line: 0, text, checked, children };
+}
+
+// ── filterCompleted (pure) ─────────────────────────────
+
+describe("filterCompleted", () => {
+    it("returns the input list unchanged when nothing is checked", () => {
+        const items = [
+            item("a", false),
+            item("b", false, [item("b.1", false)]),
+        ];
+        const out = filterCompleted(items);
+        expect(out).toHaveLength(2);
+        expect(out[0].text).toBe("a");
+        expect(out[1].text).toBe("b");
+        expect(out[1].children).toHaveLength(1);
+    });
+
+    it("hides a leaf that is fully checked", () => {
+        const items = [item("a", false), item("b", true)];
+        const out = filterCompleted(items);
+        expect(out.map((t) => t.text)).toEqual(["a"]);
+    });
+
+    it("keeps a checked parent when it has an unchecked descendant", () => {
+        // The core contract: parent checked + pending child = parent
+        // stays visible, otherwise the pending child would be
+        // unreachable.
+        const items = [
+            item("parent", true, [item("child", false), item("done", true)]),
+        ];
+        const out = filterCompleted(items);
+        expect(out).toHaveLength(1);
+        expect(out[0].text).toBe("parent");
+        expect(out[0].checked).toBe(true);
+        expect(out[0].children).toHaveLength(1);
+        // The pending child survives; the done leaf is filtered.
+        expect(out[0].children![0].text).toBe("child");
+    });
+
+    it("hides a parent that is checked AND has no surviving children", () => {
+        const items = [
+            item("parent", true, [item("done-a", true), item("done-b", true)]),
+        ];
+        const out = filterCompleted(items);
+        expect(out).toHaveLength(0);
+    });
+
+    it("keeps a parent that is unchecked even with all-done children", () => {
+        // Parent itself unchecked → not "fully completed" → stays.
+        const items = [
+            item("parent", false, [item("done-a", true), item("done-b", true)]),
+        ];
+        const out = filterCompleted(items);
+        expect(out).toHaveLength(1);
+        expect(out[0].text).toBe("parent");
+        // Children all filtered out → empty children array.
+        expect(out[0].children).toEqual([]);
+    });
+
+    it("applies the rule recursively at every depth", () => {
+        // Mid-level node: checked + has a pending grandchild → stays.
+        // Top-level: checked, but a pending grandchild leaks up the
+        // ancestry so it ALSO stays.
+        const items = [
+            item("top", true, [
+                item("mid", true, [
+                    item("leaf-pending", false),
+                    item("leaf-done", true),
+                ]),
+            ]),
+        ];
+        const out = filterCompleted(items);
+        expect(out).toHaveLength(1);
+        expect(out[0].text).toBe("top");
+        expect(out[0].children).toHaveLength(1);
+        expect(out[0].children![0].text).toBe("mid");
+        expect(out[0].children![0].children).toHaveLength(1);
+        expect(out[0].children![0].children![0].text).toBe("leaf-pending");
+    });
+
+    it("returns a new array (does not mutate the input)", () => {
+        const child = item("c", true);
+        const parent = item("p", false, [child]);
+        const items = [parent];
+        const out = filterCompleted(items);
+        expect(out).not.toBe(items);
+        // The filtered parent has its children replaced with []; the
+        // original parent's children list is untouched.
+        expect(parent.children).toHaveLength(1);
+        expect(out[0].children).toEqual([]);
+    });
+});
+
+// ── TodoTreeProvider integration ───────────────────────
+
+function makeStore(items: TodoItem[]): TodoStore {
+    const store = new TodoStore("/workspace");
+    // Bypass file I/O — the provider only reads from store.getItems().
+    (store as unknown as { items: TodoItem[] }).items = items;
+    return store;
+}
+
+function visibleTexts(provider: TodoTreeProvider, parent?: TodoItem): string[] {
+    const children = provider.getChildren(parent) as TodoItem[];
+    return children.map((c) => c.text);
+}
+
+describe("TodoTreeProvider filter", () => {
+    it("defaults to showCompleted=true (no items hidden)", () => {
+        const store = makeStore([item("a", false), item("b", true)]);
+        const provider = new TodoTreeProvider(store);
+        expect(provider.isShowingCompleted()).toBe(true);
+        expect(visibleTexts(provider)).toEqual(["a", "b"]);
+    });
+
+    it("toggleShowCompleted flips the flag and refreshes", () => {
+        const store = makeStore([item("a", false), item("b", true)]);
+        const provider = new TodoTreeProvider(store);
+        // Subscribe to ensure refresh() doesn't throw in the test env.
+        provider.onDidChangeTreeData(() => {});
+        expect(provider.toggleShowCompleted()).toBe(false);
+        expect(provider.isShowingCompleted()).toBe(false);
+        // Pending first, completed last — and "b" is now hidden.
+        expect(visibleTexts(provider)).toEqual(["a"]);
+        // Flip back → "b" returns.
+        expect(provider.toggleShowCompleted()).toBe(true);
+        expect(visibleTexts(provider)).toEqual(["a", "b"]);
+    });
+
+    it("keeps a checked parent visible when a child is still pending", () => {
+        const store = makeStore([
+            item("Feature", true, [
+                item("sub-done", true),
+                item("sub-pending", false),
+            ]),
+        ]);
+        const provider = new TodoTreeProvider(store);
+        provider.onDidChangeTreeData(() => {});
+
+        expect(provider.toggleShowCompleted()).toBe(false);
+
+        // Top level: "Feature" survives (has pending descendant).
+        const top = visibleTexts(provider);
+        expect(top).toEqual(["Feature"]);
+
+        // Expanding it shows only the pending child.
+        const parent = provider.getChildren() as TodoItem[];
+        const expanded = visibleTexts(provider, parent[0]);
+        expect(expanded).toEqual(["sub-pending"]);
+    });
+
+    it("hides a checked parent whose descendants are all done", () => {
+        const store = makeStore([
+            item("all-done", true, [
+                item("child-1", true),
+                item("child-2", true),
+            ]),
+            item("still-pending", false),
+        ]);
+        const provider = new TodoTreeProvider(store);
+        provider.onDidChangeTreeData(() => {});
+
+        expect(provider.toggleShowCompleted()).toBe(false);
+        expect(visibleTexts(provider)).toEqual(["still-pending"]);
+    });
+
+    it("hides a checked parent that has no children", () => {
+        const store = makeStore([
+            item("lone-done", true),
+            item("lone-pending", false),
+        ]);
+        const provider = new TodoTreeProvider(store);
+        provider.onDidChangeTreeData(() => {});
+
+        expect(provider.toggleShowCompleted()).toBe(false);
+        expect(visibleTexts(provider)).toEqual(["lone-pending"]);
+    });
+});

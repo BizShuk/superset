@@ -215,6 +215,7 @@ export function activate(context: vscode.ExtensionContext): void {
     subscriptions.push(topologyView);
 
     // ── TODO TreeView ─────────────────────────────────────
+    const TODO_VIEW_TITLE = "TODO";
     const workspaceFolder =
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const todoStore = new TodoStore(workspaceFolder);
@@ -226,6 +227,16 @@ export function activate(context: vscode.ExtensionContext): void {
         treeDataProvider: todoProvider,
         showCollapseAll: true,
     });
+    // Let the filter command flip the toolbar icon between "filter"
+    // (hiding completed) and "filter-filled" (showing all). The view
+    // starts in the "show all" state to preserve the previous
+    // default behavior; the title reflects the current intent.
+    const updateTodoFilterBadge = (showing: boolean) => {
+        todoView.title = showing
+            ? `${TODO_VIEW_TITLE}  $(filter-filled)`
+            : `${TODO_VIEW_TITLE}  $(filter)`;
+    };
+    updateTodoFilterBadge(todoProvider.isShowingCompleted());
     subscriptions.push(todoView);
 
     // Load initial data; re-load on README.todo file changes
@@ -893,13 +904,10 @@ export function activate(context: vscode.ExtensionContext): void {
     );
 
     subscriptions.push(
-        vscode.commands.registerCommand(
-            "superset.todoFilter",
-            async () => {
-                await todoStore.load();
-                todoProvider.refresh();
-            }
-        )
+        vscode.commands.registerCommand("superset.todoFilter", async () => {
+            const nowShowing = todoProvider.toggleShowCompleted();
+            updateTodoFilterBadge(nowShowing);
+        })
     );
 
     // Spawn a PTY-backed terminal. Every byte from the shell goes through

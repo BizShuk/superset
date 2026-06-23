@@ -1,8 +1,8 @@
 # TODO
 
 - [ ] Add mDNS service expiration (auto-remove stale services)
-- [ ] Add keyboard shortcut for panel cycling (Ctrl+Shift+P)
-- [ ] Implement Explorer sub-panel
+- [x] Add keyboard shortcut for panel cycling (Ctrl+Shift+P)
+- [x] Implement Explorer sub-panel
     - [ ] Add network topology traceroute visualization
     - [ ] Add mDNS sub-panel with service discovery
     - [ ] Support user-configurable service types for mDNS browsing
