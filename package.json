@@ -250,6 +250,11 @@
                     "group": "1_focus"
                 },
                 {
+                    "command": "superset.mdnsShowDetail",
+                    "when": "viewItem == mdnsService",
+                    "group": "1_focus"
+                },
+                {
                     "command": "superset.mdnsCopyDetail",
                     "when": "viewItem == mdnsDetail",
                     "group": "1_focus"

@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type { MdnsListener, MdnsService } from "./types";
 import type { MdnsRegistry } from "./mdnsRegistry";
 import type { MdnsTypeGroup } from "./mdnsTreeSpec";
-import { buildMdnsServiceSpec, buildMdnsTypeSpec } from "./mdnsTreeSpec";
+import { buildMdnsServiceSpec, buildMdnsTypeSpec, buildMdnsDetailFields } from "./mdnsTreeSpec";
 
 export interface MdnsDetail {
     readonly kind: "mdnsDetail";
@@ -127,68 +127,7 @@ export class MdnsTreeProvider
     // ── Detail rows ────────────────────────────────────────
 
     private buildDetailRows(svc: MdnsService): MdnsDetail[] {
-        const rows: MdnsDetail[] = [];
-
-        rows.push(d("類型", svc.type, svc));
-        rows.push(d("網域", svc.domain, svc));
-        rows.push(d("主機", svc.host ?? "(無)", svc));
-
-        if (svc.port > 0) {
-            rows.push(d("埠號", String(svc.port), svc));
-        }
-
-        if (svc.addresses.length > 0) {
-            rows.push(d("位址", svc.addresses.join(", "), svc));
-        } else {
-            rows.push(d("位址", "(無)", svc));
-        }
-
-        if (svc.priority > 0 || svc.weight > 0) {
-            rows.push(
-                d("優先級 / 權重", `${svc.priority} / ${svc.weight}`, svc)
-            );
-        }
-
-        if (svc.ttl > 0) {
-            rows.push(d("TTL", `${svc.ttl} 秒`, svc));
-        }
-
-        if (svc.subtypes.length > 0) {
-            rows.push(d("子類型", svc.subtypes.join(", "), svc));
-        }
-
-        if (svc.srcAddress) {
-            rows.push(d("來源網卡", svc.srcAddress, svc));
-        }
-
-        if (Object.keys(svc.txt).length > 0) {
-            rows.push(
-                d(
-                    "TXT 屬性",
-                    Object.entries(svc.txt)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join(", "),
-                    svc
-                )
-            );
-        }
-
-        rows.push(
-            d(
-                "首次發現",
-                new Date(svc.firstSeen).toLocaleTimeString(),
-                svc
-            )
-        );
-        rows.push(
-            d(
-                "最後更新",
-                new Date(svc.lastSeen).toLocaleTimeString(),
-                svc
-            )
-        );
-
-        return rows;
+        return buildMdnsDetailFields(svc).map((f) => d(f.label, f.value, svc));
     }
 
     // ── Tooltip ────────────────────────────────────────────
@@ -199,37 +138,10 @@ export class MdnsTreeProvider
             "",
             `| 欄位 | 值 |`,
             `|---|---|`,
-            `| 類型 | ${svc.type} |`,
-            `| 主機 | ${svc.host ?? "(無)"} |`,
-            `| 埠號 | ${svc.port} |`,
-            `| 位址 | ${svc.addresses.length > 0 ? svc.addresses.join(", ") : "(無)"} |`,
         ];
-        if (svc.priority > 0 || svc.weight > 0) {
-            lines.push(
-                `| 優先級 | ${svc.priority} |`,
-                `| 權重 | ${svc.weight} |`
-            );
+        for (const f of buildMdnsDetailFields(svc)) {
+            lines.push(`| ${f.label} | ${f.value} |`);
         }
-        if (svc.ttl > 0) {
-            lines.push(`| TTL | ${svc.ttl} 秒 |`);
-        }
-        if (svc.subtypes.length > 0) {
-            lines.push(`| 子類型 | ${svc.subtypes.join(", ")} |`);
-        }
-        if (svc.srcAddress) {
-            lines.push(`| 來源 | ${svc.srcAddress} |`);
-        }
-        if (Object.keys(svc.txt).length > 0) {
-            lines.push(
-                `| TXT | ${Object.entries(svc.txt)
-                    .map(([k, v]) => `${k}=${v}`)
-                    .join(", ")} |`
-            );
-        }
-        lines.push(
-            `| 首次發現 | ${new Date(svc.firstSeen).toLocaleTimeString()} |`,
-            `| 最後更新 | ${new Date(svc.lastSeen).toLocaleTimeString()} |`
-        );
         return lines.join("\n");
     }
 

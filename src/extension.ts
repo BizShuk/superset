@@ -14,6 +14,7 @@ import { ExplorerTreeProvider } from "./explorerTreeProvider";
 import { MdnsRegistry } from "./mdnsRegistry";
 import { MulticastDnsTransport } from "./mdnsTransport";
 import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
+import { buildMdnsDetailFields } from "./mdnsTreeSpec";
 import { TopologyStore } from "./topologyStore";
 import { NodeTopologyScanner } from "./topologyScanner";
 import { TopologyTreeProvider } from "./topologyTreeProvider";
@@ -204,9 +205,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // ── Topology TreeView ─────────────────────────────────
     const topologyStore = new TopologyStore(new NodeTopologyScanner());
+    topologyStore.start();
     const topologyProvider = new TopologyTreeProvider(topologyStore);
     topologyProvider.start();
     subscriptions.push({ dispose: () => topologyProvider.stop() });
+    subscriptions.push({ dispose: () => topologyStore.stop() });
 
     const topologyView = vscode.window.createTreeView("superset.topology", {
         treeDataProvider: topologyProvider,
@@ -829,37 +832,10 @@ export function activate(context: vscode.ExtensionContext): void {
                 if (!svc) return;
                 const lines: string[] = [
                     `名稱: ${svc.name}`,
-                    `類型: ${svc.type}`,
-                    `網域: ${svc.domain}`,
-                    `主機: ${svc.host ?? "(無)"}`,
-                    `埠號: ${svc.port}`,
-                    `位址: ${svc.addresses.length > 0 ? svc.addresses.join(", ") : "(無)"}`,
+                    ...buildMdnsDetailFields(svc).map(
+                        (f) => `${f.label}: ${f.value}`
+                    ),
                 ];
-                if (svc.priority > 0 || svc.weight > 0) {
-                    lines.push(
-                        `優先級: ${svc.priority}  權重: ${svc.weight}`
-                    );
-                }
-                if (svc.ttl > 0) {
-                    lines.push(`TTL: ${svc.ttl} 秒`);
-                }
-                if (svc.subtypes.length > 0) {
-                    lines.push(`子類型: ${svc.subtypes.join(", ")}`);
-                }
-                if (svc.srcAddress) {
-                    lines.push(`來源網卡: ${svc.srcAddress}`);
-                }
-                if (Object.keys(svc.txt).length > 0) {
-                    lines.push(
-                        `TXT 屬性: ${Object.entries(svc.txt)
-                            .map(([k, v]) => `${k}=${v}`)
-                            .join(", ")}`
-                    );
-                }
-                lines.push(
-                    `首次發現: ${new Date(svc.firstSeen).toLocaleTimeString()}`,
-                    `最後更新: ${new Date(svc.lastSeen).toLocaleTimeString()}`
-                );
                 const detail = lines.join("\n");
 
                 const copyText = svc.host ?? svc.addresses[0];
@@ -899,6 +875,7 @@ export function activate(context: vscode.ExtensionContext): void {
         "superset.explore",
         "superset.mdns",
         "superset.topology",
+        "superset.todo",
     ];
 
     subscriptions.push(
