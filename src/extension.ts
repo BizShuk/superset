@@ -14,6 +14,9 @@ import { ExplorerTreeProvider } from "./explorerTreeProvider";
 import { MdnsRegistry } from "./mdnsRegistry";
 import { MulticastDnsTransport } from "./mdnsTransport";
 import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
+import { TopologyStore } from "./topologyStore";
+import { NodeTopologyScanner } from "./topologyScanner";
+import { TopologyTreeProvider } from "./topologyTreeProvider";
 import {
     GroupStore,
     UNGROUPED_ID,
@@ -196,6 +199,18 @@ export function activate(context: vscode.ExtensionContext): void {
         showCollapseAll: true,
     });
     subscriptions.push(mdnsView);
+
+    // ── Topology TreeView ─────────────────────────────────
+    const topologyStore = new TopologyStore(new NodeTopologyScanner());
+    const topologyProvider = new TopologyTreeProvider(topologyStore);
+    topologyProvider.start();
+    subscriptions.push({ dispose: () => topologyProvider.stop() });
+
+    const topologyView = vscode.window.createTreeView("superset.topology", {
+        treeDataProvider: topologyProvider,
+        showCollapseAll: true,
+    });
+    subscriptions.push(topologyView);
 
     // Wire HighlightPresenter against a status bar item.
     const statusBar = vscode.window.createStatusBarItem(
@@ -778,6 +793,19 @@ export function activate(context: vscode.ExtensionContext): void {
                     await vscode.env.clipboard.writeText(text);
                     vscode.window.showInformationMessage(`已複製 ${text}`);
                 }
+            }
+        )
+    );
+
+    // ── Topology commands ─────────────────────────────────
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.topologyScan",
+            async () => {
+                vscode.window.showInformationMessage("掃描網路拓撲中...");
+                await topologyStore.scan();
+                topologyProvider.refresh();
+                vscode.window.showInformationMessage("網路拓撲掃描完成");
             }
         )
     );

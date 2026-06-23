@@ -102,6 +102,11 @@
             {
                 "command": "superset.exploreOpen",
                 "title": "Superset: Open File"
+            },
+            {
+                "command": "superset.topologyScan",
+                "title": "Superset: Scan Network Topology",
+                "icon": "$(radio-tower)"
             }
         ],
         "viewsContainers": {
@@ -129,6 +134,11 @@
                     "id": "superset.mdns",
                     "name": "MDNS",
                     "contextualTitle": "Superset"
+                },
+                {
+                    "id": "superset.topology",
+                    "name": "Topology",
+                    "contextualTitle": "Superset"
                 }
             ]
         },
@@ -152,6 +162,11 @@
                 {
                     "command": "superset.mdnsRefresh",
                     "when": "view == superset.mdns",
+                    "group": "navigation"
+                },
+                {
+                    "command": "superset.topologyScan",
+                    "when": "view == superset.topology",
                     "group": "navigation"
                 }
             ],

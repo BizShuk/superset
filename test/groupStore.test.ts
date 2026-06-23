@@ -12,7 +12,7 @@ describe("GroupStore", () => {
         const groups = gs.getGroups();
         expect(groups).toHaveLength(1);
         expect(groups[0].id).toBe(UNGROUPED_ID);
-        expect(groups[0].name).toBe("未分組");
+        expect(groups[0].name).toBe("(Ungrouped)");
         expect(groups[0].terminals).toEqual([]);
     });
 

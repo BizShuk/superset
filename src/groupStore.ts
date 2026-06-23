@@ -42,7 +42,7 @@ export class GroupStore {
     constructor() {
         this.groups.set(UNGROUPED_ID, {
             id: UNGROUPED_ID,
-            name: "未分組",
+            name: "(Ungrouped)",
             color: "gray",
             collapsed: false,
             terminals: [],
