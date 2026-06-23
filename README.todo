@@ -1,10 +1,12 @@
 # TODO
 
 - [ ] Add mDNS service expiration (auto-remove stale services)
-- [x] Add keyboard shortcut for panel cycling (Ctrl+Shift+P)
+- [ ] Add keyboard shortcut for panel cycling (Ctrl+Shift+P)
+- test
+- [ ] Add ping latency check for topology hosts
 - [x] Implement Explorer sub-panel
     - [ ] Add network topology traceroute visualization
     - [ ] Add mDNS sub-panel with service discovery
     - [ ] Support user-configurable service types for mDNS browsing
-    - [ ] Add ping latency check for topology hosts
+
     - [x] Add local network host scanner
