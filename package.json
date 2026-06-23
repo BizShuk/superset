@@ -107,6 +107,19 @@
                 "command": "superset.topologyScan",
                 "title": "Superset: Scan Network Topology",
                 "icon": "$(radio-tower)"
+            },
+            {
+                "command": "superset.focusPanel",
+                "title": "Superset: Focus Panel"
+            },
+            {
+                "command": "superset.todoToggle",
+                "title": "Superset: Toggle Todo"
+            },
+            {
+                "command": "superset.todoFilter",
+                "title": "Superset: Filter Todos",
+                "icon": "$(filter)"
             }
         ],
         "viewsContainers": {
@@ -139,6 +152,11 @@
                     "id": "superset.topology",
                     "name": "Topology",
                     "contextualTitle": "Superset"
+                },
+                {
+                    "id": "superset.todo",
+                    "name": "TODO",
+                    "contextualTitle": "Superset"
                 }
             ]
         },
@@ -167,6 +185,11 @@
                 {
                     "command": "superset.topologyScan",
                     "when": "view == superset.topology",
+                    "group": "navigation"
+                },
+                {
+                    "command": "superset.todoFilter",
+                    "when": "view == superset.todo",
                     "group": "navigation"
                 }
             ],

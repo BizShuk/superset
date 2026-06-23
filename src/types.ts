@@ -92,3 +92,18 @@ export interface TopologyNode {
 
 export type TopologyChange = { type: "scanned"; nodes: TopologyNode[] };
 export type TopologyListener = (change: TopologyChange) => void;
+
+// ── Todo types ─────────────────────────────────────
+
+export interface TodoItem {
+    readonly line: number;
+    readonly text: string;
+    checked: boolean;
+    children?: TodoItem[];
+}
+
+export type TodoChange =
+    | { type: "loaded"; items: TodoItem[] }
+    | { type: "toggled"; item: TodoItem };
+
+export type TodoListener = (change: TodoChange) => void;

@@ -11,6 +11,20 @@ export interface HighlightPresenterDeps {
     showStatusBar: () => void;
     hideStatusBar: () => void;
     /**
+     * Optional. When provided, the presenter calls this on every
+     * `showStatusBar` (and `clearStatusBarCommand` on `hideStatusBar`)
+     * so the extension can wire / unwire a click command on the
+     * underlying status bar item. Kept as a parameterless callback so
+     * the presenter doesn't have to know which command to bind — that
+     * knowledge lives at the call site (extension.ts).
+     *
+     * VSCode keeps a status bar item's `command` even when the item is
+     * hidden, so a stale click target would surface a "run command"
+     * tooltip on hover for no reason. Always clear on hide.
+     */
+    setStatusBarCommand?: () => void;
+    clearStatusBarCommand?: () => void;
+    /**
      * Optional diagnostic sink. Used to surface the tab-name prefix
      * fallback decision (see applyPrefix), since the failure is silent
      * at the user-facing level once we degrade.
@@ -96,6 +110,10 @@ export class HighlightPresenter {
         const count = this.deps.registry.getUnseen().length;
         if (count === 0) {
             this.deps.setStatusBarText("");
+            // Clear the click binding when the item hides — see the
+            // deps docstring for why VSCode's residual binding is
+            // observable to the user.
+            this.deps.clearStatusBarCommand?.();
             this.deps.hideStatusBar();
         } else {
             this.deps.setStatusBarText(
@@ -103,6 +121,11 @@ export class HighlightPresenter {
                     ? "1 個終端機有新輸出"
                     : `${count} 個終端機有新輸出`
             );
+            // Show + click-bind in the same branch: a visible status
+            // bar notification MUST be clickable, and a clickable one
+            // MUST be visible. Splitting them across refresh calls
+            // risks a half-rendered state on fast unseen transitions.
+            this.deps.setStatusBarCommand?.();
             this.deps.showStatusBar();
         }
     }

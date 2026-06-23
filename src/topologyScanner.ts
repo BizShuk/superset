@@ -137,6 +137,10 @@ export class NodeTopologyScanner implements TopologyScanner {
 
     // ── Traceroute ─────────────────────────────────────────
 
+    /**
+     * Build a deeply nested tree: each hop nests into the previous one.
+     * Same subnet hops are leaf siblings; new subnet creates a child group.
+     */
     private async scanTraceroute(): Promise<TopologyNode> {
         const platform = process.platform;
         const target = "8.8.8.8";
@@ -148,7 +152,7 @@ export class NodeTopologyScanner implements TopologyScanner {
         }
 
         const out = await execAsync(cmd);
-        const lines = out.split("\n").slice(1); // skip header
+        const lines = out.split("\n").slice(1);
         const hops: Array<{ hop: string; ip: string; time: string }> = [];
 
         for (const line of lines) {
@@ -165,35 +169,83 @@ export class NodeTopologyScanner implements TopologyScanner {
             }
         }
 
-        // Group consecutive hops by /24 subnet
-        const subnetGroups: TopologyNode[] = [];
-        let currentSubnet = "";
-        let currentGroup: TopologyNode[] = [];
+        if (hops.length === 0) {
+            return group(`Trace ${target}`, []);
+        }
+
+        // Build a deeply nested tree:
+        //   - hops within the same subnet are leaf siblings
+        //   - a new subnet creates a nested child group inside the previous one
+        const root = { label: `Trace ${target}`, children: [] as TopologyNode[] };
+
+        let currentSubnet = hops[0].ip === "*" ? "Unreachable" : subnet24(hops[0].ip);
+        let currentGroup: TopologyNode = {
+            label: currentSubnet,
+            children: [],
+        };
+
+        // Find the deepest insertion point: walk into existing nested groups
+        const insertInto = (
+            parent: TopologyNode,
+            node: TopologyNode
+        ): TopologyNode => {
+            if (!parent.children || parent.children.length === 0) {
+                return parent;
+            }
+            const last = parent.children[parent.children.length - 1];
+            if (
+                last.children &&
+                last.children.length > 0 &&
+                last.label !== "Unreachable" &&
+                last.label.includes("/")
+            ) {
+                return insertInto(last, node);
+            }
+            return parent;
+        };
 
         for (const h of hops) {
-            const subnet = h.ip === "*" ? "*" : subnet24(h.ip);
+            const subnet = h.ip === "*" ? "Unreachable" : subnet24(h.ip);
+
             if (subnet !== currentSubnet) {
-                if (currentGroup.length > 0) {
-                    subnetGroups.push(
-                        group(currentSubnet, currentGroup)
+                // Commit current group to root if non-empty
+                if (currentGroup.children && currentGroup.children.length > 0) {
+                    const targetParent = insertInto(
+                        root,
+                        currentGroup
+                    );
+                    targetParent.children!.push(currentGroup);
+                }
+                // Start new group nested inside the previous one
+                const newGroup: TopologyNode = { label: subnet, children: [] };
+                if (h.ip === "*") {
+                    newGroup.children!.push(child(`* * *`));
+                } else {
+                    newGroup.children!.push(
+                        child(h.ip, h.time || undefined)
                     );
                 }
                 currentSubnet = subnet;
-                currentGroup = [];
-            }
-            if (h.ip === "*") {
-                currentGroup.push(child(`${h.hop}: * * *`));
+                currentGroup = newGroup;
             } else {
-                currentGroup.push(
-                    child(`${h.hop}: ${h.ip}`, h.time || undefined)
-                );
+                // Same subnet — add as leaf sibling
+                if (h.ip === "*") {
+                    currentGroup.children!.push(child(`* * *`));
+                } else {
+                    currentGroup.children!.push(
+                        child(h.ip, h.time || undefined)
+                    );
+                }
             }
-        }
-        if (currentGroup.length > 0) {
-            subnetGroups.push(group(currentSubnet, currentGroup));
         }
 
-        return group(`Trace ${target}`, subnetGroups);
+        // Commit last group
+        if (currentGroup.children && currentGroup.children.length > 0) {
+            const targetParent = insertInto(root, currentGroup);
+            targetParent.children!.push(currentGroup);
+        }
+
+        return root;
     }
 
     // ── DNS servers ────────────────────────────────────────

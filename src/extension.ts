@@ -17,6 +17,8 @@ import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
 import { TopologyStore } from "./topologyStore";
 import { NodeTopologyScanner } from "./topologyScanner";
 import { TopologyTreeProvider } from "./topologyTreeProvider";
+import { TodoTreeProvider } from "./todoTreeProvider";
+import { TodoStore } from "./todoStore";
 import {
     GroupStore,
     UNGROUPED_ID,
@@ -212,6 +214,29 @@ export function activate(context: vscode.ExtensionContext): void {
     });
     subscriptions.push(topologyView);
 
+    // ── TODO TreeView ─────────────────────────────────────
+    const workspaceFolder =
+        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+    const todoStore = new TodoStore(workspaceFolder);
+    const todoProvider = new TodoTreeProvider(todoStore);
+    todoProvider.start();
+    subscriptions.push({ dispose: () => todoProvider.stop() });
+
+    const todoView = vscode.window.createTreeView("superset.todo", {
+        treeDataProvider: todoProvider,
+        showCollapseAll: true,
+    });
+    subscriptions.push(todoView);
+
+    // Load initial data; re-load on README.todo file changes
+    todoStore.load();
+    const todoFileWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(workspaceFolder, "README.todo")
+    );
+    todoFileWatcher.onDidChange(() => todoStore.load());
+    todoFileWatcher.onDidCreate(() => todoStore.load());
+    subscriptions.push(todoFileWatcher);
+
     // Wire HighlightPresenter against a status bar item.
     const statusBar = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,
@@ -232,6 +257,18 @@ export function activate(context: vscode.ExtensionContext): void {
         },
         showStatusBar: () => statusBar.show(),
         hideStatusBar: () => statusBar.hide(),
+        // Make the notification clickable. While the item is shown
+        // (>=1 unseen terminal), a click jumps to the Superset
+        // dashboard. When the presenter hides the item, the command is
+        // cleared so a hidden status bar entry never advertises a
+        // stale click target. The command ID is owned by this file
+        // (not the presenter) so the presenter stays wiring-free.
+        setStatusBarCommand: () => {
+            statusBar.command = "superset.focusView";
+        },
+        clearStatusBarCommand: () => {
+            statusBar.command = undefined;
+        },
         log,
     });
     presenter.start();
@@ -806,6 +843,61 @@ export function activate(context: vscode.ExtensionContext): void {
                 await topologyStore.scan();
                 topologyProvider.refresh();
                 vscode.window.showInformationMessage("網路拓撲掃描完成");
+            }
+        )
+    );
+
+    // ── Panel navigation ──────────────────────────────────
+    const panelOrder = [
+        "superset.terminals",
+        "superset.explore",
+        "superset.mdns",
+        "superset.topology",
+    ];
+
+    subscriptions.push(
+        vscode.commands.registerCommand("superset.focusPanel", async () => {
+            const current = vscode.window.activeTextEditor;
+            // Find which view container panel currently has visible focus
+            // Strategy: cycle through views; focus the next one
+            const allViews = panelOrder;
+            // Try to focus the first panel — each call cycles
+            // Simple approach: focus the superset view container
+            await vscode.commands.executeCommand(
+                "workbench.view.extension.superset"
+            );
+            // The view container now has focus; get the current visible view
+            // We cycle by trying to focus each view in order
+            for (const viewId of allViews) {
+                try {
+                    await vscode.commands.executeCommand(
+                        `${viewId}.focus`
+                    );
+                    break;
+                } catch {
+                    // View might not be visible, try next
+                }
+            }
+        })
+        );
+
+    // ── TODO commands ─────────────────────────────────────
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.todoToggle",
+            async (item: { line: number; checked: boolean; text: string } | undefined) => {
+                if (!item) return;
+                await todoStore.toggle(item);
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.todoFilter",
+            async () => {
+                await todoStore.load();
+                todoProvider.refresh();
             }
         )
     );

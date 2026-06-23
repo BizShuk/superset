@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { TerminalHandle } from "./types";
 import type { TerminalRegistry } from "./terminalRegistry";
-import { GroupStore, type Group } from "./groupStore";
+import { GroupStore, UNGROUPED_ID, type Group } from "./groupStore";
 import { buildTreeItemSpec, buildGroupSpec } from "./treeSpec";
 
 export { UNSEEN_PREFIX, stripUnseenPrefix } from "./treeSpec";
@@ -145,9 +145,12 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
         item.iconPath = new vscode.ThemeIcon(
             spec.iconKind === "groupHighlighted" ? "folder-active" : "folder",
             new vscode.ThemeColor(
-                `charts.${spec.color === "magenta" ? "purple" : spec.color}`
+                group.id === UNGROUPED_ID
+                    ? "disabledForeground"
+                    : `charts.${spec.color === "magenta" ? "purple" : spec.color}`
             )
         );
+        // Dim (Ungrouped) label via icon color + label suffix
         item.collapsibleState =
             spec.collapsibleState === "expanded"
                 ? vscode.TreeItemCollapsibleState.Expanded

@@ -40,9 +40,7 @@ export class TopologyTreeProvider
         const spec = buildTopologySpec(element);
         const item = new vscode.TreeItem(spec.label);
         item.description = spec.description;
-        item.iconPath = new vscode.ThemeIcon(
-            spec.iconKind === "group" ? "symbol-namespace" : "symbol-property"
-        );
+        // No icon — clean look
         item.contextValue = spec.contextValue;
         const hasChildren =
             element.children && element.children.length > 0;
