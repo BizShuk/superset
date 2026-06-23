@@ -1,3 +1,4 @@
 # TODO
 
-- [ ] Refactor `extension.ts` into per-feature modules (composition root pattern) — see [plans/2026-06-23-extension-module-split.md](plans/2026-06-23-extension-module-split.md)
+- [x] Refactor `extension.ts` into per-feature modules (composition root pattern) — see [plans/2026-06-23-extension-module-split.md](plans/2026-06-23-extension-module-split.md)
+- [ ] TODO subgroup panel add a button to open README.todo
