@@ -21,6 +21,8 @@ export interface MdnsPacket {
         ttl: number;
         data: unknown;
     }>;
+    /** Source address of the packet (multicast sender). */
+    srcAddress?: string;
 }
 
 export interface MdnsTransport {
@@ -58,7 +60,7 @@ export class MulticastDnsTransport implements MdnsTransport {
         this.mdns = mDNS({ loopback: true });
         this.started = true;
 
-        this.mdns.on("response", (response: Packet) => {
+        this.mdns.on("response", (response: Packet, rinfo) => {
             const answers = (response.answers ?? []) as RawAnswer[];
             const additionals = (response.additionals ?? []) as RawAnswer[];
             const pkt: MdnsPacket = {
@@ -68,6 +70,7 @@ export class MulticastDnsTransport implements MdnsTransport {
                 additionals: additionals
                     .filter((a) => a.type !== "OPT")
                     .map(normalizeAnswer),
+                srcAddress: rinfo.address,
             };
             for (const cb of this.listeners) {
                 cb(pkt);

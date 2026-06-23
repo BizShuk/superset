@@ -11,9 +11,13 @@ function fakeService(overrides: Partial<MdnsService> = {}): MdnsService {
         type: "_http._tcp",
         domain: "local",
         port: 8080,
+        priority: 0,
+        weight: 0,
+        ttl: 0,
         host: "myserver.local",
         addresses: ["192.168.1.42"],
         txt: { path: "/api" },
+        subtypes: [],
         firstSeen: 1000,
         lastSeen: 2000,
         ...overrides,
@@ -46,6 +50,30 @@ describe("buildMdnsServiceSpec", () => {
         const svc = fakeService({ port: 0 });
         const spec = buildMdnsServiceSpec(svc);
         expect(spec.description).toBe("myserver.local");
+    });
+
+    it("shows priority and weight when non-default", () => {
+        const svc = fakeService({ priority: 10, weight: 50 });
+        const spec = buildMdnsServiceSpec(svc);
+        expect(spec.description).toContain("(p:10 w:50)");
+    });
+
+    it("does not show priority/weight when both are 0", () => {
+        const svc = fakeService({ priority: 0, weight: 0 });
+        const spec = buildMdnsServiceSpec(svc);
+        expect(spec.description).not.toContain("p:");
+    });
+
+    it("shows TTL in seconds", () => {
+        const svc = fakeService({ ttl: 300 });
+        const spec = buildMdnsServiceSpec(svc);
+        expect(spec.description).toContain("TTL:300s");
+    });
+
+    it("does not show TTL when 0", () => {
+        const svc = fakeService({ ttl: 0 });
+        const spec = buildMdnsServiceSpec(svc);
+        expect(spec.description).not.toContain("TTL");
     });
 });
 

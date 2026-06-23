@@ -19,12 +19,20 @@ export interface MdnsTypeGroup {
  */
 export function buildMdnsServiceSpec(svc: MdnsService): MdnsTreeItemSpec {
     const addr = svc.host ?? svc.addresses[0] ?? "?";
-    const desc =
+    let desc =
         addr === "?"
             ? "?"
             : svc.port > 0
               ? `${addr}:${svc.port}`
               : addr;
+    // Append priority/weight if non-default (both 0 = default)
+    if (svc.priority > 0 || svc.weight > 0) {
+        desc += ` (p:${svc.priority} w:${svc.weight})`;
+    }
+    // Append TTL if present
+    if (svc.ttl > 0) {
+        desc += ` TTL:${svc.ttl}s`;
+    }
     return {
         label: svc.name,
         iconKind: "service",

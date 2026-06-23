@@ -45,14 +45,33 @@ export type ExplorerListener = (change: ExplorerChange) => void;
 // ── mDNS types ──────────────────────────────────────
 
 export interface MdnsService {
+    /** Instance name, e.g. "MyPrinter._http._tcp.local" */
     readonly name: string;
-    readonly type: string; // e.g. "_http._tcp"
-    readonly domain: string; // "local"
+    /** Service type, e.g. "_http._tcp" */
+    readonly type: string;
+    /** DNS domain, almost always "local" for mDNS */
+    readonly domain: string;
+    /** TCP/UDP port from SRV record */
     readonly port: number;
+    /** SRV priority — lower = higher priority. Client should try lower first. */
+    readonly priority: number;
+    /** SRV weight — relative weight for same-priority hosts (0 = default). */
+    readonly weight: number;
+    /** Minimum TTL across all records that compose this service (seconds). */
+    readonly ttl: number;
+    /** Hostname from SRV target, e.g. "myserver.local" */
     readonly host?: string;
+    /** IPv4/IPv6 addresses from A/AAAA records */
     readonly addresses: readonly string[];
+    /** TXT key-value pairs, e.g. { path: "/api", version: "1.0" } */
     readonly txt: Readonly<Record<string, string>>;
+    /** Subtypes extracted from PTR records, e.g. ["_printer"] */
+    readonly subtypes: readonly string[];
+    /** Source IP of the multicast packet (network interface identifier) */
+    readonly srcAddress?: string;
+    /** Timestamp of first discovery (ms epoch) */
     readonly firstSeen: number;
+    /** Timestamp of last re-discovery (ms epoch) */
     readonly lastSeen: number;
 }
 

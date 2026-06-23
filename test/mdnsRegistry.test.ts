@@ -46,9 +46,16 @@ function ptrRecord(
 function srvRecord(
     name: string,
     port: number,
-    target: string
+    target: string,
+    priority: number = 0,
+    weight: number = 0
 ): MdnsPacket["answers"][number] {
-    return { name, type: "SRV", ttl: 120, data: { port, target } };
+    return {
+        name,
+        type: "SRV",
+        ttl: 120,
+        data: { port, target, priority, weight },
+    };
 }
 
 function txtRecord(
@@ -117,6 +124,9 @@ describe("MdnsRegistry", () => {
         const svc = call.service;
         expect(svc.name).toContain("MyServer");
         expect(svc.port).toBe(8080);
+        expect(svc.priority).toBe(0);
+        expect(svc.weight).toBe(0);
+        expect(svc.ttl).toBe(120);
         expect(svc.addresses).toContain("192.168.1.42");
         expect(svc.txt).toEqual({ path: "/api" });
     });
@@ -189,5 +199,79 @@ describe("MdnsRegistry", () => {
 
     it("getByKey returns undefined for unknown key", () => {
         expect(registry.getByKey("nonexistent")).toBeUndefined();
+    });
+
+    it("captures SRV priority and weight", async () => {
+        const listener = vi.fn();
+        registry.onDidChange(listener);
+        registry.start();
+
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_http._tcp.local", "Balanced._http._tcp.local"),
+                srvRecord("Balanced._http._tcp.local", 80, "host.local", 10, 50),
+            ],
+        });
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        const svc = listener.mock.calls[0][0].service;
+        expect(svc.priority).toBe(10);
+        expect(svc.weight).toBe(50);
+    });
+
+    it("tracks minimum TTL across all records", async () => {
+        const listener = vi.fn();
+        registry.onDidChange(listener);
+        registry.start();
+
+        await transport.feedAndFlush({
+            answers: [
+                { name: "_http._tcp.local", type: "PTR", ttl: 300, data: "Svc._http._tcp.local" },
+                { name: "Svc._http._tcp.local", type: "SRV", ttl: 60, data: { port: 80, target: "host.local" } },
+                { name: "Svc._http._tcp.local", type: "TXT", ttl: 120, data: {} },
+            ],
+        });
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        const svc = listener.mock.calls[0][0].service;
+        expect(svc.ttl).toBe(60); // min of 300, 60, 120
+    });
+
+    it("extracts subtypes from PTR records", async () => {
+        const listener = vi.fn();
+        registry.onDidChange(listener);
+        registry.start();
+
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord(
+                    "_printer._sub._http._tcp.local",
+                    "MyPrinter._http._tcp.local"
+                ),
+                srvRecord("MyPrinter._http._tcp.local", 631, "printer.local"),
+            ],
+        });
+
+        expect(listener).toHaveBeenCalledTimes(1);
+        const svc = listener.mock.calls[0][0].service;
+        expect(svc.type).toBe("_http._tcp");
+        expect(svc.subtypes).toContain("_printer");
+    });
+
+    it("records srcAddress from packet", async () => {
+        const listener = vi.fn();
+        registry.onDidChange(listener);
+        registry.start();
+
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_http._tcp.local", "Svc._http._tcp.local"),
+                srvRecord("Svc._http._tcp.local", 80, "host.local"),
+            ],
+            srcAddress: "192.168.1.100",
+        });
+
+        const svc = listener.mock.calls[0][0].service;
+        expect(svc.srcAddress).toBe("192.168.1.100");
     });
 });

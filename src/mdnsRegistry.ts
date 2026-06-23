@@ -7,11 +7,45 @@ interface MutableService {
     type: string;
     domain: string;
     port: number;
+    priority: number;
+    weight: number;
+    ttl: number;
     host?: string;
     addresses: string[];
     txt: Record<string, string>;
+    subtypes: string[];
+    srcAddress?: string;
     firstSeen: number;
     lastSeen: number;
+}
+
+/** Track the minimum TTL across all records for a service. */
+function trackMinTtl(current: number, incoming: number): number {
+    if (current === 0) return incoming;
+    return Math.min(current, incoming);
+}
+
+/**
+ * Extract the subtype from a PTR name like "_printer._sub._http._tcp".
+ * Returns the subtype string (e.g. "_printer") or undefined.
+ */
+function extractSubtype(typeName: string): string | undefined {
+    const parts = typeName.split(".");
+    const subIdx = parts.indexOf("_sub");
+    if (subIdx <= 0) return undefined;
+    const subtype = parts[subIdx - 1];
+    return subtype.startsWith("_") ? subtype : undefined;
+}
+
+/**
+ * Strip the subtype segment from a type name.
+ * "_printer._sub._http._tcp" → "_http._tcp"
+ */
+function stripSubtype(typeName: string): string {
+    const parts = typeName.split(".");
+    const subIdx = parts.indexOf("_sub");
+    if (subIdx <= 0) return typeName;
+    return parts.slice(subIdx + 1).join(".");
 }
 
 function freeze(s: MutableService): MdnsService {
@@ -20,9 +54,14 @@ function freeze(s: MutableService): MdnsService {
         type: s.type,
         domain: s.domain,
         port: s.port,
+        priority: s.priority,
+        weight: s.weight,
+        ttl: s.ttl,
         host: s.host,
         addresses: s.addresses.slice(),
         txt: { ...s.txt },
+        subtypes: s.subtypes.slice(),
+        srcAddress: s.srcAddress,
         firstSeen: s.firstSeen,
         lastSeen: s.lastSeen,
     };
@@ -101,76 +140,86 @@ export class MdnsRegistry {
 
         for (const r of allRecords) {
             if (r.type === "PTR") {
-                this.handlePtr(r);
+                this.handlePtr(r, pkt.srcAddress);
             } else if (r.type === "SRV") {
-                this.handleSrv(r);
+                this.handleSrv(r, pkt.srcAddress);
             } else if (r.type === "TXT") {
-                this.handleTxt(r);
+                this.handleTxt(r, pkt.srcAddress);
             } else if (r.type === "A" || r.type === "AAAA") {
-                this.handleAddress(r);
+                this.handleAddress(r, pkt.srcAddress);
             }
         }
 
         this.flushPending();
     }
 
-    private handlePtr(r: {
-        name: string;
-        type: string;
-        ttl: number;
-        data: unknown;
-    }): void {
+    private handlePtr(
+        r: { name: string; type: string; ttl: number; data: unknown },
+        srcAddress?: string
+    ): void {
         const data = r.data as string;
         if (typeof data !== "string") return;
 
-        // r.name is the service type (e.g. "_http._tcp.local")
+        // r.name is the service type (e.g. "_http._tcp.local" or "_printer._sub._http._tcp.local")
         // data is the instance name (e.g. "MyPrinter._http._tcp.local")
         if (data === r.name) return; // skip self-referential
 
         const key = data; // instance name is the key
-        const pending = this.getPending(key);
+        const pending = this.getPending(key, srcAddress);
         if (!pending.name) {
             pending.name = data;
-            pending.type = r.name.replace(/\.local\.?$/i, "");
+            // Strip .local suffix and extract subtype from PTR name
+            const basename = r.name.replace(/\.local\.?$/i, "");
+            const subtype = extractSubtype(basename);
+            if (subtype) {
+                pending.type = stripSubtype(basename);
+                if (!pending.subtypes.includes(subtype)) {
+                    pending.subtypes = [...pending.subtypes, subtype];
+                }
+            } else {
+                pending.type = basename;
+            }
             pending.domain = "local";
         }
-        pending.firstSeen = pending.firstSeen ?? Date.now();
+        pending.ttl = trackMinTtl(pending.ttl, r.ttl);
+        pending.firstSeen = pending.firstSeen || Date.now();
         pending.lastSeen = Date.now();
     }
 
-    private handleSrv(r: {
-        name: string;
-        type: string;
-        ttl: number;
-        data: unknown;
-    }): void {
+    private handleSrv(
+        r: { name: string; type: string; ttl: number; data: unknown },
+        srcAddress?: string
+    ): void {
         const data = r.data as {
             port?: number;
             target?: string;
+            priority?: number;
+            weight?: number;
         };
         if (!data || typeof data.port !== "number") return;
 
         const key = r.name;
-        const pending = this.getPending(key);
+        const pending = this.getPending(key, srcAddress);
         pending.port = data.port;
+        pending.priority = data.priority ?? 0;
+        pending.weight = data.weight ?? 0;
         if (data.target) {
             pending.host = data.target.replace(/\.$/i, "");
         }
-        pending.firstSeen = pending.firstSeen ?? Date.now();
+        pending.ttl = trackMinTtl(pending.ttl, r.ttl);
+        pending.firstSeen = pending.firstSeen || Date.now();
         pending.lastSeen = Date.now();
     }
 
-    private handleTxt(r: {
-        name: string;
-        type: string;
-        ttl: number;
-        data: unknown;
-    }): void {
+    private handleTxt(
+        r: { name: string; type: string; ttl: number; data: unknown },
+        srcAddress?: string
+    ): void {
         const data = r.data as Record<string, string> | Buffer | undefined;
         if (!data) return;
 
         const key = r.name;
-        const pending = this.getPending(key);
+        const pending = this.getPending(key, srcAddress);
 
         let txt: Record<string, string> = {};
         if (Buffer.isBuffer(data)) {
@@ -190,16 +239,15 @@ export class MdnsRegistry {
             txt = data;
         }
         pending.txt = { ...(pending.txt ?? {}), ...txt };
-        pending.firstSeen = pending.firstSeen ?? Date.now();
+        pending.ttl = trackMinTtl(pending.ttl, r.ttl);
+        pending.firstSeen = pending.firstSeen || Date.now();
         pending.lastSeen = Date.now();
     }
 
-    private handleAddress(r: {
-        name: string;
-        type: string;
-        ttl: number;
-        data: unknown;
-    }): void {
+    private handleAddress(
+        r: { name: string; type: string; ttl: number; data: unknown },
+        srcAddress?: string
+    ): void {
         const data = r.data as string;
         if (typeof data !== "string") return;
 
@@ -207,12 +255,13 @@ export class MdnsRegistry {
         const hostname = r.name.replace(/\.$/i, "");
 
         // Add address to the hostname entry itself
-        const self = this.getPending(hostname);
+        const self = this.getPending(hostname, srcAddress);
         const selfAddrs = self.addresses ?? [];
         if (!selfAddrs.includes(addr)) {
             self.addresses = [...selfAddrs, addr];
         }
-        self.firstSeen = self.firstSeen ?? Date.now();
+        self.ttl = trackMinTtl(self.ttl, r.ttl);
+        self.firstSeen = self.firstSeen || Date.now();
         self.lastSeen = Date.now();
 
         // Also add to any service whose host matches this hostname
@@ -222,7 +271,8 @@ export class MdnsRegistry {
                 if (!existing.includes(addr)) {
                     p.addresses = [...existing, addr];
                 }
-                p.firstSeen = p.firstSeen ?? Date.now();
+                p.ttl = trackMinTtl(p.ttl, r.ttl);
+                p.firstSeen = p.firstSeen || Date.now();
                 p.lastSeen = Date.now();
             }
         }
@@ -230,7 +280,7 @@ export class MdnsRegistry {
 
     // ── Private: coalescing ────────────────────────────────
 
-    private getPending(key: string): MutableService {
+    private getPending(key: string, srcAddress?: string): MutableService {
         let p = this.pending.get(key);
         if (!p) {
             p = {
@@ -238,12 +288,19 @@ export class MdnsRegistry {
                 type: "",
                 domain: "local",
                 port: 0,
+                priority: 0,
+                weight: 0,
+                ttl: 0,
                 addresses: [],
                 txt: {},
+                subtypes: [],
+                srcAddress,
                 firstSeen: 0,
                 lastSeen: 0,
             };
             this.pending.set(key, p);
+        } else if (srcAddress && !p.srcAddress) {
+            p.srcAddress = srcAddress;
         }
         return p;
     }

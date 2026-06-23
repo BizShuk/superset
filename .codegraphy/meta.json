@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "lastIndexedAt": null,
+  "lastIndexedCommit": null,
+  "pluginSignature": null,
+  "settingsSignature": null,
+  "pendingChangedFiles": [
+    "/Users/bytedance/projects/superset/.codegraphy",
+    "/Users/bytedance/projects/superset/src/panelView.ts",
+    "/Users/bytedance/projects/superset/src/panelView.ts.tmp.76630.5853eed8beec",
+    "/Users/bytedance/projects/superset/src/panelView.ts.tmp.76630.a5c6728d368e",
+    "/Users/bytedance/projects/superset/src/extension.ts",
+    "/Users/bytedance/projects/superset/src/extension.ts.tmp.33260.e248e6581f56",
+    "/Users/bytedance/projects/superset/README.panel.md",
+    "/Users/bytedance/projects/superset/README.panel.md.tmp.33260.5e0c3b9b5693",
+    "/Users/bytedance/projects/superset/src/treeProvider.ts",
+    "/Users/bytedance/projects/superset/media",
+    "/Users/bytedance/projects/superset/src/panelStore.ts",
+    "/Users/bytedance/projects/superset/src/panelProtocol.ts",
+    "/Users/bytedance/projects/superset/test/panelStore.test.ts",
+    "/Users/bytedance/projects/superset/test/renderTree.test.ts",
+    "/Users/bytedance/projects/superset/test/panelProtocol.test.ts",
+    "/Users/bytedance/projects/superset/test/terminalRegistry.test.ts",
+    "/Users/bytedance/projects/superset/test/buildTreeSnapshot.test.ts",
+    "/Users/bytedance/projects/superset/test/treeProvider.test.ts",
+    "/Users/bytedance/projects/superset/media/panel.css",
+    "/Users/bytedance/projects/superset/media/panel.html",
+    "/Users/bytedance/projects/superset/media/panel.js",
+    "/Users/bytedance/projects/superset/superset-0.0.2.vsix",
+    "/Users/bytedance/projects/superset/plans/2026-06-22-vscode-build-task-design.md"
+  ]
+}
