@@ -76,6 +76,24 @@
             {
                 "command": "superset.toggleGroupCollapsed",
                 "title": "Superset: Toggle Group"
+            },
+            {
+                "command": "superset.exploreRefresh",
+                "title": "Superset: Refresh Explorer",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "superset.mdnsRefresh",
+                "title": "Superset: Refresh mDNS",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "superset.mdnsCopy",
+                "title": "Superset: Copy Service Address"
+            },
+            {
+                "command": "superset.exploreOpen",
+                "title": "Superset: Open File"
             }
         ],
         "viewsContainers": {
@@ -93,6 +111,16 @@
                     "id": "superset.terminals",
                     "name": "Terminals",
                     "contextualTitle": "Superset"
+                },
+                {
+                    "id": "superset.explore",
+                    "name": "Explore",
+                    "contextualTitle": "Superset"
+                },
+                {
+                    "id": "superset.mdns",
+                    "name": "MDNS",
+                    "contextualTitle": "Superset"
                 }
             ]
         },
@@ -106,6 +134,16 @@
                 {
                     "command": "superset.newGroup",
                     "when": "view == superset.terminals",
+                    "group": "navigation"
+                },
+                {
+                    "command": "superset.exploreRefresh",
+                    "when": "view == superset.explore",
+                    "group": "navigation"
+                },
+                {
+                    "command": "superset.mdnsRefresh",
+                    "when": "view == superset.mdns",
                     "group": "navigation"
                 }
             ],
@@ -149,6 +187,16 @@
                     "command": "superset.deleteGroup",
                     "when": "viewItem == group",
                     "group": "9_group"
+                },
+                {
+                    "command": "superset.mdnsCopy",
+                    "when": "viewItem == mdnsService",
+                    "group": "1_focus"
+                },
+                {
+                    "command": "superset.exploreOpen",
+                    "when": "viewItem == explorerFile",
+                    "group": "1_focus"
                 }
             ]
         },
@@ -175,12 +223,14 @@
         "test:watch": "vitest"
     },
     "devDependencies": {
+        "@types/multicast-dns": "^7.2.4",
         "@types/node": "^26.0.0",
         "@types/vscode": "^1.85.0",
         "typescript": "^5.4.0",
         "vitest": "^4.1.9"
     },
     "dependencies": {
-        "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1"
+        "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+        "multicast-dns": "^7.2.5"
     }
 }

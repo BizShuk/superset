@@ -8,6 +8,12 @@ import { TerminalTreeProvider, isGroup } from "./treeProvider";
 import { HighlightPresenter } from "./highlightPresenter";
 import { stripUnseenPrefix } from "./treeSpec";
 import { decideAutoReplace } from "./autoReplace";
+import { ExplorerStore } from "./explorerStore";
+import { VscodeFsAdapter } from "./fsAdapter";
+import { ExplorerTreeProvider } from "./explorerTreeProvider";
+import { MdnsRegistry } from "./mdnsRegistry";
+import { MulticastDnsTransport } from "./mdnsTransport";
+import { MdnsTreeProvider } from "./mdnsTreeProvider";
 import {
     GroupStore,
     UNGROUPED_ID,
@@ -162,6 +168,34 @@ export function activate(context: vscode.ExtensionContext): void {
     const windowTag = vscode.env.sessionId.slice(0, 8);
     treeView.message = `Window: ${windowTag}`;
     subscriptions.push(treeView);
+
+    // ── Explorer TreeView ─────────────────────────────────
+    const explorerStore = new ExplorerStore(new VscodeFsAdapter());
+    explorerStore.start();
+    const explorerProvider = new ExplorerTreeProvider(explorerStore);
+    explorerProvider.start();
+    subscriptions.push({ dispose: () => explorerProvider.stop() });
+    subscriptions.push({ dispose: () => explorerStore.stop() });
+
+    const explorerView = vscode.window.createTreeView("superset.explore", {
+        treeDataProvider: explorerProvider,
+        showCollapseAll: true,
+    });
+    subscriptions.push(explorerView);
+
+    // ── mDNS TreeView ─────────────────────────────────────
+    const mdnsRegistry = new MdnsRegistry(new MulticastDnsTransport());
+    mdnsRegistry.start();
+    const mdnsProvider = new MdnsTreeProvider(mdnsRegistry);
+    mdnsProvider.start();
+    subscriptions.push({ dispose: () => mdnsProvider.stop() });
+    subscriptions.push({ dispose: () => mdnsRegistry.stop() });
+
+    const mdnsView = vscode.window.createTreeView("superset.mdns", {
+        treeDataProvider: mdnsProvider,
+        showCollapseAll: true,
+    });
+    subscriptions.push(mdnsView);
 
     // Wire HighlightPresenter against a status bar item.
     const statusBar = vscode.window.createStatusBarItem(
@@ -624,6 +658,55 @@ export function activate(context: vscode.ExtensionContext): void {
                     return;
                 }
                 groupStore.toggleGroupCollapsed(group.id);
+            }
+        )
+    );
+
+    // ── Explorer commands ─────────────────────────────────
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.exploreRefresh",
+            () => {
+                explorerStore.refreshAll();
+                explorerProvider.refresh();
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.exploreOpen",
+            async (node: { uri: string; isDirectory: boolean } | undefined) => {
+                if (!node || node.isDirectory) return;
+                const uri = vscode.Uri.file(node.uri);
+                await vscode.commands.executeCommand("vscode.open", uri);
+            }
+        )
+    );
+
+    // ── mDNS commands ─────────────────────────────────────
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.mdnsRefresh",
+            () => {
+                mdnsRegistry.refresh();
+                mdnsProvider.refresh();
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.mdnsCopy",
+            async (svc: { host?: string; addresses: readonly string[]; port: number } | undefined) => {
+                if (!svc) return;
+                const target = svc.host ?? svc.addresses[0];
+                if (target) {
+                    const text =
+                        svc.port > 0 ? `${target}:${svc.port}` : target;
+                    await vscode.env.clipboard.writeText(text);
+                    vscode.window.showInformationMessage(`已複製 ${text}`);
+                }
             }
         )
     );
