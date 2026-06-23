@@ -13,14 +13,14 @@ import { VscodeFsAdapter } from "./fsAdapter";
 import { ExplorerTreeProvider } from "./explorerTreeProvider";
 import { MdnsRegistry } from "./mdnsRegistry";
 import { MulticastDnsTransport } from "./mdnsTransport";
-import { MdnsTreeProvider } from "./mdnsTreeProvider";
+import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
 import {
     GroupStore,
     UNGROUPED_ID,
     type Group,
     type GroupColor,
 } from "./groupStore";
-import type { TerminalHandle } from "./types";
+import type { MdnsService, TerminalHandle } from "./types";
 
 export function activate(context: vscode.ExtensionContext): void {
     console.log("[superset] activated");
@@ -698,12 +698,83 @@ export function activate(context: vscode.ExtensionContext): void {
     subscriptions.push(
         vscode.commands.registerCommand(
             "superset.mdnsCopy",
-            async (svc: { host?: string; addresses: readonly string[]; port: number } | undefined) => {
+            async (svc: MdnsService | undefined) => {
                 if (!svc) return;
                 const target = svc.host ?? svc.addresses[0];
                 if (target) {
                     const text =
                         svc.port > 0 ? `${target}:${svc.port}` : target;
+                    await vscode.env.clipboard.writeText(text);
+                    vscode.window.showInformationMessage(`已複製 ${text}`);
+                }
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.mdnsCopyDetail",
+            async (detail: MdnsDetail | undefined) => {
+                if (!detail) return;
+                await vscode.env.clipboard.writeText(detail.value);
+                vscode.window.showInformationMessage(
+                    `已複製 ${detail.value}`
+                );
+            }
+        )
+    );
+
+    subscriptions.push(
+        vscode.commands.registerCommand(
+            "superset.mdnsShowDetail",
+            async (svc: MdnsService | undefined) => {
+                if (!svc) return;
+                const lines: string[] = [
+                    `名稱: ${svc.name}`,
+                    `類型: ${svc.type}`,
+                    `網域: ${svc.domain}`,
+                    `主機: ${svc.host ?? "(無)"}`,
+                    `埠號: ${svc.port}`,
+                    `位址: ${svc.addresses.length > 0 ? svc.addresses.join(", ") : "(無)"}`,
+                ];
+                if (svc.priority > 0 || svc.weight > 0) {
+                    lines.push(
+                        `優先級: ${svc.priority}  權重: ${svc.weight}`
+                    );
+                }
+                if (svc.ttl > 0) {
+                    lines.push(`TTL: ${svc.ttl} 秒`);
+                }
+                if (svc.subtypes.length > 0) {
+                    lines.push(`子類型: ${svc.subtypes.join(", ")}`);
+                }
+                if (svc.srcAddress) {
+                    lines.push(`來源網卡: ${svc.srcAddress}`);
+                }
+                if (Object.keys(svc.txt).length > 0) {
+                    lines.push(
+                        `TXT 屬性: ${Object.entries(svc.txt)
+                            .map(([k, v]) => `${k}=${v}`)
+                            .join(", ")}`
+                    );
+                }
+                lines.push(
+                    `首次發現: ${new Date(svc.firstSeen).toLocaleTimeString()}`,
+                    `最後更新: ${new Date(svc.lastSeen).toLocaleTimeString()}`
+                );
+                const detail = lines.join("\n");
+
+                const copyText = svc.host ?? svc.addresses[0];
+                const action = await vscode.window.showInformationMessage(
+                    detail,
+                    { modal: true },
+                    "複製位址"
+                );
+                if (action === "複製位址" && copyText) {
+                    const text =
+                        svc.port > 0
+                            ? `${copyText}:${svc.port}`
+                            : copyText;
                     await vscode.env.clipboard.writeText(text);
                     vscode.window.showInformationMessage(`已複製 ${text}`);
                 }

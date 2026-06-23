@@ -92,6 +92,14 @@
                 "title": "Superset: Copy Service Address"
             },
             {
+                "command": "superset.mdnsCopyDetail",
+                "title": "Superset: Copy Value"
+            },
+            {
+                "command": "superset.mdnsShowDetail",
+                "title": "Superset: Show Service Detail"
+            },
+            {
                 "command": "superset.exploreOpen",
                 "title": "Superset: Open File"
             }
@@ -191,6 +199,11 @@
                 {
                     "command": "superset.mdnsCopy",
                     "when": "viewItem == mdnsService",
+                    "group": "1_focus"
+                },
+                {
+                    "command": "superset.mdnsCopyDetail",
+                    "when": "viewItem == mdnsDetail",
                     "group": "1_focus"
                 },
                 {
