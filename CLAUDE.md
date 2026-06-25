@@ -2,7 +2,7 @@
 
 VSCode 擴充功能:主側欄列出所有終端機,偵測背景終端機的新輸出並三處高亮(面板圖示、tab 名稱、狀態列)。本檔案記錄專案結構、建置指令與「為何這樣設計」的決策脈絡,作為日後維護與重構的依據。
 
-> 對外文件 (功能描述、安裝、使用) 見 [`README.md`](README.md);設計決策歷史見 [`plans/`](plans/)。
+> 對外文件 (功能描述、安裝、使用) 見 [`README.md`](README.md);設計決策歷史見 [`plans/`](plans/) (進行中計劃) 與 [`specs/`](specs/) (已實作的歷史規格)。
 
 Update version in @package.json every change based on <majore,minor,patch>
 
@@ -87,6 +87,19 @@ Update version in @package.json every change based on <majore,minor,patch>
 | `features/mdns/index.ts`      | mDNS 服務發現 TreeView              | MdnsRegistry, MdnsTreeProvider                            |
 | `features/topology/index.ts`  | 網路拓撲掃描 TreeView               | TopologyStore, TopologyTreeProvider                       |
 | `features/todo/index.ts`      | TODO 清單 TreeView + 過濾器 badge   | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
+
+---
+
+## 計劃 vs 規格目錄 (plans/ vs specs/)
+
+兩個目錄存放 markdown 文件,功能不同:
+
+| 目錄        | 用途                                                | 何時放入                                                |
+| ----------- | --------------------------------------------------- | ------------------------------------------------------- |
+| `plans/`    | **進行中 / 未實作** 的設計與實作計劃                | 寫計劃時;feature 實作完成、push 成功後,搬到 `specs/` |
+| `specs/`    | **已實作且 push** 的歷史規格文件(已不再變動的紀錄) | 對應功能 commit 進 git history 後                        |
+
+`specs/` 內的檔案視為「事後記錄」,不再被當作進行中的計劃修改;新的變更以新 plan 形式開在 `plans/`,完成後整份升級進 `specs/`。
 
 ### Terminals Feature 內部元件
 
@@ -176,7 +189,8 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## 相關連結
 
-- 設計規格:[`plans/2026-06-20-terminal-dashboard-panel.md`](plans/2026-06-20-terminal-dashboard-panel.md)
+- 設計規格(已實作): [`specs/2026-06-20-terminal-dashboard-panel.md`](specs/2026-06-20-terminal-dashboard-panel.md)
+- 進行中計劃: [`plans/`](plans/)
 - VSCode Terminal API 官方文件:<https://code.visualstudio.com/docs/terminal/shell-integration>
 - VSCode Pseudoterminal:<https://code.visualstudio.com/api/references/vscode-api#Pseudoterminal>
 - node-pty:<https://github.com/homebridge/node-pty-prebuilt-multiarch>

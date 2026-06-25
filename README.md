@@ -5,7 +5,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 新增「Termina
 `superset` 把 VSCode 終端機事件彙整成可觀察的狀態,核心使用情境:背景的 Claude Code 終端機持續輸出時,使用者能在側欄一眼看到「哪個背景終端機有新動靜」。
 
 > 程式碼實作以本文件的「VSCode 終端機事件總覽」表格為準;`src/extension.ts` 訂閱的每個 API 都應在此表中找到對應列。
-> 設計決策、狀態機、資料流見 [`plans/2026-06-20-terminal-dashboard-panel.md`](plans/2026-06-20-terminal-dashboard-panel.md)。
+> 設計決策、狀態機、資料流見 [`specs/2026-06-20-terminal-dashboard-panel.md`](specs/2026-06-20-terminal-dashboard-panel.md) (已實作規格);進行中的新功能計劃見 [`plans/`](plans/)。
 >
 > 註:本文件先前名為 `terminal-dashboard`;2026-06-20 重新命名為 `superset` 後,plan 檔名沿用日期前綴作為歷史 ID、內文已同步更新。
 
@@ -286,8 +286,8 @@ npm run test:watch  # watch 模式
 
 - [VSCode Extension Manifest 官方文件](https://code.visualstudio.com/api/references/extension-manifest)
 - [VSCode Shell Integration 官方文件](https://code.visualstudio.com/docs/terminal/shell-integration)
-- 設計規格: [`plans/2026-06-20-terminal-dashboard-panel.md`](plans/2026-06-20-terminal-dashboard-panel.md)
-- 實作計畫: [`plans/2026-06-20-terminal-dashboard-panel.md`](plans/2026-06-20-terminal-dashboard-panel.md)
+- 設計規格 (已實作): [`specs/2026-06-20-terminal-dashboard-panel.md`](specs/2026-06-20-terminal-dashboard-panel.md)
+- 進行中計劃: [`plans/`](plans/)
 
 ---
 
