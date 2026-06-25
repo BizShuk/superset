@@ -274,4 +274,61 @@ describe("MdnsRegistry", () => {
         const svc = listener.mock.calls[0][0].service;
         expect(svc.srcAddress).toBe("192.168.1.100");
     });
+
+    it("dedupes by network key when two names share host|port|type", async () => {
+        const listener = vi.fn();
+        registry.onDidChange(listener);
+        registry.start();
+
+        // First instance name — becomes the canonical row.
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_ipp._tcp.local", "Printer._ipp._tcp.local"),
+                srvRecord("Printer._ipp._tcp.local", 631, "printer.local"),
+                aRecord("printer.local", "10.0.0.1"),
+            ],
+        });
+        // Second instance name, SAME host:port:type → must merge, not duplicate.
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_ipp._tcp.local", "Printer-Alt._ipp._tcp.local"),
+                srvRecord("Printer-Alt._ipp._tcp.local", 631, "printer.local"),
+                aRecord("printer.local", "10.0.0.2"),
+            ],
+        });
+
+        const all = registry.getAll();
+        expect(all.length).toBe(1);
+        expect(all[0].name).toBe("Printer._ipp._tcp.local");
+        expect(all[0].aliases).toContain("Printer-Alt._ipp._tcp.local");
+        expect(all[0].addresses).toEqual(
+            expect.arrayContaining(["10.0.0.1", "10.0.0.2"])
+        );
+        // Second sighting emits an update against the canonical row, not a new add.
+        const types = listener.mock.calls.map((c) => c[0].type);
+        expect(types).toEqual(["added", "updated"]);
+    });
+
+    it("keeps first-seen name canonical regardless of arrival order", async () => {
+        registry.start();
+
+        // Alt name arrives first → it becomes canonical.
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_ipp._tcp.local", "Z-Printer._ipp._tcp.local"),
+                srvRecord("Z-Printer._ipp._tcp.local", 631, "printer.local"),
+            ],
+        });
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_ipp._tcp.local", "A-Printer._ipp._tcp.local"),
+                srvRecord("A-Printer._ipp._tcp.local", 631, "printer.local"),
+            ],
+        });
+
+        const all = registry.getAll();
+        expect(all.length).toBe(1);
+        expect(all[0].name).toBe("Z-Printer._ipp._tcp.local");
+        expect(all[0].aliases).toContain("A-Printer._ipp._tcp.local");
+    });
 });
