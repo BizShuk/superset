@@ -78,12 +78,11 @@ Update version in @package.json every change based on <majore,minor,patch>
 
 ### Feature Modules
 
-五個獨立 feature modules,每個都有統一的 `register(ctx: FeatureContext): FeatureHandle` 介面:
+四個獨立 feature modules,每個都有統一的 `register(ctx: FeatureContext): FeatureHandle` 介面:
 
 | 模組                          | 職責                                | 主要元件                                                  |
 | ----------------------------- | ----------------------------------- | --------------------------------------------------------- |
 | `features/terminals/index.ts` | 終端機面板 + 高亮 + PTY 自動替換   | TerminalRegistry, OutputWatcher, PtyTerminalHost, ...     |
-| `features/explorer/index.ts`  | 檔案總管 TreeView                   | ExplorerStore, ExplorerTreeProvider                       |
 | `features/mdns/index.ts`      | mDNS 服務發現 TreeView              | MdnsRegistry, MdnsTreeProvider                            |
 | `features/topology/index.ts`  | 網路拓撲掃描 TreeView               | TopologyStore, TopologyTreeProvider                       |
 | `features/todo/index.ts`      | TODO 清單 TreeView + 過濾器 badge   | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
