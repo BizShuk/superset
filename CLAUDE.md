@@ -160,6 +160,30 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ---
 
+## mDNS 模組設計 (mDNS Module)
+
+`MdnsRegistry` (`src/mdnsRegistry.ts`) 是純資料層:訂閱 `MdnsTransport`、解析 DNS-SD 記錄、用 observer pattern 對外發 `MdnsChange`。沒有 `vscode` import,可在純 Node 測試。
+
+### 封包 → 合併 → 提交
+
+- `handlePacket` 把一個 UDP datagram 內的 PTR/SRV/TXT/A/AAAA 記錄寫進 `pending: Map<instanceName, MutableService>`,250ms debounce 後 `flushPending` 一次凍結成 `MdnsService` 提交。同一 datagram 的多筆記錄合併成一個 service 才發事件,避免抖動。
+- `services: Map<instanceName, MdnsService>` 以實例名稱為主鍵。
+
+### 去重:network identity secondary key
+
+- 同一台主機可能以多個 mDNS 實例名稱廣播、或同時走多張網卡 / IPv4+IPv6,造成面板重複列。`byNetworkKey: Map<host|port|type, canonicalName>` 為次索引;`flushPending` 提交時若新 service 的 network key 已存在於另一個實例名下,就 `mergeServices` 進該 canonical row(first-seen 名稱為準),其餘名稱存進 `service.aliases`,不再新增列。純函式 `networkKey` / `mergeServices` 在 `src/mdnsDedup.ts`。
+- `canonKeyToNk` 反向索引讓「同一實例改 port」時能釋放舊 network-key 槽位,避免後續不同服務誤佔而假合併。
+- `mergeServices` 同時聯集 addresses/subtypes、取 min ttl、取 max `lastSeen` / min `firstSeen` — 後者關鍵:新封包合併進 canonical 時不會留下過舊的 `lastSeen`,否則過期掃描會誤刪剛出現的服務。
+
+### 過期:TTL grace period
+
+- `services` 只增不減會讓面板塞滿已離線服務。`expireStale()` 每 `EXPIRY_TICK_MS`(5s)掃一次,`now - lastSeen > (ttl || TTL_DEFAULT_SECONDS) × 1000 × TTL_GRACE_MULTIPLIER`(3× TTL,RFC 6762 §10.1)就移除並發 `MdnsChange: "expired"` 事件。沒帶 TTL 的記錄 fallback 到 120s。持續收到封包的服務 `lastSeen` 不斷更新,永遠不過期。
+- `MdnsChange` 多了 `expired` 變體(與 `removed` 區分:`removed` = transport 告知,`expired` = registry 自判),供監控/診斷用。`MdnsTreeProvider` 不分事件類型、只重抓 `getAll()`,故新增變體不影響消費端。
+- `ClockSource`(預設 `Date.now`)為建構子選用依賴,測試以 `vi.useFakeTimers()` + 注入 `{ now: () => fakeNow }` 精確控制時間;正式環境呼叫端不變。
+- 過期移除 canonical row 時同步清 `byNetworkKey` / `canonKeyToNk`,保持索引一致。
+
+---
+
 ## 型別與 API 細節
 
 ### 為何 `TerminalHandle` 介面只有三個方法
@@ -178,18 +202,26 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## 測試 (Testing)
 
-`npm test` 跑 Vitest,目前 162 個 case 全綠:
+`npm test` 跑 Vitest,目前 173 個 case 全綠:
 
-| 測試檔                       | 對象                           | 案例數 |
-| ---------------------------- | ------------------------------ | ------ |
-| `terminalRegistry.test.ts`   | 純狀態機                       | 14     |
-| `outputWatcher.test.ts`      | Shell Integration watcher      | 5      |
-| `ptyTerminalHost.test.ts`    | PTY host (TUI 偵測核心)        | 14     |
-| `treeProvider.test.ts`       | 面板渲染 (`buildTreeItemSpec`) | 5      |
-| `highlightPresenter.test.ts` | tab 前綴 + 狀態列 + 降級       | 9      |
-| `badge.test.ts`              | TODO badge 純函式              | 6      |
-| `smoke.test.ts`              | 整體 smoke                     | 1      |
-| 其他                         | explorer, mdns, todo, topology | 108    |
+| 測試檔                            | 對象                           | 案例數 |
+| --------------------------------- | ------------------------------ | ------ |
+| `terminalRegistry.test.ts`        | 純狀態機                       | 17     |
+| `outputWatcher.test.ts`           | Shell Integration watcher      | 6      |
+| `ptyTerminalHost.test.ts`         | PTY host (TUI 偵測核心)        | 15     |
+| `treeProvider.test.ts`            | 面板渲染 (`buildTreeItemSpec`) | 11     |
+| `highlightPresenter.test.ts`      | tab 前綴 + 狀態列 + 降級       | 11     |
+| `badge.test.ts`                   | TODO badge 純函式              | 6      |
+| `autoReplace.test.ts`             | PTY 替換決策 + agent 排除      | 11     |
+| `groupStore.test.ts`              | 群組 metadata                  | 25     |
+| `mdnsDedup.test.ts`               | mDNS 去重純函式                | 8      |
+| `mdnsRegistry.test.ts`            | mDNS registry + 去重           | 15     |
+| `mdnsRegistry.expiration.test.ts` | mDNS 服務過期                  | 8      |
+| `mdnsTreeSpec.test.ts`            | mDNS 面板渲染 + 細節欄位       | 12     |
+| `todoStore.test.ts`               | TODO store                     | 6      |
+| `todoTreeProvider.test.ts`        | TODO 面板渲染                  | 17     |
+| `topologyStore.test.ts`           | 拓撲掃描 store                 | 4      |
+| `smoke.test.ts`                   | 整體 smoke                     | 1      |
 
 `TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/treeSpec.ts` 純函式。
 

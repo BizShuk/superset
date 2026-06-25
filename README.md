@@ -23,6 +23,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 新增「Termina
 - 命令 `Superset: Open TUI Terminal` 開啟 PTY-backed terminal,內部用 `node-pty` 100% 攔截 TUI app (`claude`、`vim`、`htop`) 的所有輸出。建議在跑 TUI app 前用此命令開新 terminal。
 - 側欄 `MDNS` 面板列出同網段以 DNS-SD / mDNS 廣播的服務(印表機、AirPlay、SSH 等),展開可看位址、埠號、TXT 屬性等細節,並可一鍵複製 `host:port`。
 - 同一台主機以多個 mDNS 實例名稱廣播、或同時走多張網卡 / IPv4+IPv6 時,自動以 `host|port|type` 為網路身分去重,合併成同一列;其餘名稱顯示在該列的「別名」細節欄位,避免面板出現重複項目。
+- 服務一段時間未再廣播即自動過期移除:以 `3 × TTL` 為寬限期(RFC 6762,沒帶 TTL 者 fallback 120 秒),讓面板只保留目前真正在線的服務,不累積已離網的舊紀錄。
 
 ---
 
