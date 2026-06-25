@@ -27,7 +27,10 @@ export class TodoTreeProvider
      */
     private showCompleted = true;
 
-    constructor(private readonly store: TodoStore) {}
+    constructor(
+        private readonly store: TodoStore,
+        private readonly extensionUri?: vscode.Uri
+    ) {}
 
     start(): void {
         if (this.unsubscribeStore) return;
@@ -69,13 +72,26 @@ export class TodoTreeProvider
         if (element.kind === "list") {
             return this.buildListItem(element);
         }
-        const item = new vscode.TreeItem(element.text);
-        item.iconPath = new vscode.ThemeIcon(
-            element.checked ? "pass" : "circle-large-outline",
-            element.checked
-                ? new vscode.ThemeColor("charts.green")
-                : new vscode.ThemeColor("charts.yellow")
-        );
+
+        const priorityMatch = element.text.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
+        // Keep the priority prefix in the label (e.g. "[P0] Fix bug") so users
+        // can read the priority at a glance; the SVG icon is added separately.
+        const labelText = element.text;
+
+        const item = new vscode.TreeItem(labelText);
+
+        if (priorityMatch && !element.checked && this.extensionUri) {
+            const p = priorityMatch[2].toUpperCase();
+            item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${p.toLowerCase()}.svg`);
+        } else {
+            item.iconPath = new vscode.ThemeIcon(
+                element.checked ? "pass" : "circle-large-outline",
+                element.checked
+                    ? new vscode.ThemeColor("charts.green")
+                    : new vscode.ThemeColor("charts.yellow")
+            );
+        }
+
         item.description = element.checked ? "✓" : undefined;
         item.tooltip = element.checked
             ? `${element.text} (completed)`
@@ -89,7 +105,7 @@ export class TodoTreeProvider
             title: "Toggle Todo",
             arguments: [element],
         };
-        item.contextValue = element.checked ? "todoDone" : "todoPending";
+        item.contextValue = "todoCheckbox";
         return item;
     }
 
@@ -101,11 +117,23 @@ export class TodoTreeProvider
      * can target it if needed in the future.
      */
     private buildListItem(element: TodoItem): vscode.TreeItem {
-        const item = new vscode.TreeItem(element.text);
-        item.iconPath = new vscode.ThemeIcon(
-            "dash",
-            new vscode.ThemeColor("descriptionForeground")
-        );
+        const priorityMatch = element.text.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
+        const labelText = priorityMatch
+            ? element.text.substring(priorityMatch[0].length).trim()
+            : element.text;
+
+        const item = new vscode.TreeItem(labelText);
+
+        if (priorityMatch && this.extensionUri) {
+            const p = priorityMatch[2].toUpperCase();
+            item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${p.toLowerCase()}.svg`);
+        } else {
+            item.iconPath = new vscode.ThemeIcon(
+                "dash",
+                new vscode.ThemeColor("descriptionForeground")
+            );
+        }
+
         item.tooltip = element.text;
         item.collapsibleState =
             element.children && element.children.length > 0

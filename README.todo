@@ -10,7 +10,7 @@
 
 ## Features (high-value, not started)
 
-- [ ] [feature] Terminal fuzzy search — see [plans/2026-06-23-feature-terminal-fuzzy-search.md](plans/2026-06-23-feature-terminal-fuzzy-search.md)
+- [ ] [P2] [feature] Terminal fuzzy search — see [plans/2026-06-23-feature-terminal-fuzzy-search.md](plans/2026-06-23-feature-terminal-fuzzy-search.md)
 - [ ] [feature] mDNS one-click connect — see [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
 - [ ] [feature] Workspace-aware group suggestions — see [plans/2026-06-23-feature-workspace-aware-group-suggestions.md](plans/2026-06-23-feature-workspace-aware-group-suggestions.md)
 - [ ] [feature] TODO in-tree rename — see [plans/2026-06-23-feature-todo-in-tree-rename.md](plans/2026-06-23-feature-todo-in-tree-rename.md)

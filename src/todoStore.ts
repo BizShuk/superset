@@ -164,6 +164,33 @@ export class TodoStore {
         this.emit({ type: "toggled", item });
     }
 
+    async updatePriority(item: TodoItem, newPriority: "P0" | "P1" | "P2"): Promise<void> {
+        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
+        let content: string;
+        try {
+            content = await readFile(filePath, "utf-8");
+        } catch {
+            return;
+        }
+
+        const lines = content.split("\n");
+        if (item.line >= lines.length) return;
+
+        // Replace any existing [P0]/[P1]/[P2] or (P0)/(P1)/(P2) prefix with new [Px]
+        const re = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(?:\[|\()P[0-2](?:\]|\))(\s+.*)$/;
+        const m = lines[item.line].match(re);
+        if (!m) return;
+
+        lines[item.line] = `${m[1]}[${newPriority}]${m[2]}`;
+        await writeFile(filePath, lines.join("\n"), "utf-8");
+
+        // The file is now the source of truth; emit so consumers can
+        // re-load. We can't mutate `item.text` (it's readonly on the
+        // TodoItem contract) and we don't want to silently desync
+        // the in-memory model from disk.
+        this.emit({ type: "toggled", item });
+    }
+
     onDidChange(listener: TodoListener): () => void {
         this.listeners.add(listener);
         return () => {

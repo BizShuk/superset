@@ -108,6 +108,10 @@
                 "title": "Superset: Toggle Todo"
             },
             {
+                "command": "superset.todoChangePriority",
+                "title": "Superset: Change Priority"
+            },
+            {
                 "command": "superset.todoFilterHideCompleted",
                 "title": "Superset: Hide Completed",
                 "icon": "$(filter-filled)"
@@ -239,6 +243,11 @@
                     "command": "superset.mdnsCopyDetail",
                     "when": "viewItem == mdnsDetail",
                     "group": "1_focus"
+                },
+                {
+                    "command": "superset.todoChangePriority",
+                    "when": "viewItem == todoCheckbox",
+                    "group": "3_priority"
                 }
             ]
         },

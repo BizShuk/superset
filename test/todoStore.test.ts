@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { TodoStore } from "../src/todoStore";
 import { readFile, writeFile } from "fs/promises";
+import { mkdtempSync, writeFileSync, readFileSync } from "fs";
+import { tmpdir } from "os";
+import { join } from "path";
 
 vi.mock("fs/promises", () => ({
     readFile: vi.fn(),
@@ -204,5 +207,25 @@ describe("TodoStore", () => {
         expect(items[2]).toMatchObject({ text: "dash unchecked", kind: "checkbox", checked: false });
         expect(items[3]).toMatchObject({ text: "star checked", kind: "checkbox", checked: true });
         expect(store.getCompletedCount()).toBe(2);
+    });
+
+    it("updatePriority rewrites the priority prefix in README.todo", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-priority-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "- [ ] [P0] Old name\n- [ ] Keep me\n", "utf8");
+        // For this test, route the mocked fs/promises calls through
+        // the real filesystem so updatePriority actually persists.
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+        const store = new TodoStore(dir);
+        await store.load();
+        const item = store.getItems()[0];
+        await store.updatePriority(item, "P1");
+        const after = readFileSync(file, "utf8");
+        expect(after).toContain("[P1] Old name");
+        expect(after).not.toContain("[P0] Old name");
     });
 });

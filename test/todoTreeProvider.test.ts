@@ -23,11 +23,21 @@ vi.mock("vscode", () => {
     class ThemeColor {
         constructor(public id: string) {}
     }
+    class Uri {
+        constructor(public path: string) {}
+        static file(path: string) {
+            return new Uri(path);
+        }
+        static joinPath(base: Uri, ...paths: string[]) {
+            return new Uri(base.path + "/" + paths.join("/"));
+        }
+    }
     const TreeItemCollapsibleState = { None: 0, Collapsed: 1, Expanded: 2 };
     return {
         EventEmitter,
         ThemeIcon,
         ThemeColor,
+        Uri,
         TreeItemCollapsibleState,
         TreeItem: class {
             command?: unknown;
@@ -311,5 +321,58 @@ describe("TodoTreeProvider list nodes", () => {
         expect(top).toHaveLength(1);
         expect(top[0].text).toBe("section");
         expect(top[0].children).toEqual([]);
+    });
+});
+
+describe("TodoTreeProvider priority icons", () => {
+    const mockUri = { path: "/extension" } as any;
+
+    it("parses P0/P1/P2 from checkbox items and uses custom SVG icons", () => {
+        const store = makeStore([
+            item("P0 fix core bug", false),
+            item("[P1]: investigate lag", false),
+            item("(p2) - documentation update", false),
+            item("Normal task", false),
+        ]);
+        const provider = new TodoTreeProvider(store, mockUri);
+        const items = store.getItems();
+
+        const tiP0 = provider.getTreeItem(items[0]);
+        expect(tiP0.label).toBe("P0 fix core bug");
+        expect((tiP0.iconPath as any).path).toBe("/extension/resources/p0.svg");
+
+        const tiP1 = provider.getTreeItem(items[1]);
+        expect(tiP1.label).toBe("[P1]: investigate lag");
+        expect((tiP1.iconPath as any).path).toBe("/extension/resources/p1.svg");
+
+        const tiP2 = provider.getTreeItem(items[2]);
+        expect(tiP2.label).toBe("(p2) - documentation update");
+        expect((tiP2.iconPath as any).path).toBe("/extension/resources/p2.svg");
+
+        const tiNormal = provider.getTreeItem(items[3]);
+        expect(tiNormal.label).toBe("Normal task");
+        expect((tiNormal.iconPath as any).id).toBe("circle-large-outline");
+    });
+
+    it("restores to pass icon for completed items even if they have priority prefixes", () => {
+        const store = makeStore([
+            item("P0 completed bugfix", true),
+        ]);
+        const provider = new TodoTreeProvider(store, mockUri);
+        const ti = provider.getTreeItem(store.getItems()[0]);
+
+        expect(ti.label).toBe("P0 completed bugfix");
+        expect((ti.iconPath as any).id).toBe("pass");
+    });
+
+    it("parses P0/P1/P2 from list items and uses custom SVG icons", () => {
+        const store = makeStore([
+            item("[P0] important note", false, undefined, "list"),
+        ]);
+        const provider = new TodoTreeProvider(store, mockUri);
+        const ti = provider.getTreeItem(store.getItems()[0]);
+
+        expect(ti.label).toBe("important note");
+        expect((ti.iconPath as any).path).toBe("/extension/resources/p0.svg");
     });
 });
