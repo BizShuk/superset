@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視。",
-    "version": "0.1.1",
+    "version": "0.1.3",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -131,7 +131,7 @@
             "activitybar": [
                 {
                     "id": "superset",
-                    "title": "Terminals",
+                    "title": "SuperSet",
                     "icon": "images/icon.png"
                 }
             ]
@@ -141,27 +141,27 @@
                 {
                     "id": "superset.terminals",
                     "name": "Terminals",
-                    "contextualTitle": "Superset"
+                    "contextualTitle": "SuperSet"
                 },
                 {
                     "id": "superset.explore",
                     "name": "Explore",
-                    "contextualTitle": "Superset"
+                    "contextualTitle": "SuperSet"
                 },
                 {
                     "id": "superset.mdns",
                     "name": "MDNS",
-                    "contextualTitle": "Superset"
+                    "contextualTitle": "SuperSet"
                 },
                 {
                     "id": "superset.topology",
                     "name": "Topology",
-                    "contextualTitle": "Superset"
+                    "contextualTitle": "SuperSet"
                 },
                 {
                     "id": "superset.todo",
                     "name": "TODO",
-                    "contextualTitle": "Superset"
+                    "contextualTitle": "SuperSet"
                 }
             ]
         },

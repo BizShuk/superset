@@ -50,8 +50,17 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Global commands (not tied to a single feature).
     subscriptions.push(
-        vscode.commands.registerCommand("superset.focusView", () => {
-            vscode.commands.executeCommand("workbench.view.superset");
+        vscode.commands.registerCommand("superset.focusView", async () => {
+            // Open the Superset view container, then focus the terminals
+            // view — the "terminal dashboard" the status-bar notification
+            // points at. `workbench.view.extension.<id>` is the built-in
+            // command for extension-contributed activity-bar containers;
+            // the bare `workbench.view.superset` form is unregistered and
+            // silently no-ops.
+            await vscode.commands.executeCommand(
+                "workbench.view.extension.superset"
+            );
+            await vscode.commands.executeCommand("superset.terminals.focus");
         }),
         vscode.commands.registerCommand("superset.showLogs", () => {
             diag.show(true);

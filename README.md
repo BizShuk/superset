@@ -288,6 +288,7 @@ npm run test:watch  # watch 模式
 - [VSCode Shell Integration 官方文件](https://code.visualstudio.com/docs/terminal/shell-integration)
 - 設計規格 (已實作): [`specs/2026-06-20-terminal-dashboard-panel.md`](specs/2026-06-20-terminal-dashboard-panel.md)
 - 進行中計劃: [`plans/`](plans/)
+- 變更紀錄: [`CHANGELOG.md`](CHANGELOG.md)
 
 ---
 
