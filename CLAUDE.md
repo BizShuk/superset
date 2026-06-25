@@ -142,6 +142,14 @@ Update version in @package.json every change based on <majore,minor,patch>
 
 關鍵: `getTerminal: () => terminalRef` 是 closure,host 內部不直接持有 terminal 參考,而是延遲到第一次資料流入時再取。這避免「terminal 還沒建好就要 reference」的 chicken-and-egg。
 
+### Agent-owned terminal 排除 (Antigravity)
+
+某些 terminal 是其他 agent/extension 擁有的背景工作終端機 (background worker),不是給用戶操作的工作面 (work surface),出現在面板上只是雜訊。最典型的例子是 Antigravity 開出來的 `Antigravity Agent` terminal。
+
+- **`shouldTrackTerminal(name)`** (`src/autoReplace.ts`):純函式,name 含 `antigravity` (case-insensitive) → 不進面板。在兩個入口 (pre-populate loop 與 `onDidOpenTerminal`) 都先過這道閘,被排除的 terminal 從不進 registry,因此沒有 row、沒有高亮、也沒有 PTY wrap。
+- **與 `decideAutoReplace` 的關係**:`shouldTrackTerminal` 先跑,agent terminal 在 PTY-replace 決策前就被丟掉;`decideAutoReplace` 內仍保留同樣的 `/antigravity/i` 檢查作 defense-in-depth。
+- 名稱匹配兩邊一致,新增同類 agent 時兩處一起改。
+
 ---
 
 ## `node-pty` 整合

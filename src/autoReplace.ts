@@ -63,3 +63,25 @@ export function decideAutoReplace(
     }
     return { replace: true, reason: "plain panel terminal" };
 }
+
+/**
+ * Should this terminal ever appear in the dashboard panel?
+ *
+ * Some terminals are owned by other agents/extensions and exist only as
+ * silent background workers — e.g. the `Antigravity Agent` terminal that
+ * Antigravity spawns. They are not user-facing work surfaces and surfacing
+ * them in the Terminals panel is noise. We exclude them entirely (never
+ * added to the registry), so they get no row, no highlight, and no PTY
+ * wrap.
+ *
+ * This runs *before* `decideAutoReplace` at every entry point, so an
+ * agent-owned terminal is dropped before the PTY-replace decision is even
+ * considered. The antigravity guard inside `decideAutoReplace` is kept as
+ * a defense-in-depth belt-and-suspenders in case a caller bypasses the
+ * panel gate — both use the same `/antigravity/i` match.
+ *
+ * Pure and unit-testable — no vscode dependency.
+ */
+export function shouldTrackTerminal(name: string): boolean {
+    return !/antigravity/i.test(name);
+}

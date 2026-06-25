@@ -8,7 +8,7 @@ import { PtyTerminalHost } from "../../ptyTerminalHost";
 import { TerminalTreeProvider, isGroup } from "../../treeProvider";
 import { HighlightPresenter } from "../../highlightPresenter";
 import { stripUnseenPrefix } from "../../treeSpec";
-import { decideAutoReplace } from "../../autoReplace";
+import { decideAutoReplace, shouldTrackTerminal } from "../../autoReplace";
 import {
     GroupStore,
     UNGROUPED_ID,
@@ -42,6 +42,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // Pre-populate registry and group store with already-open terminals.
     for (const terminal of vscode.window.terminals) {
+        if (!shouldTrackTerminal(terminal.name)) {
+            log(`[skip-track] "${terminal.name}": agent-owned (excluded from panel)`);
+            continue;
+        }
         registry.add(terminal);
         groupStore.assignDefaultGroup(terminal);
     }
@@ -278,6 +282,12 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const openSub = vscode.window.onDidOpenTerminal((terminal) => {
         if (ptyBackedTerminals.has(terminal)) {
             registry.add(terminal);
+            return;
+        }
+        // Agent-owned terminals (e.g. Antigravity Agent) are excluded from the
+        // panel entirely — they are silent background workers, not work surfaces.
+        if (!shouldTrackTerminal(terminal.name)) {
+            log(`[skip-track] onOpen "${terminal.name}": agent-owned (excluded from panel)`);
             return;
         }
         const opts = (terminal.creationOptions ?? {}) as Record<

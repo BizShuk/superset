@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideAutoReplace } from "../src/autoReplace";
+import { decideAutoReplace, shouldTrackTerminal } from "../src/autoReplace";
 
 describe("decideAutoReplace", () => {
     it("replaces a plain panel terminal (no special options)", () => {
@@ -50,5 +50,25 @@ describe("decideAutoReplace", () => {
     it("returns a human-readable reason for diagnostics", () => {
         expect(decideAutoReplace({ location: 2 }, "x").reason).toMatch(/location/);
         expect(decideAutoReplace({}, "x").reason).toMatch(/plain/);
+    });
+});
+
+describe("shouldTrackTerminal", () => {
+    it("tracks ordinary terminals", () => {
+        expect(shouldTrackTerminal("bash")).toBe(true);
+        expect(shouldTrackTerminal("Superset TUI")).toBe(true);
+    });
+
+    it("excludes the Antigravity Agent terminal", () => {
+        expect(shouldTrackTerminal("Antigravity Agent")).toBe(false);
+    });
+
+    it("excludes antigravity terminals case-insensitively", () => {
+        expect(shouldTrackTerminal("antigravity-1")).toBe(false);
+        expect(shouldTrackTerminal("ANTIGRAVITY")).toBe(false);
+    });
+
+    it("excludes any terminal whose name contains antigravity", () => {
+        expect(shouldTrackTerminal("my antigravity worker")).toBe(false);
     });
 });
