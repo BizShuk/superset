@@ -68,7 +68,8 @@ export interface MdnsService {
 export type MdnsChange =
     | { type: "added"; service: MdnsService }
     | { type: "removed"; service: MdnsService }
-    | { type: "updated"; service: MdnsService };
+    | { type: "updated"; service: MdnsService }
+    | { type: "expired"; service: MdnsService };
 
 export type MdnsListener = (change: MdnsChange) => void;
 

@@ -2,6 +2,20 @@ import type { MdnsChange, MdnsListener, MdnsService } from "./types";
 import type { MdnsPacket, MdnsTransport } from "./mdnsTransport";
 import { networkKey, mergeServices } from "./mdnsDedup";
 
+/** Injectable clock so tests can control `lastSeen` / grace-period math. */
+export interface ClockSource {
+    now(): number;
+}
+
+/** Grace period as a multiple of a service's TTL (RFC 6762 §10.1 cache-flush). */
+export const TTL_GRACE_MULTIPLIER = 3;
+/** How often the expiry sweep runs. */
+export const EXPIRY_TICK_MS = 5_000;
+/** TTL (seconds) assumed when a record arrives without one. */
+export const TTL_DEFAULT_SECONDS = 120;
+
+const DEFAULT_CLOCK: ClockSource = { now: () => Date.now() };
+
 /** Mutable internal representation for coalescing DNS records. */
 interface MutableService {
     name: string;
@@ -89,8 +103,13 @@ export class MdnsRegistry {
     private byNetworkKey = new Map<string, string>();
     /** Reverse of `byNetworkKey`: canonical key → its current network key. */
     private canonKeyToNk = new Map<string, string>();
+    /** Periodic sweep that removes services past their TTL grace period. */
+    private expiryTimer?: ReturnType<typeof setInterval>;
 
-    constructor(private readonly transport: MdnsTransport) {}
+    constructor(
+        private readonly transport: MdnsTransport,
+        private readonly clock: ClockSource = DEFAULT_CLOCK
+    ) {}
 
     // ── Lifecycle ──────────────────────────────────────────
 
@@ -101,6 +120,10 @@ export class MdnsRegistry {
         );
         this.transport.start();
         this.transport.browse();
+        this.expiryTimer = setInterval(
+            () => this.expireStale(),
+            EXPIRY_TICK_MS
+        );
     }
 
     stop(): void {
@@ -109,6 +132,10 @@ export class MdnsRegistry {
         if (this.coalesceTimer) {
             clearTimeout(this.coalesceTimer);
             this.coalesceTimer = undefined;
+        }
+        if (this.expiryTimer) {
+            clearInterval(this.expiryTimer);
+            this.expiryTimer = undefined;
         }
         this.transport.stop();
     }
@@ -191,8 +218,8 @@ export class MdnsRegistry {
             pending.domain = "local";
         }
         pending.ttl = trackMinTtl(pending.ttl, r.ttl);
-        pending.firstSeen = pending.firstSeen || Date.now();
-        pending.lastSeen = Date.now();
+        pending.firstSeen = pending.firstSeen || this.clock.now();
+        pending.lastSeen = this.clock.now();
     }
 
     private handleSrv(
@@ -216,8 +243,8 @@ export class MdnsRegistry {
             pending.host = data.target.replace(/\.$/i, "");
         }
         pending.ttl = trackMinTtl(pending.ttl, r.ttl);
-        pending.firstSeen = pending.firstSeen || Date.now();
-        pending.lastSeen = Date.now();
+        pending.firstSeen = pending.firstSeen || this.clock.now();
+        pending.lastSeen = this.clock.now();
     }
 
     private handleTxt(
@@ -249,8 +276,8 @@ export class MdnsRegistry {
         }
         pending.txt = { ...(pending.txt ?? {}), ...txt };
         pending.ttl = trackMinTtl(pending.ttl, r.ttl);
-        pending.firstSeen = pending.firstSeen || Date.now();
-        pending.lastSeen = Date.now();
+        pending.firstSeen = pending.firstSeen || this.clock.now();
+        pending.lastSeen = this.clock.now();
     }
 
     private handleAddress(
@@ -270,8 +297,8 @@ export class MdnsRegistry {
             self.addresses = [...selfAddrs, addr];
         }
         self.ttl = trackMinTtl(self.ttl, r.ttl);
-        self.firstSeen = self.firstSeen || Date.now();
-        self.lastSeen = Date.now();
+        self.firstSeen = self.firstSeen || this.clock.now();
+        self.lastSeen = this.clock.now();
 
         // Also add to any service whose host matches this hostname
         for (const [, p] of this.pending) {
@@ -281,8 +308,8 @@ export class MdnsRegistry {
                     p.addresses = [...existing, addr];
                 }
                 p.ttl = trackMinTtl(p.ttl, r.ttl);
-                p.firstSeen = p.firstSeen || Date.now();
-                p.lastSeen = Date.now();
+                p.firstSeen = p.firstSeen || this.clock.now();
+                p.lastSeen = this.clock.now();
             }
         }
     }
@@ -366,6 +393,35 @@ export class MdnsRegistry {
             }
             this.pending.clear();
         }, 250);
+    }
+
+    /**
+     * Remove services that have not been re-announced within their TTL grace
+     * period (`ttl × TTL_GRACE_MULTIPLIER`, falling back to
+     * `TTL_DEFAULT_SECONDS` when no TTL is known). Emits an `expired` event
+     * per removed service so the panel can drop stale rows. A service that
+     * keeps receiving packets has its `lastSeen` refreshed and never expires.
+     */
+    private expireStale(): void {
+        const now = this.clock.now();
+        const expired: MdnsService[] = [];
+        for (const [key, svc] of this.services) {
+            const ttl = svc.ttl || TTL_DEFAULT_SECONDS;
+            const graceMs = ttl * 1000 * TTL_GRACE_MULTIPLIER;
+            if (now - svc.lastSeen > graceMs) {
+                expired.push(svc);
+                this.services.delete(key);
+                // Keep the secondary dedup indexes in sync.
+                const nk = this.canonKeyToNk.get(key);
+                if (nk) {
+                    this.byNetworkKey.delete(nk);
+                    this.canonKeyToNk.delete(key);
+                }
+            }
+        }
+        for (const svc of expired) {
+            this.emit({ type: "expired", service: svc });
+        }
     }
 
     private emit(change: MdnsChange): void {
