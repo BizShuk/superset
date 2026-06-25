@@ -69,6 +69,12 @@ export interface MdnsService {
     readonly txt: Readonly<Record<string, string>>;
     /** Subtypes extracted from PTR records, e.g. ["_printer"] */
     readonly subtypes: readonly string[];
+    /**
+     * Other mDNS instance names that resolved to the same network endpoint
+     * (host|port|type) and were merged into this canonical row.
+     * First-seen name is the canonical `name`; the rest land here.
+     */
+    readonly aliases?: readonly string[];
     /** Source IP of the multicast packet (network interface identifier) */
     readonly srcAddress?: string;
     /** Timestamp of first discovery (ms epoch) */
