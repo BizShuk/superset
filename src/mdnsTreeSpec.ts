@@ -33,6 +33,10 @@ export function buildMdnsDetailFields(svc: MdnsService): MdnsDetailField[] {
         { label: "主機", value: svc.host ?? "(無)" },
     ];
 
+    if (svc.aliases && svc.aliases.length > 0) {
+        fields.push({ label: "別名", value: svc.aliases.join(", ") });
+    }
+
     if (svc.port > 0) {
         fields.push({ label: "埠號", value: String(svc.port) });
     }

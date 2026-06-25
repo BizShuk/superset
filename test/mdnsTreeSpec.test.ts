@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+    buildMdnsDetailFields,
     buildMdnsServiceSpec,
     buildMdnsTypeSpec,
 } from "../src/mdnsTreeSpec";
@@ -86,5 +87,31 @@ describe("buildMdnsTypeSpec", () => {
         expect(spec.description).toBe("2 個服務");
         expect(spec.iconKind).toBe("serviceType");
         expect(spec.contextValue).toBe("mdnsType");
+    });
+});
+
+describe("buildMdnsDetailFields", () => {
+    it("includes an Aliases field when aliases are present", () => {
+        const svc = fakeService({
+            aliases: ["Other._http._tcp.local", "Alt._http._tcp.local"],
+        });
+        const fields = buildMdnsDetailFields(svc);
+        const aliases = fields.find((f) => f.label === "別名");
+        expect(aliases).toBeDefined();
+        expect(aliases!.value).toBe(
+            "Other._http._tcp.local, Alt._http._tcp.local"
+        );
+    });
+
+    it("omits the Aliases field when there are no aliases", () => {
+        const svc = fakeService();
+        const fields = buildMdnsDetailFields(svc);
+        expect(fields.find((f) => f.label === "別名")).toBeUndefined();
+    });
+
+    it("omits the Aliases field when aliases is an empty array", () => {
+        const svc = fakeService({ aliases: [] });
+        const fields = buildMdnsDetailFields(svc);
+        expect(fields.find((f) => f.label === "別名")).toBeUndefined();
     });
 });
