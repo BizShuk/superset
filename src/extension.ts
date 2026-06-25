@@ -1,7 +1,6 @@
 import * as vscode from "vscode";
 import type { FeatureContext, SharedDeps } from "./types";
 import { register as registerTerminals } from "./features/terminals";
-import { register as registerExplorer } from "./features/explorer";
 import { register as registerMdns } from "./features/mdns";
 import { register as registerTopology } from "./features/topology";
 import { register as registerTodo } from "./features/todo";
@@ -42,7 +41,6 @@ export function activate(context: vscode.ExtensionContext): void {
     // Register all features.
     const features = [
         registerTerminals(ctx),
-        registerExplorer(ctx),
         registerMdns(ctx),
         registerTopology(ctx),
         registerTodo(ctx),
@@ -68,7 +66,6 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand("superset.focusPanel", async () => {
             const panelOrder = [
                 "superset.terminals",
-                "superset.explore",
                 "superset.mdns",
                 "superset.topology",
                 "superset.todo",

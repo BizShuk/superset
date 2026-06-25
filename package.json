@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視。",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -78,11 +78,6 @@
                 "title": "Superset: Toggle Group"
             },
             {
-                "command": "superset.exploreRefresh",
-                "title": "Superset: Refresh Explorer",
-                "icon": "$(refresh)"
-            },
-            {
                 "command": "superset.mdnsRefresh",
                 "title": "Superset: Refresh mDNS",
                 "icon": "$(refresh)"
@@ -98,10 +93,6 @@
             {
                 "command": "superset.mdnsShowDetail",
                 "title": "Superset: Show Service Detail"
-            },
-            {
-                "command": "superset.exploreOpen",
-                "title": "Superset: Open File"
             },
             {
                 "command": "superset.topologyScan",
@@ -144,11 +135,6 @@
                     "contextualTitle": "SuperSet"
                 },
                 {
-                    "id": "superset.explore",
-                    "name": "Explore",
-                    "contextualTitle": "SuperSet"
-                },
-                {
                     "id": "superset.mdns",
                     "name": "MDNS",
                     "contextualTitle": "SuperSet"
@@ -175,11 +161,6 @@
                 {
                     "command": "superset.newGroup",
                     "when": "view == superset.terminals",
-                    "group": "navigation"
-                },
-                {
-                    "command": "superset.exploreRefresh",
-                    "when": "view == superset.explore",
                     "group": "navigation"
                 },
                 {
@@ -257,11 +238,6 @@
                 {
                     "command": "superset.mdnsCopyDetail",
                     "when": "viewItem == mdnsDetail",
-                    "group": "1_focus"
-                },
-                {
-                    "command": "superset.exploreOpen",
-                    "when": "viewItem == explorerFile",
                     "group": "1_focus"
                 }
             ]
