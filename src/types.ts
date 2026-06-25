@@ -1,3 +1,5 @@
+import type * as vscode from "vscode";
+
 export interface TerminalHandle {
     readonly name: string;
     show(): void;
@@ -117,3 +119,27 @@ export type TodoChange =
     | { type: "toggled"; item: TodoItem };
 
 export type TodoListener = (change: TodoChange) => void;
+
+// ── Feature module types ─────────────────────────────
+
+/**
+ * Shared dependencies injected into every feature module by the
+ * composition root (extension.ts). Each feature reads what it needs
+ * and ignores the rest.
+ */
+export interface SharedDeps {
+    readonly statusBar: vscode.StatusBarItem;
+    readonly diag: vscode.OutputChannel;
+    readonly log: (msg: string) => void;
+}
+
+export interface FeatureContext {
+    readonly context: vscode.ExtensionContext;
+    readonly subscriptions: vscode.Disposable[];
+    readonly workspaceFolder: string;
+    readonly shared: SharedDeps;
+}
+
+export interface FeatureHandle {
+    dispose(): void;
+}

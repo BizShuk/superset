@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視。",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "publisher": "shuk",
     "repository": {
         "type": "git",
