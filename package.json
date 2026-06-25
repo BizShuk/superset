@@ -120,6 +120,21 @@
                 "command": "superset.todoFilterShowAll",
                 "title": "Superset: Show All",
                 "icon": "$(filter)"
+            },
+            {
+                "command": "superset.todoFilterP0",
+                "title": "Superset: Filter P0",
+                "icon": "$(filter)"
+            },
+            {
+                "command": "superset.todoFilterP1",
+                "title": "Superset: Filter P1",
+                "icon": "$(filter)"
+            },
+            {
+                "command": "superset.todoFilterP2",
+                "title": "Superset: Filter P2",
+                "icon": "$(filter)"
             }
         ],
         "viewsContainers": {
@@ -186,6 +201,42 @@
                     "command": "superset.todoFilterShowAll",
                     "when": "view == superset.todo && superset.todo.filtering == true",
                     "group": "navigation"
+                },
+                {
+                    "command": "superset.todoFilterP0",
+                    "when": "view == superset.todo && superset.todo.filterP0 == false",
+                    "group": "navigation",
+                    "icon": "$(filter)"
+                },
+                {
+                    "command": "superset.todoFilterP0",
+                    "when": "view == superset.todo && superset.todo.filterP0 == true",
+                    "group": "navigation",
+                    "icon": "$(filter-filled)"
+                },
+                {
+                    "command": "superset.todoFilterP1",
+                    "when": "view == superset.todo && superset.todo.filterP1 == false",
+                    "group": "navigation",
+                    "icon": "$(filter)"
+                },
+                {
+                    "command": "superset.todoFilterP1",
+                    "when": "view == superset.todo && superset.todo.filterP1 == true",
+                    "group": "navigation",
+                    "icon": "$(filter-filled)"
+                },
+                {
+                    "command": "superset.todoFilterP2",
+                    "when": "view == superset.todo && superset.todo.filterP2 == false",
+                    "group": "navigation",
+                    "icon": "$(filter)"
+                },
+                {
+                    "command": "superset.todoFilterP2",
+                    "when": "view == superset.todo && superset.todo.filterP2 == true",
+                    "group": "navigation",
+                    "icon": "$(filter-filled)"
                 }
             ],
             "view/item/context": [

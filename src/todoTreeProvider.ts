@@ -26,6 +26,13 @@ export class TodoTreeProvider
      * Default true to preserve the previous behavior (no filter).
      */
     private showCompleted = true;
+    /**
+     * Active priority filter. When empty (the default), every priority is
+     * shown. When non-empty, only items whose [Px] tag is in the set are
+     * shown; items without a priority prefix are hidden while a filter
+     * is active (filtering for "P0+P1" implies "show only those").
+     */
+    private enabledPriorities = new Set<"P0" | "P1" | "P2">();
 
     constructor(
         private readonly store: TodoStore,
@@ -68,20 +75,42 @@ export class TodoTreeProvider
         return this.showCompleted;
     }
 
+    /**
+     * Toggle a priority in the active filter. When the set is empty after
+     * the toggle, no priority filter is applied (all priorities shown).
+     */
+    togglePriorityFilter(p: "P0" | "P1" | "P2"): boolean {
+        if (this.enabledPriorities.has(p)) {
+            this.enabledPriorities.delete(p);
+        } else {
+            this.enabledPriorities.add(p);
+        }
+        this.refresh();
+        return this.enabledPriorities.has(p);
+    }
+
+    isPriorityEnabled(p: "P0" | "P1" | "P2"): boolean {
+        return this.enabledPriorities.has(p);
+    }
+
     getTreeItem(element: TodoItem): vscode.TreeItem {
         if (element.kind === "list") {
             return this.buildListItem(element);
         }
 
         const priorityMatch = element.text.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
-        // Keep the priority prefix in the label (e.g. "[P0] Fix bug") so users
-        // can read the priority at a glance; the SVG icon is added separately.
-        const labelText = element.text;
+        // Strip the [P0]/[P1]/[P2] prefix from the label — the priority
+        // is conveyed by the SVG icon, so the label just shows the task name.
+        const labelText = priorityMatch
+            ? element.text.substring(priorityMatch[0].length).trim()
+            : element.text;
 
         const item = new vscode.TreeItem(labelText);
 
         if (priorityMatch && !element.checked && this.extensionUri) {
             const p = priorityMatch[2].toUpperCase();
+            // VSCode loads SVG files referenced via Uri directly — no need
+            // to read the file content and wrap as data URI.
             item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${p.toLowerCase()}.svg`);
         } else {
             item.iconPath = new vscode.ThemeIcon(
@@ -100,11 +129,13 @@ export class TodoTreeProvider
             element.children && element.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Expanded
                 : vscode.TreeItemCollapsibleState.None;
-        item.command = {
-            command: "superset.todoToggle",
-            title: "Toggle Todo",
-            arguments: [element],
-        };
+        // No item.command — toggle is driven by the native checkboxState
+        // (only checkbox icon click triggers it; clicking the row text does
+        // nothing). The framework fires onDidChangeCheckboxState which the
+        // feature module wires to superset.todoToggle.
+        item.checkboxState = element.checked
+            ? vscode.TreeItemCheckboxState.Checked
+            : vscode.TreeItemCheckboxState.Unchecked;
         item.contextValue = "todoCheckbox";
         return item;
     }
@@ -146,7 +177,8 @@ export class TodoTreeProvider
 
     getChildren(element?: TodoItem): vscode.ProviderResult<TodoItem[]> {
         const raw = element ? element.children || [] : this.store.getItems();
-        const filtered = this.showCompleted ? raw : filterCompleted(raw);
+        const completedFiltered = this.showCompleted ? raw : filterCompleted(raw);
+        const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
         return sortSiblings(filtered);
     }
 }
@@ -166,6 +198,43 @@ function sortSiblings(items: TodoItem[]): TodoItem[] {
         ...items.filter((t) => !t.checked),
         ...items.filter((t) => t.checked),
     ];
+}
+
+/**
+ * Filter items by active priority set. When `enabledPriorities` is empty,
+ * returns items unchanged. Otherwise keeps only items whose leading
+ * `[Px]`/`(Px)` tag is in the set. Items without a priority prefix are
+ * hidden while any priority filter is active — "show P0+P1" means "show
+ * only P0 and P1", not "show P0+P1 plus un-prioritised items".
+ *
+ * Recurses into children so a filtered parent keeps only matching kids.
+ *
+ * Exported for unit testing.
+ */
+export function applyPriorityFilter(
+    items: TodoItem[],
+    enabledPriorities: Set<"P0" | "P1" | "P2">
+): TodoItem[] {
+    if (enabledPriorities.size === 0) return items;
+    return items
+        .map((item) => {
+            const filteredChildren = item.children
+                ? applyPriorityFilter(item.children, enabledPriorities)
+                : undefined;
+            const m = item.text.match(/^(\[|\()?(P[0-2])(\]|\))?/i);
+            const tag = m?.[2]?.toUpperCase();
+            const matches =
+                tag !== undefined &&
+                (tag === "P0" || tag === "P1" || tag === "P2") &&
+                enabledPriorities.has(tag);
+            if (matches) {
+                return filteredChildren
+                    ? { ...item, children: filteredChildren }
+                    : item;
+            }
+            return null;
+        })
+        .filter((t): t is TodoItem => t !== null);
 }
 
 /**

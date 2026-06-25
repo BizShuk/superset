@@ -176,19 +176,25 @@ export class TodoStore {
         const lines = content.split("\n");
         if (item.line >= lines.length) return;
 
-        // Replace any existing [P0]/[P1]/[P2] or (P0)/(P1)/(P2) prefix with new [Px]
-        const re = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(?:\[|\()P[0-2](?:\]|\))(\s+.*)$/;
-        const m = lines[item.line].match(re);
-        if (!m) return;
-
-        lines[item.line] = `${m[1]}[${newPriority}]${m[2]}`;
+        // Path 1: line already has a priority tag — replace it.
+        const replaceRe = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(?:\[|\()P[0-2](?:\]|\))(\s+.*)$/;
+        const m = lines[item.line].match(replaceRe);
+        if (m) {
+            lines[item.line] = `${m[1]}[${newPriority}]${m[2]}`;
+        } else {
+            // Path 2: no priority prefix — insert `[Px] ` after the
+            // optional checkbox marker.
+            const insertRe = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(\S.*)$/;
+            const im = lines[item.line].match(insertRe);
+            if (!im) return;
+            lines[item.line] = `${im[1]}[${newPriority}] ${im[2]}`;
+        }
         await writeFile(filePath, lines.join("\n"), "utf-8");
 
-        // The file is now the source of truth; emit so consumers can
-        // re-load. We can't mutate `item.text` (it's readonly on the
-        // TodoItem contract) and we don't want to silently desync
-        // the in-memory model from disk.
-        this.emit({ type: "toggled", item });
+        // Reload so the in-memory `items` reflect the new prefix. The file
+        // is the source of truth; we don't mutate `item.text` (it's readonly).
+        // Emitting "loaded" makes TodoTreeProvider re-render with fresh data.
+        await this.load();
     }
 
     onDidChange(listener: TodoListener): () => void {

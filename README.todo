@@ -4,14 +4,14 @@
 - [ ] TODO subgroup panel add a button to open README.todo
 - [ ] deal with terminal "Antigravity Agent" terminal life cycle
 - [ ] deal with network topology routing parsing error (host ip adress is not listed in trace path)
-- [ ] TODO subgroup panel add a button to open README.todo
+- [ ] [P0] TODO subgroup panel add a button to open README.todo
 
-- [ ] Refactor `extension.ts` into per-feature modules (composition root pattern) — see [plans/2026-06-23-extension-module-split.md](plans/2026-06-23-extension-module-split.md)
+- [ ] [P1] Refactor `extension.ts` into per-feature modules (composition root pattern) — see [plans/2026-06-23-extension-module-split.md](plans/2026-06-23-extension-module-split.md)
 
 ## Features (high-value, not started)
 
-- [ ] [P2] [feature] Terminal fuzzy search — see [plans/2026-06-23-feature-terminal-fuzzy-search.md](plans/2026-06-23-feature-terminal-fuzzy-search.md)
-- [ ] [feature] mDNS one-click connect — see [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
+- [ ] [P1] [feature] Terminal fuzzy search — see [plans/2026-06-23-feature-terminal-fuzzy-search.md](plans/2026-06-23-feature-terminal-fuzzy-search.md)
+- [ ] [P2] [feature] mDNS one-click connect — see [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
 - [ ] [feature] Workspace-aware group suggestions — see [plans/2026-06-23-feature-workspace-aware-group-suggestions.md](plans/2026-06-23-feature-workspace-aware-group-suggestions.md)
 - [ ] [feature] TODO in-tree rename — see [plans/2026-06-23-feature-todo-in-tree-rename.md](plans/2026-06-23-feature-todo-in-tree-rename.md)
 - [ ] [feature] Topology background scan — see [plans/2026-06-23-feature-topology-background-scan.md](plans/2026-06-23-feature-topology-background-scan.md)

@@ -2,6 +2,18 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Install Extension",
+            "type": "shell",
+            "command": "agy-ide --install-extension *.vsix --force",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "focus": true,
+                "clear": true
+            }
+        },
+        {
             "type": "npm",
             "script": "build",
             "group": {
@@ -17,18 +29,6 @@
                 "close": true
             },
             "label": "npm: build"
-        },
-        {
-            "label": "Install Extension",
-            "type": "shell",
-            "command": "agy-ide --install-extension *.vsix --force",
-            "problemMatcher": [],
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared",
-                "focus": true,
-                "clear": true
-            }
         }
     ]
 }

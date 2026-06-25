@@ -228,4 +228,55 @@ describe("TodoStore", () => {
         expect(after).toContain("[P1] Old name");
         expect(after).not.toContain("[P0] Old name");
     });
+
+    it("updatePriority reloads items so subsequent reads see the new prefix", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-priority-reload-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "- [ ] [P0] Task\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+        const store = new TodoStore(dir);
+        await store.load();
+        expect(store.getItems()[0].text).toBe("[P0] Task");
+        await store.updatePriority(store.getItems()[0], "P2");
+        // After updatePriority the store should have re-loaded so a fresh
+        // getItems() returns the new prefix (UI re-renders from this).
+        expect(store.getItems()[0].text).toBe("[P2] Task");
+    });
+
+    it("updatePriority emits 'loaded' so the tree re-renders with fresh data", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-priority-loaded-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "- [ ] [P0] Task\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+        const store = new TodoStore(dir);
+        await store.load();
+        const events: string[] = [];
+        store.onDidChange((c) => events.push(c.type));
+        await store.updatePriority(store.getItems()[0], "P1");
+        expect(events).toContain("loaded");
+    });
+
+    it("updatePriority inserts a [Px] prefix when the line has none", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-priority-insert-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "- [ ] plain task\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+        const store = new TodoStore(dir);
+        await store.load();
+        await store.updatePriority(store.getItems()[0], "P2");
+        const after = readFileSync(file, "utf8");
+        expect(after).toContain("- [ ] [P2] plain task");
+    });
 });
