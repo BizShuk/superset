@@ -69,23 +69,48 @@ Update version in @package.json every change based on <majore,minor,patch>
 
 ### Composition Root
 
-`src/extension.ts` (~91 行) 是 composition root,只負責:
+`src/extension.ts` (~108 行) 是 composition root,只負責:
 
 - 建立共享資源 (OutputChannel、StatusBar)
 - 組裝 `FeatureContext`
 - 依序呼叫各 feature module 的 `register()` 函式
 - 註冊跨 feature 的 global commands (`focusView`、`showLogs`、`focusPanel`)
+- `return createTreePreviewExtension()`:把 Markdown 預覽的 `extendMarkdownIt` API 交還給 VSCode (見下方 Tree Preview)
 
 ### Feature Modules
 
-四個獨立 feature modules,每個都有統一的 `register(ctx: FeatureContext): FeatureHandle` 介面:
+每個 feature 是 `src/<feature>/` 一個資料夾 (沒有 `features/` 中間層),自帶 `index.ts` (組裝入口)、`types.ts` (該 feature 的 domain types) 與實作檔。四個 TreeView feature 走統一的 `register(ctx: FeatureContext): FeatureHandle` 介面;`treePreview` 是例外 (見表後說明):
 
-| 模組                          | 職責                                | 主要元件                                                  |
-| ----------------------------- | ----------------------------------- | --------------------------------------------------------- |
-| `features/terminals/index.ts` | 終端機面板 + 高亮 + PTY 自動替換   | TerminalRegistry, OutputWatcher, PtyTerminalHost, ...     |
-| `features/mdns/index.ts`      | mDNS 服務發現 TreeView              | MdnsRegistry, MdnsTreeProvider                            |
-| `features/topology/index.ts`  | 網路拓撲掃描 TreeView               | TopologyStore, TopologyTreeProvider                       |
-| `features/todo/index.ts`      | TODO 清單 TreeView + 過濾器 badge   | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
+| 模組                    | 職責                              | 主要元件                                                  |
+| ----------------------- | --------------------------------- | --------------------------------------------------------- |
+| `src/terminals/`        | 終端機面板 + 高亮 + PTY 自動替換  | TerminalRegistry, OutputWatcher, PtyTerminalHost, ...     |
+| `src/mdns/`             | mDNS 服務發現 TreeView            | MdnsRegistry, MdnsTreeProvider                            |
+| `src/topology/`         | 網路拓撲掃描 TreeView             | TopologyStore, TopologyTreeProvider                       |
+| `src/todo/`             | TODO 清單 TreeView + 過濾器 badge | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
+| `src/treePreview/`      | Markdown `tree` 區塊語法高亮 + 預覽渲染 | createTreePreviewExtension, renderLine                |
+
+> 跨 feature 共用的框架型別 (`FeatureContext`、`FeatureHandle`、`SharedDeps`) 放在 `src/shared.ts`;各 feature 自己的 domain 型別放在該資料夾的 `types.ts` (原本集中在單一 `src/types.ts` 的 grab-bag 已依 feature 拆分)。
+
+### `src/terminals/` 內部拆檔 (SRP)
+
+`terminals/index.ts` 只做組裝 (registry、treeView、presenter、watcher、factory、commands 的接線 + 生命週期事件 + disposable 收集);各職責抽成獨立檔:
+
+| 檔案                       | 職責                                                          | 可單元測試 |
+| -------------------------- | ------------------------------------------------------------- | ---------- |
+| `watchedTerminalTracker.ts`| 「使用者正在看哪個 terminal」狀態機 (含 recency 視窗,注入時鐘) | ✓          |
+| `dragAndDrop.ts`           | TreeView drag-and-drop controller (terminal/group 搬移)       | vscode-bound |
+| `ptyTerminalFactory.ts`    | 建 PTY-backed terminal (node-pty spawner + Pseudoterminal 接線) | 部分       |
+| `shellExecutionSource.ts`  | `onDidStartTerminalShellExecution` → OutputWatcher 事件 adapter | vscode-bound |
+| `commands.ts`              | `registerTerminalCommands` / `registerGroupCommands`          | vscode-bound |
+
+### Tree Preview (從 md-tree-highlight 合併)
+
+`src/treePreview/` 是原獨立套件 `md-tree-highlight` (git submodule) 併入 superset 的成果。它不開 TreeView、不註冊 command、不產生 disposable,所以不走 `register()`;它的貢獻是 VSCode Markdown 預覽的 `extendMarkdownIt` hook,只能透過 `activate()` 的回傳值交出。
+
+- `treePreview/renderLine.ts`:純函式,把單行 `tree` 內容 (box-drawing 連接符 + 名稱 + 可選 `# comment`) 轉成帶 📁/📄 icon 的 HTML span;無 `vscode` import,可直接單元測試。
+- `index.ts`:`createTreePreviewExtension()` 用 `renderLine` 包出 `{ extendMarkdownIt }`,攔截 ```` ```tree ```` fenced block。
+- 宣告性貢獻在 `package.json`:`languages` (tree)、`grammars` (`syntaxes/tree.tmLanguage.json` + markdown injection)、`markdown.markdownItPlugins: true`、`markdown.previewStyles` (`styles/tree.css`)。
+- 因為要交出 `extendMarkdownIt`,`activate()` 的回傳型別從 `void` 改為 `MarkdownItExtension`。
 
 ---
 
@@ -93,10 +118,10 @@ Update version in @package.json every change based on <majore,minor,patch>
 
 兩個目錄存放 markdown 文件,功能不同:
 
-| 目錄        | 用途                                                | 何時放入                                                |
-| ----------- | --------------------------------------------------- | ------------------------------------------------------- |
-| `plans/`    | **進行中 / 未實作** 的設計與實作計劃                | 寫計劃時;feature 實作完成、push 成功後,搬到 `specs/` |
-| `specs/`    | **已實作且 push** 的歷史規格文件(已不再變動的紀錄) | 對應功能 commit 進 git history 後                        |
+| 目錄     | 用途                                               | 何時放入                                             |
+| -------- | -------------------------------------------------- | ---------------------------------------------------- |
+| `plans/` | **進行中 / 未實作** 的設計與實作計劃               | 寫計劃時;feature 實作完成、push 成功後,搬到 `specs/` |
+| `specs/` | **已實作且 push** 的歷史規格文件(已不再變動的紀錄) | 對應功能 commit 進 git history 後                    |
 
 `specs/` 內的檔案視為「事後記錄」,不再被當作進行中的計劃修改;新的變更以新 plan 形式開在 `plans/`,完成後整份升級進 `specs/`。
 
@@ -119,7 +144,7 @@ Update version in @package.json every change based on <majore,minor,patch>
 
 ### `PtyTerminalHost` 生命週期
 
-```
+```tree
 [1] 使用者執行「Superset: Open TUI Terminal」命令
     │
     ├── extension.ts 建 PtyTerminalHost(getTerminal=closure, spawn, ...)
@@ -145,7 +170,7 @@ Update version in @package.json every change based on <majore,minor,patch>
 
 某些 terminal 是其他 agent/extension 擁有的背景工作終端機 (background worker),不是給用戶操作的工作面 (work surface),出現在面板上只是雜訊。最典型的例子是 Antigravity 開出來的 `Antigravity Agent` terminal。
 
-- **`shouldTrackTerminal(name)`** (`src/autoReplace.ts`):純函式,name 含 `antigravity` (case-insensitive) → 不進面板。在兩個入口 (pre-populate loop 與 `onDidOpenTerminal`) 都先過這道閘,被排除的 terminal 從不進 registry,因此沒有 row、沒有高亮、也沒有 PTY wrap。
+- **`shouldTrackTerminal(name)`** (`src/terminals/autoReplace.ts`):純函式,name 含 `antigravity` (case-insensitive) → 不進面板。在兩個入口 (pre-populate loop 與 `onDidOpenTerminal`) 都先過這道閘,被排除的 terminal 從不進 registry,因此沒有 row、沒有高亮、也沒有 PTY wrap。
 - **與 `decideAutoReplace` 的關係**:`shouldTrackTerminal` 先跑,agent terminal 在 PTY-replace 決策前就被丟掉;`decideAutoReplace` 內仍保留同樣的 `/antigravity/i` 檢查作 defense-in-depth。
 - 名稱匹配兩邊一致,新增同類 agent 時兩處一起改。
 
@@ -161,7 +186,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## mDNS 模組設計 (mDNS Module)
 
-`MdnsRegistry` (`src/mdnsRegistry.ts`) 是純資料層:訂閱 `MdnsTransport`、解析 DNS-SD 記錄、用 observer pattern 對外發 `MdnsChange`。沒有 `vscode` import,可在純 Node 測試。
+`MdnsRegistry` (`src/mdns/mdnsRegistry.ts`) 是純資料層:訂閱 `MdnsTransport`、解析 DNS-SD 記錄、用 observer pattern 對外發 `MdnsChange`。沒有 `vscode` import,可在純 Node 測試。
 
 ### 封包 → 合併 → 提交
 
@@ -170,7 +195,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ### 去重:network identity secondary key
 
-- 同一台主機可能以多個 mDNS 實例名稱廣播、或同時走多張網卡 / IPv4+IPv6,造成面板重複列。`byNetworkKey: Map<host|port|type, canonicalName>` 為次索引;`flushPending` 提交時若新 service 的 network key 已存在於另一個實例名下,就 `mergeServices` 進該 canonical row(first-seen 名稱為準),其餘名稱存進 `service.aliases`,不再新增列。純函式 `networkKey` / `mergeServices` 在 `src/mdnsDedup.ts`。
+- 同一台主機可能以多個 mDNS 實例名稱廣播、或同時走多張網卡 / IPv4+IPv6,造成面板重複列。`byNetworkKey: Map<host|port|type, canonicalName>` 為次索引;`flushPending` 提交時若新 service 的 network key 已存在於另一個實例名下,就 `mergeServices` 進該 canonical row(first-seen 名稱為準),其餘名稱存進 `service.aliases`,不再新增列。純函式 `networkKey` / `mergeServices` 在 `src/mdns/mdnsDedup.ts`。
 - `canonKeyToNk` 反向索引讓「同一實例改 port」時能釋放舊 network-key 槽位,避免後續不同服務誤佔而假合併。
 - `mergeServices` 同時聯集 addresses/subtypes、取 min ttl、取 max `lastSeen` / min `firstSeen` — 後者關鍵:新封包合併進 canonical 時不會留下過舊的 `lastSeen`,否則過期掃描會誤刪剛出現的服務。
 
@@ -187,7 +212,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ### 為何 `TerminalHandle` 介面只有三個方法
 
-`src/types.ts:1-6` 定義的 `TerminalHandle` 只 expose `name` / `show` / `dispose`。這是刻意的:
+`src/terminals/types.ts` 定義的 `TerminalHandle` 只 expose `name` / `show` / `dispose`。這是刻意的:
 
 - 讓 fake terminal 在測試中容易構造 (見 `test/ptyTerminalHost.test.ts:11-13`)
 - 避免把 deprecated / proposed API 變成核心契約
@@ -201,11 +226,12 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## 測試 (Testing)
 
-`npm test` 跑 Vitest,目前 173 個 case 全綠:
+`npm test` 跑 Vitest,目前 195 個 case 全綠:
 
 | 測試檔                            | 對象                           | 案例數 |
 | --------------------------------- | ------------------------------ | ------ |
 | `terminalRegistry.test.ts`        | 純狀態機                       | 17     |
+| `watchedTerminalTracker.test.ts`  | watched-terminal 狀態機 + recency | 8   |
 | `outputWatcher.test.ts`           | Shell Integration watcher      | 6      |
 | `ptyTerminalHost.test.ts`         | PTY host (TUI 偵測核心)        | 15     |
 | `treeProvider.test.ts`            | 面板渲染 (`buildTreeItemSpec`) | 11     |
@@ -220,9 +246,10 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 | `todoStore.test.ts`               | TODO store                     | 6      |
 | `todoTreeProvider.test.ts`        | TODO 面板渲染                  | 17     |
 | `topologyStore.test.ts`           | 拓撲掃描 store                 | 4      |
+| `treePreview.test.ts`             | tree 區塊 renderLine 純函式    | 7      |
 | `smoke.test.ts`                   | 整體 smoke                     | 1      |
 
-`TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/treeSpec.ts` 純函式。
+`TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/terminals/treeSpec.ts` 純函式。
 
 ---
 

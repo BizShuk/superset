@@ -1,0 +1,23 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "Directory Tree",
+    "scopeName": "source.tree",
+    "patterns": [
+        {
+            "name": "comment.line.number-sign.tree",
+            "match": "#.*$"
+        },
+        {
+            "name": "punctuation.definition.tree.connector",
+            "match": "[│├└─┌┐┘┬┴┼]+"
+        },
+        {
+            "name": "entity.name.directory.tree",
+            "match": "[^\\s│├└─#][^#\\n]*?/(?=\\s|$)"
+        },
+        {
+            "name": "string.unquoted.filename.tree",
+            "match": "[^\\s│├└─#][^#\\n]*$"
+        }
+    ]
+}

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { HighlightPresenter, UNSEEN_PREFIX } from "../src/highlightPresenter";
-import { TerminalRegistry } from "../src/terminalRegistry";
-import type { TerminalHandle } from "../src/types";
+import { HighlightPresenter, UNSEEN_PREFIX } from "../src/terminals/highlightPresenter";
+import { TerminalRegistry } from "../src/terminals/terminalRegistry";
+import type { TerminalHandle } from "../src/terminals/types";
 
 function fakeTerminal(name: string): TerminalHandle {
     return { name, show: vi.fn(), dispose: vi.fn() };

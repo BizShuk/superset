@@ -61,9 +61,9 @@ import {
     TodoTreeProvider,
     filterCompleted,
     applyPriorityFilter,
-} from "../src/todoTreeProvider";
-import { TodoStore } from "../src/todoStore";
-import type { TodoItem } from "../src/types";
+} from "../src/todo/todoTreeProvider";
+import { TodoStore } from "../src/todo/todoStore";
+import type { TodoItem } from "../src/todo/types";
 
 function item(
     text: string,

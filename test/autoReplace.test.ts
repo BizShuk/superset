@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { decideAutoReplace, shouldTrackTerminal } from "../src/autoReplace";
+import { decideAutoReplace, shouldTrackTerminal } from "../src/terminals/autoReplace";
 
 describe("decideAutoReplace", () => {
     it("replaces a plain panel terminal (no special options)", () => {

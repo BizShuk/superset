@@ -1,0 +1,128 @@
+import * as vscode from "vscode";
+import { TerminalRegistry } from "./terminalRegistry";
+import { stripUnseenPrefix } from "./treeSpec";
+import { GroupStore, UNGROUPED_ID, type Group, type GroupColor } from "./groupStore";
+
+const GROUP_COLORS: GroupColor[] = [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "blue",
+    "purple",
+    "magenta",
+    "gray",
+];
+
+export interface TerminalCommandDeps {
+    readonly registry: TerminalRegistry;
+    readonly treeProvider: { refresh(): void };
+    /** Spawn a PTY-backed terminal (delegates to PtyTerminalFactory). */
+    readonly spawnPty: (name: string, cwd: string) => vscode.Terminal;
+    /** Resolve the workspace cwd for newly spawned terminals. */
+    readonly getCwd: () => string;
+}
+
+/** Per-terminal commands: focus / delete / copy name / rename / new. */
+export function registerTerminalCommands(
+    deps: TerminalCommandDeps
+): vscode.Disposable[] {
+    const { registry, treeProvider, spawnPty, getCwd } = deps;
+    const guarded = (
+        terminal: vscode.Terminal | undefined
+    ): terminal is vscode.Terminal => !!terminal && registry.has(terminal);
+
+    return [
+        vscode.commands.registerCommand(
+            "superset.focus",
+            (terminal: vscode.Terminal | undefined) => {
+                if (guarded(terminal)) terminal.show();
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.delete",
+            (terminal: vscode.Terminal | undefined) => {
+                if (guarded(terminal)) terminal.dispose();
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.copyName",
+            async (terminal: vscode.Terminal | undefined) => {
+                if (!guarded(terminal)) return;
+                await vscode.env.clipboard.writeText(
+                    stripUnseenPrefix(terminal.name)
+                );
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.rename",
+            async (terminal: vscode.Terminal | undefined) => {
+                if (!guarded(terminal)) return;
+                terminal.show();
+                await vscode.commands.executeCommand(
+                    "workbench.action.terminal.rename"
+                );
+                treeProvider.refresh();
+            }
+        ),
+        vscode.commands.registerCommand("superset.openTuiTerminal", () => {
+            spawnPty("Superset TUI", getCwd()).show();
+        }),
+        vscode.commands.registerCommand("superset.newTerminal", () => {
+            spawnPty("bash", getCwd()).show();
+        }),
+    ];
+}
+
+/** Group commands: create / rename / set color / delete / toggle collapse. */
+export function registerGroupCommands(
+    groupStore: GroupStore
+): vscode.Disposable[] {
+    return [
+        vscode.commands.registerCommand("superset.newGroup", async () => {
+            const name = await vscode.window.showInputBox({
+                prompt: "群組名稱",
+                value: "",
+            });
+            if (!name) return;
+            groupStore.createGroup(name);
+        }),
+        vscode.commands.registerCommand(
+            "superset.renameGroup",
+            async (group: Group | undefined) => {
+                if (!group) return;
+                const name = await vscode.window.showInputBox({
+                    prompt: "新名稱",
+                    value: group.name,
+                });
+                if (!name) return;
+                groupStore.renameGroup(group.id, name);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.setGroupColor",
+            async (group: Group | undefined) => {
+                if (!group) return;
+                const color = await vscode.window.showQuickPick(GROUP_COLORS, {
+                    placeHolder: "選擇顏色",
+                });
+                if (!color) return;
+                groupStore.setGroupColor(group.id, color as GroupColor);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.deleteGroup",
+            (group: Group | undefined) => {
+                if (!group || group.id === UNGROUPED_ID) return;
+                groupStore.deleteGroup(group.id);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.toggleGroupCollapsed",
+            (group: Group | undefined) => {
+                if (!group) return;
+                groupStore.toggleGroupCollapsed(group.id);
+            }
+        ),
+    ];
+}

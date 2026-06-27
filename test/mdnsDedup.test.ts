@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { networkKey, mergeServices } from "../src/mdnsDedup";
-import type { MdnsService } from "../src/types";
+import { networkKey, mergeServices } from "../src/mdns/mdnsDedup";
+import type { MdnsService } from "../src/mdns/types";
 
 describe("networkKey", () => {
     it("joins host/port/type with |", () => {

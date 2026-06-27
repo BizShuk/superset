@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { PtyTerminalHost } from "../src/ptyTerminalHost";
-import type { PtyProcess, PtySpawner } from "../src/ptyTerminalHost";
-import { TerminalRegistry } from "../src/terminalRegistry";
-import type { TerminalHandle } from "../src/types";
+import { PtyTerminalHost } from "../src/terminals/ptyTerminalHost";
+import type { PtyProcess, PtySpawner } from "../src/terminals/ptyTerminalHost";
+import { TerminalRegistry } from "../src/terminals/terminalRegistry";
+import type { TerminalHandle } from "../src/terminals/types";
 
 function fakeTerminal(name: string): TerminalHandle {
     return { name, show: vi.fn(), dispose: vi.fn() };

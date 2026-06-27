@@ -3,8 +3,8 @@ import {
     buildMdnsDetailFields,
     buildMdnsServiceSpec,
     buildMdnsTypeSpec,
-} from "../src/mdnsTreeSpec";
-import type { MdnsService } from "../src/types";
+} from "../src/mdns/mdnsTreeSpec";
+import type { MdnsService } from "../src/mdns/types";
 
 function fakeService(overrides: Partial<MdnsService> = {}): MdnsService {
     return {

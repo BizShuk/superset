@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeTodoBadgeTitle } from "../src/features/todo/badge";
+import { computeTodoBadgeTitle } from "../src/todo/badge";
 
 describe("computeTodoBadgeTitle", () => {
     it("returns the title unchanged when not filtering", () => {

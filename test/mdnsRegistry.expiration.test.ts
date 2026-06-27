@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { MdnsRegistry } from "../src/mdnsRegistry";
-import type { MdnsPacket, MdnsTransport } from "../src/mdnsTransport";
+import { MdnsRegistry } from "../src/mdns/mdnsRegistry";
+import type { MdnsPacket, MdnsTransport } from "../src/mdns/mdnsTransport";
 
 /**
  * Expiration-path tests for MdnsRegistry. Kept in a dedicated file because the

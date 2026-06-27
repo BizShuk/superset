@@ -5,34 +5,35 @@
 ## 為何要做 (Why)
 
 - **現況的「除錯資訊取得成本」過高**:
-  - `extension.ts` 內有 21 個 `log(` 呼叫(`Superset` OutputChannel 內),但**使用者拿不到這些 log 結構**:
-    - 想看「為什麼 mDNS 面板沒顯示 X service」→ 要叫使用者「打開 Superset OutputChannel 找 `mdns.` 開頭的行」→ 不友善
-    - 想看「我現在有幾台 PTY terminal、幾台一般 terminal」→ 沒有 API,只能從 panel UI 數
-    - 想看「todo 統計」→ 同上,沒有 API
-  - `superset.showLogs` 命令只是 `diag.show(true)`,把整個 channel 倒出來;沒有結構化整理
-  - 沒有「即時」資訊:log channel 是時間序列,無法一眼看出「現在」狀態
+    - `extension.ts` 內有 21 個 `log(` 呼叫(`Superset` OutputChannel 內),但**使用者拿不到這些 log 結構**:
+        - 想看「為什麼 mDNS 面板沒顯示 X service」→ 要叫使用者「打開 Superset OutputChannel 找 `mdns.` 開頭的行」→ 不友善
+        - 想看「我現在有幾台 PTY terminal、幾台一般 terminal」→ 沒有 API,只能從 panel UI 數
+        - 想看「todo 統計」→ 同上,沒有 API
+    - `superset.showLogs` 命令只是 `diag.show(true)`,把整個 channel 倒出來;沒有結構化整理
+    - 沒有「即時」資訊:log channel 是時間序列,無法一眼看出「現在」狀態
 - **典型的求助場景**:
-  - 使用者開 GitHub issue 寫「我的 topology 面板空白,怎麼辦?」
-  - 維護者只能要他「裝 Debug version」、「跑 `console.log`」、「貼 Superset log」— 高摩擦、低成功率
-  - 有了 Diagnostic Webview:使用者按一個按鈕,維護者拿到**結構化 snapshot**,直接讀
+    - 使用者開 GitHub issue 寫「我的 topology 面板空白,怎麼辦?」
+    - 維護者只能要他「裝 Debug version」、「跑 `console.log`」、「貼 Superset log」— 高摩擦、低成功率
+    - 有了 Diagnostic Webview:使用者按一個按鈕,維護者拿到**結構化 snapshot**,直接讀
 - **低風險**:Webview 只是「讀」內部狀態並顯示,完全不改任何資料流,失敗也只影響輔助 UI。
 
 ## 使用者審查要求 (User Review Required)
 
 > [!IMPORTANT]
+>
 > - **資訊敏感度**:`MdnsService` 內可能含 `srcAddress`(網卡 IP,等同本機網路拓跡);若使用者隱私敏感,可能要遮罩。
->   - 預設:**不遮罩** — `mDNS` 面板本來就顯示 IP,且只有本機可見
->   - 提供「Redact IPs」toggle 讓使用者自己決定(預設 off)
+>     - 預設:**不遮罩** — `mDNS` 面板本來就顯示 IP,且只有本機可見
+>     - 提供「Redact IPs」toggle 讓使用者自己決定(預設 off)
 > - **Webview 的位置**:
->   - 預設:作為新 tab 在 editor area(用 `vscode.window.createWebviewPanel` + `viewColumn: ViewColumn.Beside`)
->   - 替代:作為 status bar 下拉(類似 `StatusBar` 點擊展開)— 工程成本較高
->   - 推薦 editor area tab:與既有 `OutputChannel` 開啟方式對稱
+>     - 預設:作為新 tab 在 editor area(用 `vscode.window.createWebviewPanel` + `viewColumn: ViewColumn.Beside`)
+>     - 替代:作為 status bar 下拉(類似 `StatusBar` 點擊展開)— 工程成本較高
+>     - 推薦 editor area tab:與既有 `OutputChannel` 開啟方式對稱
 > - **要不要定期 auto-refresh**?
->   - 預設:不 auto-refresh,使用者按「Refresh」按鈕手動觸發(避免每 1 秒 rebuild webview 耗電)
->   - 替代:每 5 秒 auto-refresh — 工程簡單但使用者可能不想要
+>     - 預設:不 auto-refresh,使用者按「Refresh」按鈕手動觸發(避免每 1 秒 rebuild webview 耗電)
+>     - 替代:每 5 秒 auto-refresh — 工程簡單但使用者可能不想要
 > - **是否要支援「Save snapshot to file」**(方便附件上傳 GitHub issue)?
->   - 預設:有,額外按鈕
->   - 副產物:同時是 `## Features` 區塊可勾選項
+>     - 預設:有,額外按鈕
+>     - 副產物:同時是 `## Features` 區塊可勾選項
 
 ## 提議的變更 (Proposed Changes)
 
@@ -41,44 +42,46 @@
 #### [NEW] [diagnostics.ts](file:///Users/bytedance/projects/superset/src/diagnostics.ts)
 
 - 純函式模組(不依賴 vscode),負責把各個 store / registry 狀態彙整成 snapshot 物件:
-  ```typescript
-  export interface DiagnosticSnapshot {
-      generatedAt: string;       // ISO timestamp
-      extension: {
-          version: string;
-          engines: { vscode: string; node: string };
-          activationSessionId: string;
-      };
-      terminals: {
-          total: number;
-          ptyBacked: number;
-          withUnseenOutput: number;
-          groups: number;
-      };
-      mDNS: {
-          serviceCount: number;
-          oldestLastSeen: string | null;  // 給人判斷 mDNS 是否還在動
-      };
-      topology: {
-          nodeCount: number;
-          lastScanAt: string | null;
-      };
-      todo: {
-          total: number;
-          completed: number;
-          listOnly: number;       // kind: "list" 節點(非勾選)
-      };
-      // ...etc
-  }
 
-  export function buildSnapshot(deps: {
-      registry: TerminalRegistry;
-      groupStore: GroupStore;
-      mdnsRegistry: MdnsRegistry;
-      topologyStore: TopologyStore;
-      todoStore: TodoStore;
-  }): DiagnosticSnapshot;
-  ```
+    ```typescript
+    export interface DiagnosticSnapshot {
+        generatedAt: string; // ISO timestamp
+        extension: {
+            version: string;
+            engines: { vscode: string; node: string };
+            activationSessionId: string;
+        };
+        terminals: {
+            total: number;
+            ptyBacked: number;
+            withUnseenOutput: number;
+            groups: number;
+        };
+        mDNS: {
+            serviceCount: number;
+            oldestLastSeen: string | null; // 給人判斷 mDNS 是否還在動
+        };
+        topology: {
+            nodeCount: number;
+            lastScanAt: string | null;
+        };
+        todo: {
+            total: number;
+            completed: number;
+            listOnly: number; // kind: "list" 節點(非勾選)
+        };
+        // ...etc
+    }
+
+    export function buildSnapshot(deps: {
+        registry: TerminalRegistry;
+        groupStore: GroupStore;
+        mdnsRegistry: MdnsRegistry;
+        topologyStore: TopologyStore;
+        todoStore: TodoStore;
+    }): DiagnosticSnapshot;
+    ```
+
 - 全部都是「讀」操作,副作用 0。
 
 #### [NEW] [diagnosticWebview.ts](file:///Users/bytedance/projects/superset/src/diagnosticWebview.ts)
@@ -93,30 +96,37 @@
 #### [MODIFY] [package.json](file:///Users/bytedance/projects/superset/package.json)
 
 - 在 `contributes.commands` 加:
-  ```json
-  {
-      "command": "superset.showDiagnostics",
-      "title": "Superset: Show Diagnostics",
-      "category": "Superset",
-      "icon": "$(info)"
-  }
-  ```
+
+    ```json
+    {
+        "command": "superset.showDiagnostics",
+        "title": "Superset: Show Diagnostics",
+        "category": "Superset",
+        "icon": "$(info)"
+    }
+    ```
+
 - 在 `contributes.menus.commandPalette` 加,讓命令可在 `Ctrl+Shift+P` 觸發(預設即可,不用顯式列)。
 
 #### [MODIFY] [extension.ts](file:///Users/bytedance/projects/superset/src/extension.ts)
 
 - 在 `activate()` 內:
-  ```typescript
-  const diagnosticView = new DiagnosticWebviewProvider({
-      registry, groupStore, mdnsRegistry, topologyStore, todoStore,
-  });
-  subscriptions.push(
-      vscode.commands.registerCommand("superset.showDiagnostics", () =>
-          diagnosticView.show()
-      )
-  );
-  subscriptions.push({ dispose: () => diagnosticView.dispose() });
-  ```
+
+    ```typescript
+    const diagnosticView = new DiagnosticWebviewProvider({
+        registry,
+        groupStore,
+        mdnsRegistry,
+        topologyStore,
+        todoStore
+    });
+    subscriptions.push(
+        vscode.commands.registerCommand("superset.showDiagnostics", () =>
+            diagnosticView.show()
+        )
+    );
+    subscriptions.push({ dispose: () => diagnosticView.dispose() });
+    ```
 
 ---
 
@@ -125,30 +135,30 @@
 #### [NEW] [diagnostics.test.ts](file:///Users/bytedance/projects/superset/test/diagnostics.test.ts)
 
 - 純函式 `buildSnapshot` 測試:
-  - 各個 store 都是空時,回傳的 `total: 0`、`completed: 0` 等
-  - 加 1 個 terminal → `terminals.total: 1`
-  - 1 個 mDNS service + 1 個 topology node → 對應計數正確
-  - `engines.vscode` 反映 `package.json` 的當前值
-  - `generatedAt` 是合法 ISO timestamp(可 parse)
+    - 各個 store 都是空時,回傳的 `total: 0`、`completed: 0` 等
+    - 加 1 個 terminal → `terminals.total: 1`
+    - 1 個 mDNS service + 1 個 topology node → 對應計數正確
+    - `engines.vscode` 反映 `package.json` 的當前值
+    - `generatedAt` 是合法 ISO timestamp(可 parse)
 - 不需要 mock vscode。
 
 #### [NEW] [diagnosticWebview.test.ts](file:///Users/bytedance/projects/superset/test/diagnosticWebview.test.ts)
 
 - 與 `todoTreeProvider.test.ts` 同樣的 `vi.mock("vscode")` 模式:
-  - `show()` 後 `createWebviewPanel` 被呼叫一次
-  - `dispose()` 後 panel 被 dispose
-  - `refresh()` 後 HTML 內含當前 snapshot 資料
-  - 點 webview 內的「Copy to clipboard」按鈕 → `clipboard.writeText` 被呼叫,參數是合法 JSON
+    - `show()` 後 `createWebviewPanel` 被呼叫一次
+    - `dispose()` 後 panel 被 dispose
+    - `refresh()` 後 HTML 內含當前 snapshot 資料
+    - 點 webview 內的「Copy to clipboard」按鈕 → `clipboard.writeText` 被呼叫,參數是合法 JSON
 
 ---
 
 ### 改進的「可觀察」指標
 
-| 指標                                       | 改進前          | 改進後(預期)         |
-| ------------------------------------------ | --------------- | --------------------- |
-| 使用者取得診斷資訊的步驟數                 | 5+ 步(開 Output → 找關鍵行 → copy) | 1 步(命令 → 點按鈕) |
-| 維護者收到 issue 含診斷資訊的比例         | 低              | 高                    |
-| Snapshot 結構化程度                        | 無(自由文字)   | JSON,有 schema       |
+| 指標                              | 改進前                             | 改進後(預期)        |
+| --------------------------------- | ---------------------------------- | ------------------- |
+| 使用者取得診斷資訊的步驟數        | 5+ 步(開 Output → 找關鍵行 → copy) | 1 步(命令 → 點按鈕) |
+| 維護者收到 issue 含診斷資訊的比例 | 低                                 | 高                  |
+| Snapshot 結構化程度               | 無(自由文字)                       | JSON,有 schema      |
 
 ## 驗證計劃 (Verification Plan)
 
@@ -160,21 +170,21 @@
 ### 手動驗證
 
 - 啟動 Extension Development Host:
-  - 按 `Ctrl+Shift+P` → `Superset: Show Diagnostics` → 新 webview tab 出現
-  - 顯示所有子系統的即時計數
-  - 開 1 個 terminal → 按 Refresh → 計數 +1
-  - 按 Copy to clipboard → 剪貼簿有 JSON
-  - 按 Save to file → 存到指定路徑
-  - 關閉 webview → 內部 `panel` 變 undefined,下次 `show()` 重新建立
+    - 按 `Ctrl+Shift+P` → `Superset: Show Diagnostics` → 新 webview tab 出現
+    - 顯示所有子系統的即時計數
+    - 開 1 個 terminal → 按 Refresh → 計數 +1
+    - 按 Copy to clipboard → 剪貼簿有 JSON
+    - 按 Save to file → 存到指定路徑
+    - 關閉 webview → 內部 `panel` 變 undefined,下次 `show()` 重新建立
 
 ## 風險與緩解 (Risks & Mitigations)
 
-| 風險                                          | 緩解                                                                                  |
-| --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Snapshot 包含敏感資訊(IP、session id)         | 文件明確標註「別貼公開 issue」;提供 Redact toggle                                    |
-| `buildSnapshot` 與各 store 介面耦合           | 用最小依賴(只呼叫 getter),不動 store 內部狀態                                        |
-| Webview 佔記憶體                              | 單一 panel 共享,關閉即釋放;沒有定時 refresh 故無背景負擔                            |
-| 既有命令 `superset.showLogs` 變得冗餘         | 保留(`showLogs` 給「看時間序列 log」,本 webview 給「看即時狀態」)— 互補                |
+| 風險                                  | 緩解                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------- |
+| Snapshot 包含敏感資訊(IP、session id) | 文件明確標註「別貼公開 issue」;提供 Redact toggle                       |
+| `buildSnapshot` 與各 store 介面耦合   | 用最小依賴(只呼叫 getter),不動 store 內部狀態                           |
+| Webview 佔記憶體                      | 單一 panel 共享,關閉即釋放;沒有定時 refresh 故無背景負擔                |
+| 既有命令 `superset.showLogs` 變得冗餘 | 保留(`showLogs` 給「看時間序列 log」,本 webview 給「看即時狀態」)— 互補 |
 
 ## 預估工作量 (Effort Estimate)
 

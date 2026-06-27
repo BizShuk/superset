@@ -1,11 +1,17 @@
 import * as vscode from "vscode";
-import type { FeatureContext, SharedDeps } from "./types";
-import { register as registerTerminals } from "./features/terminals";
-import { register as registerMdns } from "./features/mdns";
-import { register as registerTopology } from "./features/topology";
-import { register as registerTodo } from "./features/todo";
+import type { FeatureContext, SharedDeps } from "./shared";
+import { register as registerTerminals } from "./terminals";
+import { register as registerMdns } from "./mdns";
+import { register as registerTopology } from "./topology";
+import { register as registerTodo } from "./todo";
+import {
+    createTreePreviewExtension,
+    type MarkdownItExtension,
+} from "./treePreview";
 
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(
+    context: vscode.ExtensionContext
+): MarkdownItExtension {
     console.log("[superset] activated");
 
     const subscriptions: vscode.Disposable[] = [];
@@ -90,6 +96,11 @@ export function activate(context: vscode.ExtensionContext): void {
     for (const d of subscriptions) {
         context.subscriptions.push(d);
     }
+
+    // Surface the Markdown preview contribution (ported from
+    // md-tree-highlight). VSCode reads this return value when the manifest
+    // declares `markdown.markdownItPlugins`.
+    return createTreePreviewExtension();
 }
 
 export function deactivate(): void {

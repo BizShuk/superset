@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { MdnsRegistry } from "../src/mdnsRegistry";
-import type { MdnsPacket, MdnsTransport } from "../src/mdnsTransport";
-import type { MdnsService } from "../src/types";
+import { MdnsRegistry } from "../src/mdns/mdnsRegistry";
+import type { MdnsPacket, MdnsTransport } from "../src/mdns/mdnsTransport";
+import type { MdnsService } from "../src/mdns/types";
 
 class FakeMdnsTransport implements MdnsTransport {
     private listeners: Array<(pkt: MdnsPacket) => void> = [];

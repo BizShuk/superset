@@ -1,0 +1,26 @@
+.tree-block {
+    border-left: 3px solid #4ec9b0;
+    background: var(--vscode-textCodeBlock-background, #1e1e1e);
+    border-radius: 6px;
+    padding: 12px 14px;
+    line-height: 1.5;
+    font-family: var(--vscode-editor-font-family, "Fira Code", monospace);
+}
+
+.tree-block .tree-connector {
+    color: #6a737d;
+}
+
+.tree-block .tree-dir {
+    color: #4ec9b0;
+    font-weight: 600;
+}
+
+.tree-block .tree-file {
+    color: #d4d4d4;
+}
+
+.tree-block .tree-comment {
+    color: #6a9955;
+    font-style: italic;
+}

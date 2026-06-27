@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { TodoStore } from "../src/todoStore";
+import { TodoStore } from "../src/todo/todoStore";
 import { readFile, writeFile } from "fs/promises";
 import { mkdtempSync, writeFileSync, readFileSync } from "fs";
 import { tmpdir } from "os";

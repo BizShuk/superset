@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { GroupStore, UNGROUPED_ID, type GroupColor } from "../src/groupStore";
-import type { TerminalHandle } from "../src/types";
+import { GroupStore, UNGROUPED_ID, type GroupColor } from "../src/terminals/groupStore";
+import type { TerminalHandle } from "../src/terminals/types";
 
 function fakeTerminal(name: string): TerminalHandle {
     return { name, show: vi.fn(), dispose: vi.fn() };

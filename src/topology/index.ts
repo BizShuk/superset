@@ -1,8 +1,8 @@
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../../types";
-import { TopologyStore } from "../../topologyStore";
-import { NodeTopologyScanner } from "../../topologyScanner";
-import { TopologyTreeProvider } from "../../topologyTreeProvider";
+import type { FeatureContext, FeatureHandle } from "../shared";
+import { TopologyStore } from "./topologyStore";
+import { NodeTopologyScanner } from "./topologyScanner";
+import { TopologyTreeProvider } from "./topologyTreeProvider";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const store = new TopologyStore(new NodeTopologyScanner());

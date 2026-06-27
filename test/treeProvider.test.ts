@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildTreeItemSpec, buildGroupSpec, COLOR_GLYPH } from "../src/treeSpec";
-import type { TerminalHandle } from "../src/types";
-import type { Group } from "../src/groupStore";
+import { buildTreeItemSpec, buildGroupSpec, COLOR_GLYPH } from "../src/terminals/treeSpec";
+import type { TerminalHandle } from "../src/terminals/types";
+import type { Group } from "../src/terminals/groupStore";
 
 function fakeTerminal(name: string): TerminalHandle {
     return { name, show: vi.fn(), dispose: vi.fn() };

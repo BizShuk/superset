@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../../types";
-import { TodoStore } from "../../todoStore";
-import { TodoTreeProvider } from "../../todoTreeProvider";
+import type { FeatureContext, FeatureHandle } from "../shared";
+import { TodoStore } from "./todoStore";
+import { TodoTreeProvider } from "./todoTreeProvider";
 import { computeTodoBadgeTitle } from "./badge";
 
 const TODO_VIEW_TITLE = "TODO";

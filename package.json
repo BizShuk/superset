@@ -1,8 +1,8 @@
 {
     "name": "superset",
     "displayName": "Superset",
-    "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視。",
-    "version": "0.2.0",
+    "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
+    "version": "0.3.1",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -14,13 +14,44 @@
         "vscode": "^1.85.0"
     },
     "categories": [
-        "Other"
+        "Other",
+        "Programming Languages"
     ],
     "main": "./out/extension.js",
     "activationEvents": [
         "onStartupFinished"
     ],
     "contributes": {
+        "languages": [
+            {
+                "id": "tree",
+                "aliases": [
+                    "markdown tree",
+                    "tree highlight"
+                ]
+            }
+        ],
+        "grammars": [
+            {
+                "language": "tree",
+                "scopeName": "source.tree",
+                "path": "./syntaxes/tree.tmLanguage.json"
+            },
+            {
+                "scopeName": "markdown.tree.codeblock",
+                "path": "./syntaxes/tree-markdown-injection.tmLanguage.json",
+                "injectTo": [
+                    "text.html.markdown"
+                ],
+                "embeddedLanguages": {
+                    "meta.embedded.block.tree": "tree"
+                }
+            }
+        ],
+        "markdown.markdownItPlugins": true,
+        "markdown.previewStyles": [
+            "./styles/tree.css"
+        ],
         "commands": [
             {
                 "command": "superset.focusView",

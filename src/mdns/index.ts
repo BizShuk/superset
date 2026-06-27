@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../../types";
-import type { MdnsService } from "../../types";
-import { MdnsRegistry } from "../../mdnsRegistry";
-import { MulticastDnsTransport } from "../../mdnsTransport";
-import { MdnsTreeProvider, type MdnsDetail } from "../../mdnsTreeProvider";
-import { buildMdnsDetailFields } from "../../mdnsTreeSpec";
+import type { FeatureContext, FeatureHandle } from "../shared";
+import type { MdnsService } from "./types";
+import { MdnsRegistry } from "./mdnsRegistry";
+import { MulticastDnsTransport } from "./mdnsTransport";
+import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
+import { buildMdnsDetailFields } from "./mdnsTreeSpec";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const registry = new MdnsRegistry(new MulticastDnsTransport());

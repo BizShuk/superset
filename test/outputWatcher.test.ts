@@ -1,11 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { OutputWatcher } from "../src/outputWatcher";
+import { OutputWatcher } from "../src/terminals/outputWatcher";
 import type {
     ShellExecutionLike,
     ShellExecutionStartEvent,
-} from "../src/outputWatcher";
-import type { TerminalHandle } from "../src/types";
-import { TerminalRegistry } from "../src/terminalRegistry";
+} from "../src/terminals/outputWatcher";
+import type { TerminalHandle } from "../src/terminals/types";
+import { TerminalRegistry } from "../src/terminals/terminalRegistry";
 
 function fakeTerminal(name: string): TerminalHandle {
     return { name, show: vi.fn(), dispose: vi.fn() };

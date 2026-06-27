@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { TopologyStore, type TopologyScanner } from "../src/topologyStore";
-import type { TopologyNode } from "../src/types";
+import { TopologyStore, type TopologyScanner } from "../src/topology/topologyStore";
+import type { TopologyNode } from "../src/topology/types";
 
 function fakeScanner(nodes: TopologyNode[]): TopologyScanner {
     return { scan: vi.fn().mockResolvedValue(nodes) };
