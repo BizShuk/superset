@@ -26,7 +26,7 @@ export class TodoTreeProvider
      *
      * Default true to preserve the previous behavior (no filter).
      */
-    private showCompleted = true;
+    private showCompleted = false;
     /**
      * Active priority filter. When empty (the default), every priority is
      * shown. When non-empty, only items whose [Px] tag is in the set are

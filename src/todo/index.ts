@@ -215,10 +215,18 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
             try {
                 const resolved = resolveTodoLink(target, ctx.workspaceFolder);
-                if (resolved.type === "url") {
-                    await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(resolved.uriOrPath));
+                const uri = resolved.type === "url"
+                    ? vscode.Uri.parse(resolved.uriOrPath)
+                    : vscode.Uri.file(resolved.uriOrPath);
+
+                const isMarkdown = uri.scheme === "file" && (
+                    uri.path.toLowerCase().endsWith(".md") ||
+                    uri.path.toLowerCase().endsWith(".markdown")
+                );
+
+                if (isMarkdown) {
+                    await vscode.commands.executeCommand("markdown.showPreview", uri);
                 } else {
-                    const uri = vscode.Uri.file(resolved.uriOrPath);
                     await vscode.commands.executeCommand("vscode.open", uri);
                 }
             } catch (err) {

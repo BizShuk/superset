@@ -62,3 +62,4 @@
 - [ ] [Reset All Caches 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reset-caches.md)
 - [ ] [Reveal in Tree 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reveal-in-tree.md)
 - [ ] [Plan: Add `window.onDidWriteTerminalData` (deprecated fallback) for TUI detection](plans/dynamic-orbiting-pearl.md)
+n

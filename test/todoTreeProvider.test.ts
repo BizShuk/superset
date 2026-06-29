@@ -270,6 +270,7 @@ describe("TodoTreeProvider", () => {
     it("sorts pending first, completed last", () => {
         const store = makeStore([item("second", true), item("first", false)]);
         const provider = new TodoTreeProvider(store);
+        provider.toggleShowCompleted(); // Enable showing completed for testing sort
         expect(visibleTexts(provider)).toEqual(["first", "second"]);
     });
 
@@ -280,6 +281,7 @@ describe("TodoTreeProvider", () => {
             item("pending", false),
         ]);
         const provider = new TodoTreeProvider(store);
+        provider.toggleShowCompleted(); // Enable showing completed for testing order
         // When a list node is present among checkboxes, sortSiblings returns
         // items unchanged (allCheckboxes=false path) — list node position
         // is preserved, checkbox siblings are NOT reordered.
@@ -289,13 +291,14 @@ describe("TodoTreeProvider", () => {
     it("toggles showCompleted and returns the new value", () => {
         const store = makeStore([]);
         const provider = new TodoTreeProvider(store);
-        expect(provider.toggleShowCompleted()).toBe(false);
         expect(provider.toggleShowCompleted()).toBe(true);
+        expect(provider.toggleShowCompleted()).toBe(false);
     });
 
     it("still sorts pending-first when all siblings are checkboxes", () => {
         const store = makeStore([item("done", true), item("pending", false)]);
         const provider = new TodoTreeProvider(store);
+        provider.toggleShowCompleted(); // Enable showing completed for testing sort
         expect(visibleTexts(provider)).toEqual(["pending", "done"]);
     });
 
@@ -312,7 +315,7 @@ describe("TodoTreeProvider", () => {
         const provider = new TodoTreeProvider(store);
         provider.onDidChangeTreeData(() => {});
 
-        expect(provider.toggleShowCompleted()).toBe(false);
+        expect(provider.isShowingCompleted()).toBe(false);
         const top = provider.getChildren() as TodoItem[];
         expect(top).toHaveLength(1);
         expect(top[0].text).toBe("section");
