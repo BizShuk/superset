@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.3.1",
+    "version": "0.3.2",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -143,6 +143,16 @@
                 "title": "Superset: Change Priority"
             },
             {
+                "command": "superset.todoNew",
+                "title": "Superset: New TODO",
+                "icon": "$(add)"
+            },
+            {
+                "command": "superset.todoOpen",
+                "title": "Superset: Open README.todo",
+                "icon": "$(go-to-file)"
+            },
+            {
                 "command": "superset.todoFilterHideCompleted",
                 "title": "Superset: Hide Completed",
                 "icon": "$(filter-filled)"
@@ -155,17 +165,42 @@
             {
                 "command": "superset.todoFilterP0",
                 "title": "Superset: Filter P0",
-                "icon": "$(filter)"
+                "icon": "resources/p0_dim.svg"
+            },
+            {
+                "command": "superset.todoFilterP0On",
+                "title": "Superset: Filter P0",
+                "icon": "resources/p0.svg"
             },
             {
                 "command": "superset.todoFilterP1",
                 "title": "Superset: Filter P1",
-                "icon": "$(filter)"
+                "icon": "resources/p1_dim.svg"
+            },
+            {
+                "command": "superset.todoFilterP1On",
+                "title": "Superset: Filter P1",
+                "icon": "resources/p1.svg"
             },
             {
                 "command": "superset.todoFilterP2",
                 "title": "Superset: Filter P2",
-                "icon": "$(filter)"
+                "icon": "resources/p2_dim.svg"
+            },
+            {
+                "command": "superset.todoFilterP2On",
+                "title": "Superset: Filter P2",
+                "icon": "resources/p2.svg"
+            },
+            {
+                "command": "superset.todoOpenLink",
+                "title": "Superset: Open Link",
+                "icon": "$(link-external)"
+            },
+            {
+                "command": "superset.todoCopy",
+                "title": "Copy",
+                "icon": "$(copy)"
             }
         ],
         "viewsContainers": {
@@ -224,50 +259,54 @@
                     "group": "navigation"
                 },
                 {
+                    "command": "superset.todoNew",
+                    "when": "view == superset.todo",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "superset.todoFilterP0",
+                    "when": "view == superset.todo && superset.todo.filterP0 != true",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "superset.todoFilterP0On",
+                    "when": "view == superset.todo && superset.todo.filterP0 == true",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "superset.todoFilterP1",
+                    "when": "view == superset.todo && superset.todo.filterP1 != true",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "superset.todoFilterP1On",
+                    "when": "view == superset.todo && superset.todo.filterP1 == true",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "superset.todoFilterP2",
+                    "when": "view == superset.todo && superset.todo.filterP2 != true",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "superset.todoFilterP2On",
+                    "when": "view == superset.todo && superset.todo.filterP2 == true",
+                    "group": "navigation@4"
+                },
+                {
                     "command": "superset.todoFilterHideCompleted",
                     "when": "view == superset.todo && superset.todo.filtering != true",
-                    "group": "navigation"
+                    "group": "navigation@5"
                 },
                 {
                     "command": "superset.todoFilterShowAll",
                     "when": "view == superset.todo && superset.todo.filtering == true",
-                    "group": "navigation"
+                    "group": "navigation@5"
                 },
                 {
-                    "command": "superset.todoFilterP0",
-                    "when": "view == superset.todo && superset.todo.filterP0 == false",
-                    "group": "navigation",
-                    "icon": "$(filter)"
-                },
-                {
-                    "command": "superset.todoFilterP0",
-                    "when": "view == superset.todo && superset.todo.filterP0 == true",
-                    "group": "navigation",
-                    "icon": "$(filter-filled)"
-                },
-                {
-                    "command": "superset.todoFilterP1",
-                    "when": "view == superset.todo && superset.todo.filterP1 == false",
-                    "group": "navigation",
-                    "icon": "$(filter)"
-                },
-                {
-                    "command": "superset.todoFilterP1",
-                    "when": "view == superset.todo && superset.todo.filterP1 == true",
-                    "group": "navigation",
-                    "icon": "$(filter-filled)"
-                },
-                {
-                    "command": "superset.todoFilterP2",
-                    "when": "view == superset.todo && superset.todo.filterP2 == false",
-                    "group": "navigation",
-                    "icon": "$(filter)"
-                },
-                {
-                    "command": "superset.todoFilterP2",
-                    "when": "view == superset.todo && superset.todo.filterP2 == true",
-                    "group": "navigation",
-                    "icon": "$(filter-filled)"
+                    "command": "superset.todoOpen",
+                    "when": "view == superset.todo",
+                    "group": "navigation@6"
                 }
             ],
             "view/item/context": [
@@ -330,6 +369,26 @@
                     "command": "superset.todoChangePriority",
                     "when": "viewItem == todoCheckbox",
                     "group": "3_priority"
+                },
+                {
+                    "command": "superset.todoNew",
+                    "when": "viewItem == todoSection",
+                    "group": "inline"
+                },
+                {
+                    "command": "superset.todoOpen",
+                    "when": "viewItem == todoSection",
+                    "group": "inline"
+                },
+                {
+                    "command": "superset.todoOpenLink",
+                    "when": "viewItem == todoCheckboxWithLink || viewItem == todoListWithLink",
+                    "group": "inline"
+                },
+                {
+                    "command": "superset.todoCopy",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection",
+                    "group": "5_copy"
                 }
             ]
         },

@@ -61,6 +61,9 @@ import {
     TodoTreeProvider,
     filterCompleted,
     applyPriorityFilter,
+    extractLink,
+    cleanLabelText,
+    resolveTodoLink,
 } from "../src/todo/todoTreeProvider";
 import { TodoStore } from "../src/todo/todoStore";
 import type { TodoItem } from "../src/todo/types";
@@ -135,6 +138,35 @@ describe("applyPriorityFilter", () => {
         const out = applyPriorityFilter(input, new Set(["P0"]));
         expect(out).toHaveLength(1);
         expect(out[0].text).toBe("[P0] a");
+    });
+
+    it("keeps section items if they contain matching children", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Section 1",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 1, text: "[P0] matching", kind: "checkbox", checked: false },
+                    { line: 2, text: "[P2] non-matching", kind: "checkbox", checked: false },
+                ],
+            },
+            {
+                line: 3,
+                text: "Section 2",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 4, text: "[P2] non-matching 2", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const out = applyPriorityFilter(input, new Set(["P0"]));
+        expect(out).toHaveLength(1);
+        expect(out[0].text).toBe("Section 1");
+        expect(out[0].children).toHaveLength(1);
+        expect(out[0].children![0].text).toBe("[P0] matching");
     });
 
     it("toggling adds and removes a priority from the set", () => {
@@ -338,5 +370,86 @@ describe("TodoTreeProvider priority icons", () => {
 
         expect(ti.label).toBe("important note");
         expect((ti.iconPath as any).path).toBe("/extension/resources/p0.svg");
+    });
+
+    it("handles links in checkbox and list items by cleaning label and updating contextValue", () => {
+        const store = makeStore([
+            item("task with [link](https://google.com)", false),
+            item("note with [plan](plans/some-plan.md)", false, undefined, "list"),
+        ]);
+        const provider = new TodoTreeProvider(store, mockUri);
+        
+        const tiCheckbox = provider.getTreeItem(store.getItems()[0]);
+        expect(tiCheckbox.label).toBe("task with link");
+        expect(tiCheckbox.contextValue).toBe("todoCheckboxWithLink");
+
+        const tiList = provider.getTreeItem(store.getItems()[1]);
+        expect(tiList.label).toBe("note with plan");
+        expect(tiList.contextValue).toBe("todoListWithLink");
+    });
+});
+
+describe("extractLink and cleanLabelText helper functions", () => {
+    it("extracts markdown link target", () => {
+        expect(extractLink("see [plans/xxx.md](plans/xxx.md)")).toBe("plans/xxx.md");
+        expect(extractLink("some task [google](https://google.com) details")).toBe("https://google.com");
+    });
+
+    it("extracts raw HTTP/HTTPS URLs", () => {
+        expect(extractLink("visit https://example.com/page for details")).toBe("https://example.com/page");
+    });
+
+    it("returns null if no link is present", () => {
+        expect(extractLink("normal task text")).toBeNull();
+    });
+
+    it("cleans markdown link from label text", () => {
+        expect(cleanLabelText("see [plans/xxx.md](plans/xxx.md)")).toBe("see plans/xxx.md");
+        expect(cleanLabelText("some task [google](https://google.com) details")).toBe("some task google details");
+    });
+});
+
+describe("resolveTodoLink helper function", () => {
+    it("resolves HTTP/HTTPS links", () => {
+        expect(resolveTodoLink("https://google.com", "/workspace")).toEqual({
+            type: "url",
+            uriOrPath: "https://google.com",
+        });
+        expect(resolveTodoLink("http://localhost:3000", "/workspace")).toEqual({
+            type: "url",
+            uriOrPath: "http://localhost:3000",
+        });
+    });
+
+    it("resolves file:/// absolute URI", () => {
+        expect(resolveTodoLink("file:///absolute/path/to/file", "/workspace")).toEqual({
+            type: "url",
+            uriOrPath: "file:///absolute/path/to/file",
+        });
+    });
+
+    it("resolves file:// relative link", () => {
+        expect(resolveTodoLink("file://plans/xxx.md", "/workspace")).toEqual({
+            type: "file",
+            uriOrPath: "/workspace/plans/xxx.md",
+        });
+    });
+
+    it("resolves plain relative link", () => {
+        expect(resolveTodoLink("plans/xxx.md", "/workspace")).toEqual({
+            type: "file",
+            uriOrPath: "/workspace/plans/xxx.md",
+        });
+        expect(resolveTodoLink("./plans/xxx.md", "/workspace")).toEqual({
+            type: "file",
+            uriOrPath: "/workspace/plans/xxx.md",
+        });
+    });
+
+    it("resolves plain absolute path", () => {
+        expect(resolveTodoLink("/absolute/path", "/workspace")).toEqual({
+            type: "file",
+            uriOrPath: "/absolute/path",
+        });
     });
 });

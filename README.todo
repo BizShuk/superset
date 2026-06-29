@@ -1,12 +1,12 @@
 # TODO
 
-- [x] Refactor `extension.ts` into per-feature modules (composition root pattern) — see [plans/2026-06-23-extension-module-split.md](plans/2026-06-23-extension-module-split.md)
-- [ ] TODO subgroup panel add a button to open README.todo
-- [ ] deal with terminal "Antigravity Agent" terminal life cycle
+- [x] Refactor `extension.ts` into per-feature modules (composition root pattern) — see plans/2026-06-23-extension-module-split.md
+- [x] TODO subgroup panel add a button to open README.todo
+- [x] deal with terminal "Antigravity Agent" terminal life cycle
 - [ ] deal with network topology routing parsing error (host ip adress is not listed in trace path)
 - [ ] [P0] TODO subgroup panel add a button to open README.todo
 
-- [ ] [P1] Refactor `extension.ts` into per-feature modules (composition root pattern) — see [plans/2026-06-23-extension-module-split.md](plans/2026-06-23-extension-module-split.md)
+- [ ] [P1] Refactor `extension.ts` into per-feature modules (composition root pattern) — see plans/2026-06-23-extension-module-split.md
 
 ## Features (high-value, not started)
 
@@ -23,11 +23,11 @@
 - [ ] [feature] Group metadata persistence — follow-up of [workspace-aware group suggestions](plans/2026-06-23-feature-workspace-aware-group-suggestions.md). Persist `cwd` / `gitRemote` keys in `context.workspaceState` so the auto-group heuristic survives VSCode restart. See scan note 2026-06-23#2A.
 - [ ] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. Avoids clashing with VSCode's own `workbench.panel.defaultLocation`. See scan note 2026-06-23#2D.
 - [ ] [feature] Terminal jump-to via `Superset: Go to Terminal` quick-pick — fuzzy pick of all open terminals, used as a `Ctrl+Shift+P` target. Composes with [terminal fuzzy search](plans/2026-06-23-feature-terminal-fuzzy-search.md): the pick reuses the same `matchesTerminal` helper. See scan note 2026-06-23#2E.
-- [ ] [feature] mDNS service expiration (auto-remove stale services, 3× TTL grace) — upgrades the long-standing unchecked TODO. See [plans/2026-06-23-feature-mdns-service-expiration.md](plans/2026-06-23-feature-mdns-service-expiration.md). See scan note 2026-06-23#2F.
+- [ ] [feature] mDNS service expiration (auto-remove stale services, 3× TTL grace) — upgrades the long-standing unchecked TODO. See plans/2026-06-23-feature-mdns-service-expiration.md. See scan note 2026-06-23#2F.
 
 ### Iteration 3 (2026-06-23 third sweep)
 
-- [ ] [feature] mDNS detail-view query cache — `MdnsShowDetail` currently re-resolves on every invocation. Cache `buildMdnsDetailFields` output for 60s keyed by `${name}|${type}|${host}|${port}` to avoid spamming mDNS for already-seen services. Pairs with [service expiration](plans/2026-06-23-feature-mdns-service-expiration.md). See scan note 2026-06-23#3I.
+- [ ] [feature] mDNS detail-view query cache — `MdnsShowDetail` currently re-resolves on every invocation. Cache `buildMdnsDetailFields` output for 60s keyed by `${name}|${type}|${host}|${port}` to avoid spamming mDNS for already-seen services. Pairs with service expiration. See scan note 2026-06-23#3I.
 - [ ] [feature] mDNS service dedup by `host|port|type` — multi-NIC / IPv4+IPv6 currently produce duplicate rows. `MdnsRegistry` upserts by name but not by network identity; add secondary key so the tree shows one canonical row per service. See scan note 2026-06-23#3J.
 - [ ] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P.
 
@@ -51,3 +51,14 @@
 ### Iteration 7 (2026-06-24 seventh sweep — continuous integration)
 
 - [ ] [chore] GitHub Actions CI + issue / PR templates — add `.github/workflows/ci.yml` (3-OS matrix: macos / ubuntu / windows, runs `npm test` + `tsc --noEmit`), `.github/workflows/coverage.yml` (vitest --coverage to PR artifact), `.github/workflows/release.yml` (tag-triggered `vsce package` for [#5A VSIX sanity](plans/2026-06-23-chore-vsix-cross-platform-sanity.md)); add `ISSUE_TEMPLATE/{bug_report,feature_request}.md`, `PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, README CI badge. See [plans/2026-06-24-chore-github-actions-ci.md](plans/2026-06-24-chore-github-actions-ci.md). See scan note 2026-06-24#7A.
+
+## Plans
+
+- [ ] [Group Metadata Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-group-metadata-persistence.md)
+- [ ] [Terminal Jump-To Quick Pick 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-jump-to-terminal.md)
+- [ ] [mDNS Detail-View Query Cache 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-mdns-detail-cache.md)
+- [ ] [Open Settings Webview 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-open-settings-webview.md)
+- [ ] [Panel Layout Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-panel-layout-persistence.md)
+- [ ] [Reset All Caches 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reset-caches.md)
+- [ ] [Reveal in Tree 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reveal-in-tree.md)
+- [ ] [Plan: Add `window.onDidWriteTerminalData` (deprecated fallback) for TUI detection](plans/dynamic-orbiting-pearl.md)

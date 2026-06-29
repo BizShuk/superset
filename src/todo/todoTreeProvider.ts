@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import type { TodoChange, TodoItem } from "./types";
 import type { TodoStore } from "./todoStore";
 
@@ -94,6 +95,9 @@ export class TodoTreeProvider
     }
 
     getTreeItem(element: TodoItem): vscode.TreeItem {
+        if (element.kind === "section") {
+            return this.buildSectionItem(element);
+        }
         if (element.kind === "list") {
             return this.buildListItem(element);
         }
@@ -101,9 +105,14 @@ export class TodoTreeProvider
         const priorityMatch = element.text.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
         // Strip the [P0]/[P1]/[P2] prefix from the label — the priority
         // is conveyed by the SVG icon, so the label just shows the task name.
-        const labelText = priorityMatch
+        let labelText = priorityMatch
             ? element.text.substring(priorityMatch[0].length).trim()
             : element.text;
+
+        const hasLink = extractLink(labelText) !== null;
+        if (hasLink) {
+            labelText = cleanLabelText(labelText);
+        }
 
         const item = new vscode.TreeItem(labelText);
 
@@ -136,7 +145,7 @@ export class TodoTreeProvider
         item.checkboxState = element.checked
             ? vscode.TreeItemCheckboxState.Checked
             : vscode.TreeItemCheckboxState.Unchecked;
-        item.contextValue = "todoCheckbox";
+        item.contextValue = hasLink ? "todoCheckboxWithLink" : "todoCheckbox";
         return item;
     }
 
@@ -149,9 +158,14 @@ export class TodoTreeProvider
      */
     private buildListItem(element: TodoItem): vscode.TreeItem {
         const priorityMatch = element.text.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
-        const labelText = priorityMatch
+        let labelText = priorityMatch
             ? element.text.substring(priorityMatch[0].length).trim()
             : element.text;
+
+        const hasLink = extractLink(labelText) !== null;
+        if (hasLink) {
+            labelText = cleanLabelText(labelText);
+        }
 
         const item = new vscode.TreeItem(labelText);
 
@@ -171,7 +185,16 @@ export class TodoTreeProvider
                 ? vscode.TreeItemCollapsibleState.Expanded
                 : vscode.TreeItemCollapsibleState.None;
         // No command → click does nothing for list items.
-        item.contextValue = "todoList";
+        item.contextValue = hasLink ? "todoListWithLink" : "todoList";
+        return item;
+    }
+
+    private buildSectionItem(element: TodoItem): vscode.TreeItem {
+        const item = new vscode.TreeItem(element.text);
+        item.iconPath = new vscode.ThemeIcon("tag");
+        item.tooltip = element.text;
+        item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+        item.contextValue = "todoSection";
         return item;
     }
 
@@ -218,6 +241,15 @@ export function applyPriorityFilter(
     if (enabledPriorities.size === 0) return items;
     return items
         .map((item) => {
+            if (item.kind === "section") {
+                const filteredChildren = item.children
+                    ? applyPriorityFilter(item.children, enabledPriorities)
+                    : undefined;
+                if (filteredChildren && filteredChildren.length > 0) {
+                    return { ...item, children: filteredChildren };
+                }
+                return null;
+            }
             const filteredChildren = item.children
                 ? applyPriorityFilter(item.children, enabledPriorities)
                 : undefined;
@@ -271,3 +303,60 @@ function filterItem(item: TodoItem): TodoItem | null {
         children: filteredChildren,
     };
 }
+
+/**
+ * Extract the first hyperlink (Markdown link target or raw HTTP/HTTPS URL) from text.
+ * Exported for testing.
+ */
+export function extractLink(text: string): string | null {
+    // 1. Check for markdown link: [text](target)
+    const markdownMatch = text.match(/\[[^\]]*\]\(([^)]+)\)/);
+    if (markdownMatch) {
+        return markdownMatch[1].trim();
+    }
+    // 2. Check for HTTP/HTTPS URL
+    const urlMatch = text.match(/https?:\/\/[^\s]+/);
+    if (urlMatch) {
+        return urlMatch[0].trim();
+    }
+    return null;
+}
+
+/**
+ * Replace markdown links [text](target) with just the link text.
+ * Exported for testing.
+ */
+export function cleanLabelText(text: string): string {
+    return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+}
+
+export interface ResolvedLink {
+    readonly type: "url" | "file";
+    readonly uriOrPath: string;
+}
+
+/**
+ * Resolves a todo link target to a full path or URL, taking into account workspace relative paths and file:// protocols.
+ * Exported for testing.
+ */
+export function resolveTodoLink(target: string, workspaceFolder: string): ResolvedLink {
+    if (
+        target.startsWith("http://") ||
+        target.startsWith("https://") ||
+        target.startsWith("file:///")
+    ) {
+        return { type: "url", uriOrPath: target };
+    }
+
+    let cleanPath = target;
+    if (target.startsWith("file://")) {
+        cleanPath = target.substring(7);
+    }
+
+    const resolvedPath = path.isAbsolute(cleanPath)
+        ? cleanPath
+        : path.join(workspaceFolder, cleanPath);
+
+    return { type: "file", uriOrPath: resolvedPath };
+}
+

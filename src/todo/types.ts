@@ -12,7 +12,7 @@ export interface TodoItem {
      *              actionable items. `checked` is always `false` for
      *              list items.
      */
-    readonly kind: "checkbox" | "list";
+    readonly kind: "checkbox" | "list" | "section";
     checked: boolean;
     children?: TodoItem[];
 }

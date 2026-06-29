@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import type { FeatureContext, FeatureHandle } from "../shared";
 import { TodoStore } from "./todoStore";
-import { TodoTreeProvider } from "./todoTreeProvider";
+import { TodoTreeProvider, extractLink, resolveTodoLink } from "./todoTreeProvider";
 import { computeTodoBadgeTitle } from "./badge";
+import type { TodoItem } from "./types";
 
 const TODO_VIEW_TITLE = "TODO";
 
@@ -129,16 +131,27 @@ export function register(ctx: FeatureContext): FeatureHandle {
         );
     };
 
-    const makePriorityToggleCmd = (p: "P0" | "P1" | "P2") =>
-        vscode.commands.registerCommand(`superset.todoFilter${p}`, () => {
+    // Each priority filter has two command ids bound to the same toggle:
+    // `superset.todoFilter{P}` (dim icon, shown when inactive) and
+    // `superset.todoFilter{P}On` (coloured icon, shown when active). VSCode
+    // takes a button's icon from the *command* (menu-level `icon` is ignored),
+    // so swapping the icon by state requires two distinct commands — same
+    // pattern as todoFilterHideCompleted / todoFilterShowAll.
+    const makePriorityToggleCmds = (p: "P0" | "P1" | "P2") => {
+        const handler = () => {
             provider.togglePriorityFilter(p);
             syncPriorityContext();
             refreshTodoFilterBadge();
-        });
+        };
+        return [
+            vscode.commands.registerCommand(`superset.todoFilter${p}`, handler),
+            vscode.commands.registerCommand(`superset.todoFilter${p}On`, handler),
+        ];
+    };
 
-    const filterP0Cmd = makePriorityToggleCmd("P0");
-    const filterP1Cmd = makePriorityToggleCmd("P1");
-    const filterP2Cmd = makePriorityToggleCmd("P2");
+    const [filterP0Cmd, filterP0OnCmd] = makePriorityToggleCmds("P0");
+    const [filterP1Cmd, filterP1OnCmd] = makePriorityToggleCmds("P1");
+    const [filterP2Cmd, filterP2OnCmd] = makePriorityToggleCmds("P2");
 
     // Push initial context-key state.
     syncPriorityContext();
@@ -153,14 +166,94 @@ export function register(ctx: FeatureContext): FeatureHandle {
         applyFilterToggle
     );
 
+    const todoNewCmd = vscode.commands.registerCommand(
+        "superset.todoNew",
+        async (item?: TodoItem) => {
+            const text = await vscode.window.showInputBox({
+                prompt: "新增待辦事項描述 (New TODO Description)",
+                placeHolder: "輸入待辦事項內容...",
+            });
+            if (!text || text.trim() === "") return;
+
+            let section = "modify";
+            if (item && item.kind === "section") {
+                section = item.text;
+            } else {
+                const secInput = await vscode.window.showInputBox({
+                    prompt: "請輸入區段名稱 (Section Name)",
+                    value: "modify",
+                });
+                if (secInput === undefined) return; // User cancelled
+                if (secInput.trim() !== "") {
+                    section = secInput.trim();
+                }
+            }
+
+            await store.addTodo(text.trim(), section);
+        }
+    );
+
+    const openTodoFileCmd = vscode.commands.registerCommand(
+        "superset.todoOpen",
+        async () => {
+            const uri = vscode.Uri.file(path.join(ctx.workspaceFolder, "README.todo"));
+            try {
+                const doc = await vscode.workspace.openTextDocument(uri);
+                await vscode.window.showTextDocument(doc);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open README.todo: ${err}`);
+            }
+        }
+    );
+
+    const openTodoLinkCmd = vscode.commands.registerCommand(
+        "superset.todoOpenLink",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            const target = extractLink(item.text);
+            if (!target) return;
+
+            try {
+                const resolved = resolveTodoLink(target, ctx.workspaceFolder);
+                if (resolved.type === "url") {
+                    await vscode.commands.executeCommand("vscode.open", vscode.Uri.parse(resolved.uriOrPath));
+                } else {
+                    const uri = vscode.Uri.file(resolved.uriOrPath);
+                    await vscode.commands.executeCommand("vscode.open", uri);
+                }
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open link: ${err}`);
+            }
+        }
+    );
+
+    const copyTodoCmd = vscode.commands.registerCommand(
+        "superset.todoCopy",
+        async (item?: TodoItem) => {
+            if (!item || !item.text) return;
+            try {
+                await vscode.env.clipboard.writeText(item.text);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to copy todo text: ${err}`);
+            }
+        }
+    );
+
     ctx.subscriptions.push(
         toggleCmd,
         changePriorityCmd,
+        todoNewCmd,
+        openTodoFileCmd,
+        openTodoLinkCmd,
+        copyTodoCmd,
         hideCompletedCmd,
         showAllCmd,
         filterP0Cmd,
+        filterP0OnCmd,
         filterP1Cmd,
+        filterP1OnCmd,
         filterP2Cmd,
+        filterP2OnCmd,
         view,
         todoFileWatcher,
         { dispose: () => provider.stop() }
@@ -171,11 +264,18 @@ export function register(ctx: FeatureContext): FeatureHandle {
             provider.stop();
             toggleCmd.dispose();
             changePriorityCmd.dispose();
+            todoNewCmd.dispose();
+            openTodoFileCmd.dispose();
+            openTodoLinkCmd.dispose();
+            copyTodoCmd.dispose();
             hideCompletedCmd.dispose();
             showAllCmd.dispose();
             filterP0Cmd.dispose();
+            filterP0OnCmd.dispose();
             filterP1Cmd.dispose();
+            filterP1OnCmd.dispose();
             filterP2Cmd.dispose();
+            filterP2OnCmd.dispose();
             view.dispose();
             todoFileWatcher.dispose();
         },

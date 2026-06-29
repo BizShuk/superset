@@ -45,18 +45,41 @@ export class TodoStore {
         }
 
         const lines = content.split("\n");
-        const items: TodoItem[] = [];
+        const sections: TodoItem[] = [];
+        const defaultSection: TodoItem = {
+            line: -1,
+            text: "Default",
+            kind: "section",
+            checked: false,
+            children: [],
+        };
+        let currentSection = defaultSection;
+
         // `- [ ]` / `- [x]` — actionable checkbox.
         const checkboxRe = /^(\s*)[-*+]\s+\[(\s|x|X)\]\s+(.*)$/;
-        // `- foo` / `* bar` / `+ baz` (without `[ ]`). Capture group 1
-        // is the leading list marker so we can strip it from the
-        // visible text. Use a negative lookahead to avoid matching
-        // checkbox lines (those are already handled above).
+        // `- foo` / `* bar` / `+ baz` (without `[ ]`).
         const listRe = /^(\s*)[-*+]\s+(\[[^\]]\s*[^\]]*\](.*))?$/;
+        const headingRe = /^(##+)\s+(.*)$/;
         const stack: { item: TodoItem; indent: number }[] = [];
 
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
+
+            // 0. Heading line?
+            const hm = line.match(headingRe);
+            if (hm) {
+                const sectionItem: TodoItem = {
+                    line: i,
+                    text: hm[2].trim(),
+                    kind: "section",
+                    checked: false,
+                    children: [],
+                };
+                sections.push(sectionItem);
+                currentSection = sectionItem;
+                stack.length = 0;
+                continue;
+            }
 
             // 1. Checkbox line?
             const cm = line.match(checkboxRe);
@@ -81,27 +104,18 @@ export class TodoStore {
                     if (!parent.children) parent.children = [];
                     parent.children.push(item);
                 } else {
-                    items.push(item);
+                    if (!currentSection.children) currentSection.children = [];
+                    currentSection.children.push(item);
                 }
 
                 stack.push({ item, indent });
                 continue;
             }
 
-            // 2. Bare list marker? A line that starts with `- ` / `* `
-            // /    `+ ` and is NOT followed by a checkbox is treated
-            // as a list-only node. Headings (`#`), quotes (`>`), and
-            // plain text are all skipped.
-            //
-            // The regex intentionally rejects `[` after the marker so
-            // we never re-match a checkbox line we already handled.
+            // 2. Bare list marker?
             const lm = line.match(/^(\s*)[-*+]\s+(\S.*)$/);
             if (lm) {
                 const indent = lm[1].length;
-                // Strip the leading list marker from the text shown
-                // in the panel (a `- foo` line should read as "foo",
-                // matching how a real checkbox line's text is just
-                // the words after the `[ ]`).
                 const item: TodoItem = {
                     line: i,
                     text: lm[2].trim(),
@@ -121,21 +135,20 @@ export class TodoStore {
                     if (!parent.children) parent.children = [];
                     parent.children.push(item);
                 } else {
-                    items.push(item);
+                    if (!currentSection.children) currentSection.children = [];
+                    currentSection.children.push(item);
                 }
 
-                // Push the list node into the stack using a strictly
-                // positive indent so a *less* indented checkbox
-                // below still pops it off (preserving the file's
-                // visual nesting). We use indent+1 so a same-indent
-                // checkbox doesn't get nested under the list node.
                 stack.push({ item, indent: indent + 1 });
             }
-            // 3. Anything else (heading, quote, plain text, blank)
-            //    is ignored.
         }
-        this.items = items;
-        this.emit({ type: "loaded", items });
+        const finalItems: TodoItem[] = [];
+        if (defaultSection.children && defaultSection.children.length > 0) {
+            finalItems.push(defaultSection);
+        }
+        finalItems.push(...sections);
+        this.items = finalItems;
+        this.emit({ type: "loaded", items: finalItems });
     }
 
     async toggle(item: TodoItem): Promise<void> {
@@ -194,6 +207,79 @@ export class TodoStore {
         // Reload so the in-memory `items` reflect the new prefix. The file
         // is the source of truth; we don't mutate `item.text` (it's readonly).
         // Emitting "loaded" makes TodoTreeProvider re-render with fresh data.
+        await this.load();
+    }
+
+    async addTodo(text: string, sectionName: string): Promise<void> {
+        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
+        let content: string;
+        try {
+            content = await readFile(filePath, "utf-8");
+        } catch {
+            content = "# TODO\n";
+        }
+
+        const lines = content.split("\n");
+        let targetLineIndex = -1;
+        const isDefaultSection = sectionName.toLowerCase() === "default";
+
+        if (isDefaultSection) {
+            // Find `# TODO` or first heading
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].trim().startsWith("# ")) {
+                    targetLineIndex = i;
+                    break;
+                }
+            }
+        } else {
+            // Find `## sectionName` or `### sectionName`
+            const escapedName = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const sectionRe = new RegExp(`^(##+)\\s+${escapedName}\\b`, "i");
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].match(sectionRe)) {
+                    targetLineIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (targetLineIndex === -1) {
+            // Section does not exist. Append to the end.
+            if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                lines.push("");
+            }
+            if (isDefaultSection) {
+                lines.push(`- [ ] ${text}`);
+            } else {
+                lines.push(`## ${sectionName}`);
+                lines.push(`- [ ] ${text}`);
+            }
+        } else {
+            // Section exists. Find the end of the section.
+            let insertIndex = lines.length;
+            for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                if (lines[i].trim().startsWith("##") || lines[i].trim().startsWith("###")) {
+                    insertIndex = i;
+                    break;
+                }
+            }
+
+            // Find the last non-empty line before insertIndex.
+            let lastNonEmpty = insertIndex - 1;
+            while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty].trim() === "") {
+                lastNonEmpty--;
+            }
+
+            if (lastNonEmpty === targetLineIndex) {
+                // Empty section: insert a blank line, then the item.
+                lines.splice(targetLineIndex + 1, 0, "", `- [ ] ${text}`);
+            } else {
+                // Has items: insert directly after the last item.
+                lines.splice(lastNonEmpty + 1, 0, `- [ ] ${text}`);
+            }
+        }
+
+        await writeFile(filePath, lines.join("\n"), "utf-8");
         await this.load();
     }
 
