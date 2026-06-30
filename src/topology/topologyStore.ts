@@ -1,5 +1,6 @@
 import type { TopologyChange, TopologyListener, TopologyNode } from "./types";
-import type { ScannerTransport } from "./topologyScanner";
+import type { ScannerTransport, TracerouteHop } from "./topologyScanner";
+import { deriveLocalIp } from "./localIp";
 
 function subnet24(ip: string): string {
     const parts = ip.split(".");
@@ -99,11 +100,22 @@ export class TopologyStore {
                 if (gateway) {
                     routeChildren.push({ label: "Default Gateway", description: gateway });
                 }
-                if (hops && hops.length > 0) {
+
+                // Traceroute hops may be missing the host's own IP — `traceroute`
+                // emits from the default gateway onward, never from itself. We
+                // prepend a local hop when one is derivable so the trace is
+                // visually complete ("host → gateway → …").
+                const localIp = deriveLocalIp(interfaces, gateway);
+                const traceHops: TracerouteHop[] =
+                    hops && hops.length > 0 && localIp && !hops.some((h) => h.ip === localIp)
+                        ? [{ hop: "0", ip: localIp, time: "", role: "local" }, ...hops]
+                        : (hops ?? []);
+
+                if (traceHops.length > 0) {
                     const target = "8.8.8.8";
                     const traceRoot: TopologyNode = { label: `Trace ${target}`, children: [] };
-                    
-                    let currentSubnet = hops[0].ip === "*" ? "Unreachable" : subnet24(hops[0].ip);
+
+                    let currentSubnet = traceHops[0].ip === "*" ? "Unreachable" : subnet24(traceHops[0].ip);
                     let currentGroup: TopologyNode = {
                         label: currentSubnet,
                         children: [],
@@ -128,7 +140,10 @@ export class TopologyStore {
                         return parent;
                     };
 
-                    for (const h of hops) {
+                    const hopDesc = (h: TracerouteHop): string | undefined =>
+                        h.role === "local" ? "本機" : (h.time || undefined);
+
+                    for (const h of traceHops) {
                         const subnet = h.ip === "*" ? "Unreachable" : subnet24(h.ip);
 
                         if (subnet !== currentSubnet) {
@@ -142,7 +157,7 @@ export class TopologyStore {
                             } else {
                                 newGroup.children!.push({
                                     label: h.ip,
-                                    description: h.time || undefined,
+                                    description: hopDesc(h),
                                 });
                             }
                             currentSubnet = subnet;
@@ -153,7 +168,7 @@ export class TopologyStore {
                             } else {
                                 currentGroup.children!.push({
                                     label: h.ip,
-                                    description: h.time || undefined,
+                                    description: hopDesc(h),
                                 });
                             }
                         }
@@ -163,7 +178,7 @@ export class TopologyStore {
                         const targetParent = insertInto(traceRoot, currentGroup);
                         targetParent.children!.push(currentGroup);
                     }
-                    
+
                     routeChildren.push(traceRoot);
                 }
                 if (routeChildren.length > 0) {

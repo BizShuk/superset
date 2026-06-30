@@ -30,6 +30,8 @@ export interface TracerouteHop {
     hop: string;
     ip: string;
     time: string;
+    /** Marker set by TopologyStore when prepending the host's own IP. */
+    role?: "local";
 }
 
 export interface ArpEntry {

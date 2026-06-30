@@ -55,11 +55,13 @@ describe("TopologyStore with FakeTopologyScanner", () => {
         
         const hop1Group = trace.children![0];
         expect(hop1Group.label).toBe("192.168.1.0/24");
-        expect(hop1Group.children![0].label).toBe("192.168.1.1");
-        
-        const hop2Group = hop1Group.children![1];
+        // Local IP is prepended as the first entry of the gateway's /24 group
+        expect(hop1Group.children![0]).toEqual({ label: "192.168.1.100", description: "本機" });
+        expect(hop1Group.children![1]).toEqual({ label: "192.168.1.1", description: "1.2ms" });
+
+        const hop2Group = hop1Group.children![2];
         expect(hop2Group.label).toBe("10.0.0.0/24");
-        expect(hop2Group.children![0].label).toBe("10.0.0.1");
+        expect(hop2Group.children![0]).toEqual({ label: "10.0.0.1", description: "5.4ms" });
 
         const hop3Group = hop2Group.children![1];
         expect(hop3Group.label).toBe("Unreachable");
@@ -67,7 +69,7 @@ describe("TopologyStore with FakeTopologyScanner", () => {
 
         const hop4Group = hop2Group.children![2];
         expect(hop4Group.label).toBe("8.8.8.0/24");
-        expect(hop4Group.children![0].label).toBe("8.8.8.8");
+        expect(hop4Group.children![0]).toEqual({ label: "8.8.8.8", description: "12.3ms" });
 
         // 3. DNS Servers
         expect(roots[2]).toEqual({
