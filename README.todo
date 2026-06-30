@@ -21,9 +21,7 @@
 
 ## Platform & UX
 
-- [ ] [P2] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P. [Open Settings Webview 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-open-settings-webview.md)
 - [x] [P2] [feature] `Superset: Reset All Caches` command — one-button wipe of `context.workspaceState` keys, mDNS in-memory cache, and `TopologyStore` state. Backs the "something's stale, start over" workflow; cheap (~30 LOC) and unblocks debugging. See scan note 2026-06-23#4U. [Reset All Caches 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reset-caches.md)
-- [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. Avoids clashing with VSCode's own `workbench.panel.defaultLocation`. [Panel Layout Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-panel-layout-persistence.md)
 - [x] [P2] [feature] Default subgroup panel sizes — on first open, set panel heights: Terminals fixed at 200px, TODO expanded to fill remaining space (largest), mDNS/Topology collapsed.
 
 ## Architecture
@@ -35,6 +33,8 @@
 
 ## Archive
 
+- [ ] [P2] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P. [Open Settings Webview 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-open-settings-webview.md)
+- [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. Avoids clashing with VSCode's own `workbench.panel.defaultLocation`. [Panel Layout Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-panel-layout-persistence.md)
 - [ ] [P2] [feature] `Superset: Reveal in Tree` command — given a `TerminalHandle`, focus the `superset.terminals` TreeView and select the matching row. Wires `vscode.commands.executeCommand("treeView.reveal", item)` (stable since 1.47). Composes with every panel by reusing the same `(viewId, predicate)` helper. See scan note 2026-06-23#4Q. [Reveal in Tree 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reveal-in-tree.md)
 - [ ] [P1] [feature] Workspace-aware group suggestions — see [plans/2026-06-23-feature-workspace-aware-group-suggestions.md](plans/2026-06-23-feature-workspace-aware-group-suggestions.md)
 - [ ] [P2] [feature] mDNS one-click connect — see [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
