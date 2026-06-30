@@ -63,6 +63,25 @@ Update version in @package.json every change based on <majore,minor,patch>
 
 升級路徑:若未來要讓「既有 VSCode 內建 terminal」也吃到 TUI 偵測,目前沒有穩定 API 可走(只能回頭用 proposed API)。在 VSCode 開放 PTY 公開 API 前,方案 4 是最務實的選擇。
 
+### 為何 `onDidEndTerminalShellExecution` 救不了 TUI
+
+底層機制:shell integration script 注入 bash/zsh/pwsh 的 prompt hook,送出 OSC 633 控制序列,terminal 解析後轉成 API 事件:
+
+```tree
+OSC 633 ; A ST            → prompt 開始
+OSC 633 ; B ST            → command input 開始 (prompt 結束)
+OSC 633 ; C ST            → 指令執行開始    ──► onDidStartTerminalShellExecution
+   ...command stdout/stderr...
+OSC 633 ; D ; <exitCode>  → 指令結束       ──► onDidEndTerminalShellExecution
+OSC 633 ; E ; <cmdline>   → 設定命令文字
+```
+
+- **`onDidEnd` 是「一般指令結束」的標準訊號**:`event.exitCode` 來自 shell 在 precmd 階段抓 `$?` 塞進 `D;<code>` 段;VSCode 解析成 `number | undefined`。`undefined` 出現於:shell 沒回報 code 段、指令被中斷、terminal 在指令進行中被 dispose。start↔end 配對靠**同一個 `execution` 物件參照**(不是指令文字),所以消費端用它當 Map key;`start` 不保證有對應 `end`(terminal 中途 dispose),故 end 時要 `delete` 避免 Map 洩漏。
+- **對 TUI 失效的根因**:TUI (`claude`、`vim`、`htop`) 對 shell 而言是**一條長跑指令**,整段只有一組 C…D。`onDidEnd` 只在**整個 TUI 程式退出那一刻觸發一次**,TUI 執行期間的所有輸出/redraw 它一律收不到。
+- **可用 vs 不可用**:
+    - 想偵測「背景 TUI 跑到一半有新輸出」→ ❌ end 幫不上,必須維持 PTY (方案 5)。
+    - 想知道「指令跑完 / 成功失敗 / TUI 被關掉」→ ✅ end + `exitCode` 正是標準做法,可另行整合(例如長指令完成提示),但與 TUI 即時偵測是兩條獨立路徑。
+
 ---
 
 ## 架構速覽 (Architecture)
