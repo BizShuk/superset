@@ -1,8 +1,6 @@
 import * as os from "os";
 import * as dns from "dns";
 import { exec } from "child_process";
-import type { TopologyNode } from "./types";
-import type { TopologyScanner } from "./topologyStore";
 
 function execAsync(cmd: string): Promise<string> {
     return new Promise((resolve) => {
@@ -16,108 +14,61 @@ function execAsync(cmd: string): Promise<string> {
     });
 }
 
-function child(label: string, description?: string): TopologyNode {
-    return { label, description };
+export interface NetworkInterfaceAddress {
+    address: string;
+    family: "IPv4" | "IPv6";
+    internal: boolean;
+    mac?: string;
 }
 
-function group(
-    label: string,
-    children: TopologyNode[]
-): TopologyNode {
-    return { label, children };
+export interface NetworkInterface {
+    name: string;
+    addresses: NetworkInterfaceAddress[];
 }
 
-/** Extract the /24 subnet from an IPv4 address. */
-function subnet24(ip: string): string {
-    const parts = ip.split(".");
-    if (parts.length !== 4) return ip;
-    return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+export interface TracerouteHop {
+    hop: string;
+    ip: string;
+    time: string;
+}
+
+export interface ArpEntry {
+    ip: string;
+    mac: string;
+}
+
+export interface ScannerTransport {
+    listInterfaces(): Promise<NetworkInterface[]>;
+    getDefaultGateway(): Promise<string | null>;
+    traceroute(host: string): Promise<TracerouteHop[]>;
+    resolveDnsServers(): Promise<string[]>;
+    listArpTable(): Promise<ArpEntry[]>;
 }
 
 /**
- * Platform-aware network topology scanner.
+ * Platform-aware network topology scanner transport.
  * Uses Node.js built-in modules and system commands.
  */
-export class NodeTopologyScanner implements TopologyScanner {
-    async scan(): Promise<TopologyNode[]> {
-        const [interfaces, gateway, trace, dnsServers, arp] =
-            await Promise.all([
-                this.scanInterfaces(),
-                this.scanGateway(),
-                this.scanTraceroute(),
-                this.scanDns(),
-                this.scanArp(),
-            ]);
-
-        const nodes: TopologyNode[] = [];
-
-        if (interfaces.children && interfaces.children.length > 0) {
-            nodes.push(interfaces);
-        }
-
-        const routeChildren: TopologyNode[] = [];
-        if (gateway) {
-            routeChildren.push(gateway);
-        }
-        if (trace.children && trace.children.length > 0) {
-            routeChildren.push(trace);
-        }
-        if (routeChildren.length > 0) {
-            nodes.push(group("Routing", routeChildren));
-        }
-
-        if (dnsServers.children && dnsServers.children.length > 0) {
-            nodes.push(dnsServers);
-        }
-
-        if (arp.children && arp.children.length > 0) {
-            nodes.push(arp);
-        }
-
-        return nodes;
-    }
-
-    // ── Local interfaces ───────────────────────────────────
-
-    private async scanInterfaces(): Promise<TopologyNode> {
+export class NodeTopologyScanner implements ScannerTransport {
+    async listInterfaces(): Promise<NetworkInterface[]> {
         const ifaces = os.networkInterfaces();
-        const children: TopologyNode[] = [];
+        const result: NetworkInterface[] = [];
         for (const [name, addrs] of Object.entries(ifaces)) {
             if (!addrs) continue;
-            for (const addr of addrs) {
-                if (addr.internal) continue;
-                const v6 = addrs
-                    .filter((a) => a.family === "IPv6" && !a.internal)
-                    .map((a) => a.address)
-                    .join(", ");
-                const desc =
-                    addr.family === "IPv4"
-                        ? v6
-                            ? `${addr.address} (${addr.mac ?? "?"}) [${v6}]`
-                            : `${addr.address} (${addr.mac ?? "?"})`
-                        : addr.address;
-                if (addr.family === "IPv4") {
-                    children.push(child(`${name}: ${desc}`));
-                }
-            }
+            result.push({
+                name,
+                addresses: addrs.map((addr) => ({
+                    address: addr.address,
+                    family: addr.family,
+                    internal: addr.internal,
+                    mac: addr.mac,
+                })),
+            });
         }
-        // Add loopback
-        for (const [name, addrs] of Object.entries(ifaces)) {
-            if (!addrs) continue;
-            for (const addr of addrs) {
-                if (addr.internal) {
-                    children.push(
-                        child(`${name}: ${addr.address} (loopback)`)
-                    );
-                }
-            }
-        }
-        return group("Local Interfaces", children);
+        return result;
     }
 
-    // ── Default gateway ────────────────────────────────────
-
-    private async scanGateway(): Promise<TopologyNode | null> {
+    async getDefaultGateway(): Promise<string | null> {
         const platform = process.platform;
         let cmd: string;
         if (platform === "darwin") {
@@ -131,29 +82,21 @@ export class NodeTopologyScanner implements TopologyScanner {
         const out = await execAsync(cmd);
         const gw = out.split("\n")[0]?.trim();
         if (!gw) return null;
-
-        return child("Default Gateway", gw);
+        return gw;
     }
 
-    // ── Traceroute ─────────────────────────────────────────
-
-    /**
-     * Build a deeply nested tree: each hop nests into the previous one.
-     * Same subnet hops are leaf siblings; new subnet creates a child group.
-     */
-    private async scanTraceroute(): Promise<TopologyNode> {
+    async traceroute(host: string): Promise<TracerouteHop[]> {
         const platform = process.platform;
-        const target = "8.8.8.8";
         let cmd: string;
         if (platform === "win32") {
-            cmd = `tracert -d -h 10 -w 1000 ${target}`;
+            cmd = `tracert -d -h 10 -w 1000 ${host}`;
         } else {
-            cmd = `traceroute -n -m 10 -w 1 ${target} 2>/dev/null`;
+            cmd = `traceroute -n -m 10 -w 1 ${host} 2>/dev/null`;
         }
 
         const out = await execAsync(cmd);
         const lines = out.split("\n").slice(1);
-        const hops: Array<{ hop: string; ip: string; time: string }> = [];
+        const hops: TracerouteHop[] = [];
 
         for (const line of lines) {
             const trimmed = line.trim();
@@ -169,96 +112,14 @@ export class NodeTopologyScanner implements TopologyScanner {
             }
         }
 
-        if (hops.length === 0) {
-            return group(`Trace ${target}`, []);
-        }
-
-        // Build a deeply nested tree:
-        //   - hops within the same subnet are leaf siblings
-        //   - a new subnet creates a nested child group inside the previous one
-        const root = { label: `Trace ${target}`, children: [] as TopologyNode[] };
-
-        let currentSubnet = hops[0].ip === "*" ? "Unreachable" : subnet24(hops[0].ip);
-        let currentGroup: TopologyNode = {
-            label: currentSubnet,
-            children: [],
-        };
-
-        // Find the deepest insertion point: walk into existing nested groups
-        const insertInto = (
-            parent: TopologyNode,
-            node: TopologyNode
-        ): TopologyNode => {
-            if (!parent.children || parent.children.length === 0) {
-                return parent;
-            }
-            const last = parent.children[parent.children.length - 1];
-            if (
-                last.children &&
-                last.children.length > 0 &&
-                last.label !== "Unreachable" &&
-                last.label.includes("/")
-            ) {
-                return insertInto(last, node);
-            }
-            return parent;
-        };
-
-        for (const h of hops) {
-            const subnet = h.ip === "*" ? "Unreachable" : subnet24(h.ip);
-
-            if (subnet !== currentSubnet) {
-                // Commit current group to root if non-empty
-                if (currentGroup.children && currentGroup.children.length > 0) {
-                    const targetParent = insertInto(
-                        root,
-                        currentGroup
-                    );
-                    targetParent.children!.push(currentGroup);
-                }
-                // Start new group nested inside the previous one
-                const newGroup: TopologyNode = { label: subnet, children: [] };
-                if (h.ip === "*") {
-                    newGroup.children!.push(child(`* * *`));
-                } else {
-                    newGroup.children!.push(
-                        child(h.ip, h.time || undefined)
-                    );
-                }
-                currentSubnet = subnet;
-                currentGroup = newGroup;
-            } else {
-                // Same subnet — add as leaf sibling
-                if (h.ip === "*") {
-                    currentGroup.children!.push(child(`* * *`));
-                } else {
-                    currentGroup.children!.push(
-                        child(h.ip, h.time || undefined)
-                    );
-                }
-            }
-        }
-
-        // Commit last group
-        if (currentGroup.children && currentGroup.children.length > 0) {
-            const targetParent = insertInto(root, currentGroup);
-            targetParent.children!.push(currentGroup);
-        }
-
-        return root;
+        return hops;
     }
 
-    // ── DNS servers ────────────────────────────────────────
-
-    private async scanDns(): Promise<TopologyNode> {
-        const servers = dns.getServers();
-        const children = servers.map((s) => child(s));
-        return group("DNS Servers", children);
+    async resolveDnsServers(): Promise<string[]> {
+        return dns.getServers();
     }
 
-    // ── ARP table ──────────────────────────────────────────
-
-    private async scanArp(): Promise<TopologyNode> {
+    async listArpTable(): Promise<ArpEntry[]> {
         const platform = process.platform;
         let cmd: string;
         if (platform === "win32") {
@@ -269,35 +130,34 @@ export class NodeTopologyScanner implements TopologyScanner {
 
         const out = await execAsync(cmd);
         const lines = out.split("\n");
-        const children: TopologyNode[] = [];
+        const entries: ArpEntry[] = [];
 
         for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed) continue;
 
-            // macOS: "? (192.168.1.1) at aa:bb:cc:dd:ee:ff on en0 ifscope [ethernet]"
-            // Linux: "? (192.168.1.1) at aa:bb:cc:dd:ee:ff [ether] on eth0"
             const macMatch = trimmed.match(
                 /\(([\d.]+)\)\s+at\s+([0-9a-f:]+)/i
             );
             if (macMatch) {
-                children.push(
-                    child(macMatch[1], macMatch[2])
-                );
+                entries.push({
+                    ip: macMatch[1],
+                    mac: macMatch[2],
+                });
                 continue;
             }
 
-            // Windows: "192.168.1.1          aa-bb-cc-dd-ee-ff     dynamic"
             const winMatch = trimmed.match(
                 /^([\d.]+)\s+([0-9a-f-]+)\s+/i
             );
             if (winMatch) {
-                children.push(
-                    child(winMatch[1], winMatch[2].replace(/-/g, ":"))
-                );
+                entries.push({
+                    ip: winMatch[1],
+                    mac: winMatch[2].replace(/-/g, ":"),
+                });
             }
         }
 
-        return group("ARP Table", children);
+        return entries;
     }
 }

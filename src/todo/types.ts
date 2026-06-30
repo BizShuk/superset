@@ -3,6 +3,7 @@
 export interface TodoItem {
     readonly line: number;
     readonly text: string;
+    readonly description?: string;
     /**
      * "checkbox" = `- [ ]` / `- [x]` line; can be toggled.
      * "list"     = `- foo` / `* bar` / `+ baz` line **without** the
@@ -16,6 +17,8 @@ export interface TodoItem {
     checked: boolean;
     children?: TodoItem[];
 }
+
+export type TodoViewType = "section" | "priority" | "file";
 
 export type TodoChange =
     | { type: "loaded"; items: TodoItem[] }

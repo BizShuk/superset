@@ -41,6 +41,9 @@ vi.mock("vscode", () => {
         Uri,
         TreeItemCollapsibleState,
         TreeItemCheckboxState,
+        commands: {
+            executeCommand: vi.fn(),
+        },
         TreeItem: class {
             command?: unknown;
             contextValue?: string;
@@ -248,6 +251,21 @@ describe("filterCompleted", () => {
         expect(result).toHaveLength(1);
         expect(result[0].kind).toBe("list");
     });
+
+    it("filters out the Archive section entirely", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Archive",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 1, text: "archived-item", kind: "checkbox", checked: true },
+                ],
+            },
+        ];
+        expect(filterCompleted(input)).toHaveLength(0);
+    });
 });
 
 describe("TodoTreeProvider", () => {
@@ -454,5 +472,71 @@ describe("resolveTodoLink helper function", () => {
             type: "file",
             uriOrPath: "/absolute/path",
         });
+    });
+});
+
+describe("TodoTreeProvider View Type Groupings", () => {
+    it("groups items by priority in priority view mode", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Section 1",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 1, text: "[P0] Task A", kind: "checkbox", checked: false },
+                    { line: 2, text: "[P2] Task B", kind: "checkbox", checked: false },
+                    { line: 3, text: "Task C", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const provider = new TodoTreeProvider(makeStore(input));
+        provider.setViewType("priority");
+
+        const root = provider.getChildren() as TodoItem[];
+        expect(root).toHaveLength(3); // P0, P2, None
+        expect(root[0].text).toBe("P0");
+        expect(root[0].children).toHaveLength(1);
+        expect(root[0].children![0].text).toBe("[P0] Task A");
+
+        expect(root[1].text).toBe("P2");
+        expect(root[1].children).toHaveLength(1);
+        expect(root[1].children![0].text).toBe("[P2] Task B");
+
+        expect(root[2].text).toBe("None");
+        expect(root[2].children).toHaveLength(1);
+        expect(root[2].children![0].text).toBe("Task C");
+    });
+
+    it("groups items by file in file view mode", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Section 1",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 1, text: "Task with link [plans/abc.todo](plans/abc.todo)", kind: "checkbox", checked: false },
+                    { line: 2, text: "Task with link [plans/def.md](plans/def.md)", kind: "checkbox", checked: false },
+                    { line: 3, text: "Plain task", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const provider = new TodoTreeProvider(makeStore(input));
+        provider.setViewType("file");
+
+        const root = provider.getChildren() as TodoItem[];
+        // Groups: README.todo (for plain and def.md), abc.todo
+        expect(root).toHaveLength(2);
+
+        expect(root[0].text).toBe("README.todo");
+        expect(root[0].children).toHaveLength(2);
+        expect(root[0].children![0].text).toBe("Task with link [plans/def.md](plans/def.md)");
+        expect(root[0].children![1].text).toBe("Plain task");
+
+        expect(root[1].text).toBe("abc.todo");
+        expect(root[1].description).toBe("plans");
+        expect(root[1].children).toHaveLength(1);
+        expect(root[1].children![0].text).toBe("Task with link [plans/abc.todo](plans/abc.todo)");
     });
 });

@@ -331,4 +331,48 @@ describe("MdnsRegistry", () => {
         expect(all[0].name).toBe("Z-Printer._ipp._tcp.local");
         expect(all[0].aliases).toContain("A-Printer._ipp._tcp.local");
     });
+
+    it("getDetailCached returns same value on second call within TTL", async () => {
+        registry.start();
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_ipp._tcp.local", "Printer._ipp._tcp.local"),
+                srvRecord("Printer._ipp._tcp.local", 631, "printer.local"),
+            ],
+        });
+
+        const svc = registry.getByKey("Printer._ipp._tcp.local");
+        expect(svc).toBeDefined();
+        if (!svc) return;
+
+        const a = registry.getDetailCached(svc);
+        expect(a.hit).toBe(false);
+        expect(a.detail.length).toBeGreaterThan(0);
+
+        const b = registry.getDetailCached(svc);
+        expect(b.hit).toBe(true);
+        expect(b.detail).toEqual(a.detail);
+    });
+
+    it("invalidateDetail invalidates the cache", async () => {
+        registry.start();
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_ipp._tcp.local", "Printer._ipp._tcp.local"),
+                srvRecord("Printer._ipp._tcp.local", 631, "printer.local"),
+            ],
+        });
+
+        const svc = registry.getByKey("Printer._ipp._tcp.local");
+        expect(svc).toBeDefined();
+        if (!svc) return;
+
+        const a = registry.getDetailCached(svc);
+        expect(a.hit).toBe(false);
+
+        registry.invalidateDetail(svc);
+
+        const b = registry.getDetailCached(svc);
+        expect(b.hit).toBe(false);
+    });
 });

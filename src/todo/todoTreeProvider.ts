@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import type { TodoChange, TodoItem } from "./types";
+import type { TodoChange, TodoItem, TodoViewType } from "./types";
 import type { TodoStore } from "./todoStore";
 
 /**
@@ -34,6 +34,7 @@ export class TodoTreeProvider
      * is active (filtering for "P0+P1" implies "show only those").
      */
     private enabledPriorities = new Set<"P0" | "P1" | "P2">();
+    private viewType: TodoViewType = "section";
 
     constructor(
         private readonly store: TodoStore,
@@ -41,6 +42,7 @@ export class TodoTreeProvider
     ) {}
 
     start(): void {
+        void vscode.commands.executeCommand("setContext", "superset.todo.viewType", this.viewType);
         if (this.unsubscribeStore) return;
         const handler: (change: TodoChange) => void = (change) => {
             if (change.type === "loaded") {
@@ -50,6 +52,16 @@ export class TodoTreeProvider
             }
         };
         this.unsubscribeStore = this.store.onDidChange(handler);
+    }
+
+    setViewType(type: TodoViewType): void {
+        this.viewType = type;
+        void vscode.commands.executeCommand("setContext", "superset.todo.viewType", type);
+        this.refresh();
+    }
+
+    getViewType(): TodoViewType {
+        return this.viewType;
     }
 
     stop(): void {
@@ -192,16 +204,160 @@ export class TodoTreeProvider
     private buildSectionItem(element: TodoItem): vscode.TreeItem {
         const item = new vscode.TreeItem(element.text);
         item.iconPath = new vscode.ThemeIcon("tag");
-        item.tooltip = element.text;
+        if (element.text === "README.todo") {
+            item.iconPath = new vscode.ThemeIcon("file-text");
+        } else if (element.text.includes(".")) {
+            item.iconPath = new vscode.ThemeIcon("file");
+        } else if (element.text === "P0" || element.text === "P1" || element.text === "P2") {
+            if (this.extensionUri) {
+                item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${element.text.toLowerCase()}.svg`);
+            }
+        }
+        item.description = element.description;
+        item.tooltip = element.description ? `${element.description}/${element.text}` : element.text;
         item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
         item.contextValue = "todoSection";
         return item;
     }
 
+    private collectAllItems(items: TodoItem[]): TodoItem[] {
+        const result: TodoItem[] = [];
+        const traverse = (list: TodoItem[]) => {
+            for (const item of list) {
+                if (item.kind !== "section") {
+                    result.push(item);
+                }
+                if (item.children) {
+                    traverse(item.children);
+                }
+            }
+        };
+        traverse(items);
+        return result;
+    }
+
+    private buildPriorityGroups(items: TodoItem[]): TodoItem[] {
+        const flatItems = this.collectAllItems(items);
+        const p0: TodoItem[] = [];
+        const p1: TodoItem[] = [];
+        const p2: TodoItem[] = [];
+        const none: TodoItem[] = [];
+
+        for (const item of flatItems) {
+            const m = item.text.match(/^(\[|\()?(P[0-2])(\]|\))?/i);
+            const tag = m?.[2]?.toUpperCase();
+            const copy = { ...item, children: undefined };
+            if (tag === "P0") {
+                p0.push(copy);
+            } else if (tag === "P1") {
+                p1.push(copy);
+            } else if (tag === "P2") {
+                p2.push(copy);
+            } else {
+                none.push(copy);
+            }
+        }
+
+        const groups: TodoItem[] = [];
+        if (p0.length > 0) {
+            groups.push({ line: -100, text: "P0", kind: "section", checked: false, children: p0 });
+        }
+        if (p1.length > 0) {
+            groups.push({ line: -101, text: "P1", kind: "section", checked: false, children: p1 });
+        }
+        if (p2.length > 0) {
+            groups.push({ line: -102, text: "P2", kind: "section", checked: false, children: p2 });
+        }
+        if (none.length > 0) {
+            groups.push({ line: -103, text: "None", kind: "section", checked: false, children: none });
+        }
+        return groups;
+    }
+
+    private buildFileGroups(items: TodoItem[]): TodoItem[] {
+        const flatItems = this.collectAllItems(items);
+        const groupsMap = new Map<string, { label: string; description?: string; children: TodoItem[] }>();
+
+        for (const item of flatItems) {
+            const grp = this.getFileGroup(item.text);
+            const key = grp.label;
+            const copy = { ...item, children: undefined };
+
+            const existing = groupsMap.get(key) ?? { label: grp.label, description: grp.description, children: [] };
+            existing.children.push(copy);
+            groupsMap.set(key, existing);
+        }
+
+        const groups: TodoItem[] = [];
+        let index = 0;
+        for (const val of groupsMap.values()) {
+            groups.push({
+                line: -200 - index,
+                text: val.label,
+                description: val.description,
+                kind: "section",
+                checked: false,
+                children: val.children,
+            });
+            index++;
+        }
+
+        groups.sort((a, b) => {
+            if (a.text === "README.todo") return -1;
+            if (b.text === "README.todo") return 1;
+            return a.text.localeCompare(b.text);
+        });
+        return groups;
+    }
+
+    private getFileGroup(text: string): { label: string; description?: string } {
+        const link = extractLink(text);
+        if (!link) {
+            return { label: "README.todo" };
+        }
+        let cleanLink = link.split("#")[0];
+        if (!cleanLink.toLowerCase().endsWith(".todo")) {
+            return { label: "README.todo" };
+        }
+        if (cleanLink.startsWith("file:///")) {
+            const p = cleanLink.substring(8);
+            return this.getFileLabelAndDesc(p);
+        }
+        return this.getFileLabelAndDesc(cleanLink);
+    }
+
+    private getFileLabelAndDesc(filePath: string): { label: string; description?: string } {
+        if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+            try {
+                const url = new URL(filePath);
+                return { label: url.hostname, description: url.pathname };
+            } catch {
+                return { label: filePath };
+            }
+        }
+        const normalized = filePath.replace(/\\/g, "/");
+        const parts = normalized.split("/");
+        const label = parts[parts.length - 1] || filePath;
+        const description = parts.length > 1 ? parts.slice(0, -1).join("/") : undefined;
+        return { label, description };
+    }
+
     getChildren(element?: TodoItem): vscode.ProviderResult<TodoItem[]> {
-        const raw = element ? element.children || [] : this.store.getItems();
+        if (element) {
+            return sortSiblings(element.children || []);
+        }
+
+        const raw = this.store.getItems();
         const completedFiltered = this.showCompleted ? raw : filterCompleted(raw);
         const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
+
+        if (this.viewType === "priority") {
+            return this.buildPriorityGroups(filtered);
+        }
+        if (this.viewType === "file") {
+            return this.buildFileGroups(filtered);
+        }
+
         return sortSiblings(filtered);
     }
 }
@@ -285,6 +441,9 @@ export function filterCompleted(items: TodoItem[]): TodoItem[] {
 }
 
 function filterItem(item: TodoItem): TodoItem | null {
+    if (item.kind === "section" && item.text.toLowerCase() === "archive") {
+        return null;
+    }
     const filteredChildren = item.children
         ? filterCompleted(item.children)
         : undefined;

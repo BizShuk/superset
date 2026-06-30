@@ -1,6 +1,8 @@
 import type { MdnsChange, MdnsListener, MdnsService } from "./types";
 import type { MdnsPacket, MdnsTransport } from "./mdnsTransport";
 import { networkKey, mergeServices } from "./mdnsDedup";
+import { DetailCache } from "./mdnsDetailCache";
+import { buildMdnsDetailFields, type MdnsDetailField } from "./mdnsTreeSpec";
 
 /** Injectable clock so tests can control `lastSeen` / grace-period math. */
 export interface ClockSource {
@@ -105,6 +107,7 @@ export class MdnsRegistry {
     private canonKeyToNk = new Map<string, string>();
     /** Periodic sweep that removes services past their TTL grace period. */
     private expiryTimer?: ReturnType<typeof setInterval>;
+    private readonly detailCache = new DetailCache<readonly MdnsDetailField[]>(60_000);
 
     constructor(
         private readonly transport: MdnsTransport,
@@ -395,6 +398,27 @@ export class MdnsRegistry {
         }, 250);
     }
 
+    getDetailCached(
+        svc: Pick<MdnsService, "name" | "type" | "host" | "port">
+    ): { hit: boolean; detail: readonly MdnsDetailField[] } {
+        const key = `${svc.name}|${svc.type}|${svc.host ?? ""}|${svc.port}`;
+        const cached = this.detailCache.get(key);
+        if (cached.hit && cached.value) {
+            return { hit: true, detail: cached.value };
+        }
+        const full = this.getByKey(svc.name);
+        const detail = full ? buildMdnsDetailFields(full) : [];
+        this.detailCache.set(key, detail);
+        return { hit: false, detail };
+    }
+
+    invalidateDetail(
+        svc: Pick<MdnsService, "name" | "type" | "host" | "port">
+    ): void {
+        const key = `${svc.name}|${svc.type}|${svc.host ?? ""}|${svc.port}`;
+        this.detailCache.invalidate(key);
+    }
+
     /**
      * Remove services that have not been re-announced within their TTL grace
      * period (`ttl × TTL_GRACE_MULTIPLIER`, falling back to
@@ -411,6 +435,7 @@ export class MdnsRegistry {
             if (now - svc.lastSeen > graceMs) {
                 expired.push(svc);
                 this.services.delete(key);
+                this.invalidateDetail(svc);
                 // Keep the secondary dedup indexes in sync.
                 const nk = this.canonKeyToNk.get(key);
                 if (nk) {

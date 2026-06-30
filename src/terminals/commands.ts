@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { TerminalRegistry } from "./terminalRegistry";
 import { stripUnseenPrefix } from "./treeSpec";
 import { GroupStore, UNGROUPED_ID, type Group, type GroupColor } from "./groupStore";
+import { buildQuickPickItems } from "./jumpToTerminal";
 
 const GROUP_COLORS: GroupColor[] = [
     "red",
@@ -70,6 +71,39 @@ export function registerTerminalCommands(
         }),
         vscode.commands.registerCommand("superset.newTerminal", () => {
             spawnPty("bash", getCwd()).show();
+        }),
+        vscode.commands.registerCommand("superset.jumpToTerminal", async () => {
+            const all = registry.getAll();
+            const items = await Promise.all(
+                all.map(async (e) => {
+                    const t = e.terminal as any;
+                    let pid: number | undefined = undefined;
+                    if (t.processId) {
+                        if (typeof t.processId === "function") {
+                            pid = await t.processId();
+                        } else if (t.processId instanceof Promise || (t.processId && typeof t.processId.then === "function")) {
+                            pid = await t.processId;
+                        } else {
+                            pid = t.processId;
+                        }
+                    }
+                    const opts = t.creationOptions as any;
+                    const cwd = opts?.cwd ? (typeof opts.cwd === "string" ? opts.cwd : opts.cwd.fsPath) : undefined;
+                    return {
+                        name: e.terminal.name,
+                        pid: pid,
+                        cwd: cwd,
+                        show: () => e.terminal.show(),
+                        terminal: e.terminal,
+                    };
+                })
+            );
+            const picked = await vscode.window.showQuickPick(
+                buildQuickPickItems(items, ""),
+                { placeHolder: "輸入 terminal 名稱過濾" }
+            );
+            if (!picked) return;
+            picked.terminal.show();
         }),
     ];
 }

@@ -177,7 +177,7 @@ export class TodoStore {
         this.emit({ type: "toggled", item });
     }
 
-    async updatePriority(item: TodoItem, newPriority: "P0" | "P1" | "P2"): Promise<void> {
+    async updatePriority(item: TodoItem, newPriority: "P0" | "P1" | "P2" | "None"): Promise<void> {
         const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
         let content: string;
         try {
@@ -189,18 +189,24 @@ export class TodoStore {
         const lines = content.split("\n");
         if (item.line >= lines.length) return;
 
-        // Path 1: line already has a priority tag — replace it.
+        // Path 1: line already has a priority tag — replace or remove it.
         const replaceRe = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(?:\[|\()P[0-2](?:\]|\))(\s+.*)$/;
         const m = lines[item.line].match(replaceRe);
         if (m) {
-            lines[item.line] = `${m[1]}[${newPriority}]${m[2]}`;
+            if (newPriority === "None") {
+                lines[item.line] = `${m[1]}${m[2].trimStart()}`;
+            } else {
+                lines[item.line] = `${m[1]}[${newPriority}]${m[2]}`;
+            }
         } else {
-            // Path 2: no priority prefix — insert `[Px] ` after the
-            // optional checkbox marker.
-            const insertRe = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(\S.*)$/;
-            const im = lines[item.line].match(insertRe);
-            if (!im) return;
-            lines[item.line] = `${im[1]}[${newPriority}] ${im[2]}`;
+            if (newPriority !== "None") {
+                // Path 2: no priority prefix — insert `[Px] ` after the
+                // optional checkbox marker.
+                const insertRe = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(\S.*)$/;
+                const im = lines[item.line].match(insertRe);
+                if (!im) return;
+                lines[item.line] = `${im[1]}[${newPriority}] ${im[2]}`;
+            }
         }
         await writeFile(filePath, lines.join("\n"), "utf-8");
 
@@ -220,19 +226,62 @@ export class TodoStore {
         }
 
         const lines = content.split("\n");
-        let targetLineIndex = -1;
         const isDefaultSection = sectionName.toLowerCase() === "default";
 
         if (isDefaultSection) {
             // Find `# TODO` or first heading
+            let targetLineIndex = -1;
             for (let i = 0; i < lines.length; i++) {
                 if (lines[i].trim().startsWith("# ")) {
                     targetLineIndex = i;
                     break;
                 }
             }
+
+            if (targetLineIndex === -1) {
+                // Section does not exist. Append to the end.
+                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                    lines.push("");
+                }
+                lines.push(`- [ ] ${text}`);
+            } else {
+                // Section exists. Find the head of the section (first list item or next heading).
+                let insertIndex = -1;
+                for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line.startsWith("##") || line.startsWith("###")) {
+                        // We hit the next section. Insert before it.
+                        let j = i;
+                        while (j > targetLineIndex + 1 && lines[j - 1].trim() === "") {
+                            j--;
+                        }
+                        insertIndex = j;
+                        break;
+                    }
+                    if (line.match(/^[-*+]\s+/)) {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+                if (insertIndex === -1) {
+                    // No other sections and no list items, so just insert after targetLineIndex + 1
+                    let j = targetLineIndex + 1;
+                    while (j < lines.length && lines[j].trim() === "") {
+                        j++;
+                    }
+                    insertIndex = j;
+                }
+
+                if (insertIndex === targetLineIndex + 1) {
+                    // Empty section: insert a blank line, then the item.
+                    lines.splice(targetLineIndex + 1, 0, "", `- [ ] ${text}`);
+                } else {
+                    lines.splice(insertIndex, 0, `- [ ] ${text}`);
+                }
+            }
         } else {
             // Find `## sectionName` or `### sectionName`
+            let targetLineIndex = -1;
             const escapedName = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const sectionRe = new RegExp(`^(##+)\\s+${escapedName}\\b`, "i");
             for (let i = 0; i < lines.length; i++) {
@@ -241,42 +290,316 @@ export class TodoStore {
                     break;
                 }
             }
-        }
 
-        if (targetLineIndex === -1) {
-            // Section does not exist. Append to the end.
-            if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
-                lines.push("");
-            }
-            if (isDefaultSection) {
-                lines.push(`- [ ] ${text}`);
-            } else {
+            if (targetLineIndex === -1) {
+                // Section does not exist. Append to the end.
+                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                    lines.push("");
+                }
                 lines.push(`## ${sectionName}`);
                 lines.push(`- [ ] ${text}`);
+            } else {
+                // Section exists. Find the end of the section.
+                let insertIndex = lines.length;
+                for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                    if (lines[i].trim().startsWith("##") || lines[i].trim().startsWith("###")) {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+
+                // Find the last non-empty line before insertIndex.
+                let lastNonEmpty = insertIndex - 1;
+                while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty].trim() === "") {
+                    lastNonEmpty--;
+                }
+
+                if (lastNonEmpty === targetLineIndex) {
+                    // Empty section: insert a blank line, then the item.
+                    lines.splice(targetLineIndex + 1, 0, "", `- [ ] ${text}`);
+                } else {
+                    // Has items: insert directly after the last item.
+                    lines.splice(lastNonEmpty + 1, 0, `- [ ] ${text}`);
+                }
             }
-        } else {
-            // Section exists. Find the end of the section.
-            let insertIndex = lines.length;
-            for (let i = targetLineIndex + 1; i < lines.length; i++) {
-                if (lines[i].trim().startsWith("##") || lines[i].trim().startsWith("###")) {
-                    insertIndex = i;
+        }
+
+        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.load();
+    }
+
+    async moveTodo(item: TodoItem, sectionName: string): Promise<void> {
+        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
+        let content: string;
+        try {
+            content = await readFile(filePath, "utf-8");
+        } catch {
+            return;
+        }
+
+        const lines = content.split("\n");
+        if (item.line >= lines.length) return;
+
+        // 1. Find the block of lines to move (the item and its children based on indentation)
+        const parentIndentMatch = lines[item.line].match(/^\s*/);
+        const parentIndent = parentIndentMatch ? parentIndentMatch[0].length : 0;
+
+        let lastChildLineIndex = item.line;
+        for (let i = item.line + 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.trim() === "") {
+                continue;
+            }
+            const currentIndentMatch = line.match(/^\s*/);
+            const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
+            if (currentIndent > parentIndent) {
+                lastChildLineIndex = i;
+            } else {
+                break;
+            }
+        }
+
+        const numLinesToMove = lastChildLineIndex - item.line + 1;
+        const blockLines = lines.splice(item.line, numLinesToMove);
+
+        // Adjust indentation of the moved block so the main item starts at 0 indent
+        const adjustedBlockLines = blockLines.map((line, idx) => {
+            if (line.trim() === "") return line;
+            const currentIndentMatch = line.match(/^\s*/);
+            const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
+            const newIndent = Math.max(0, currentIndent - parentIndent);
+            let newLine = " ".repeat(newIndent) + line.substring(currentIndent);
+            return newLine;
+        });
+
+        // 2. Find or create the target section
+        const isDefaultSection = sectionName.toLowerCase() === "default";
+
+        if (isDefaultSection) {
+            // Find `# TODO` or first heading
+            let targetLineIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].trim().startsWith("# ")) {
+                    targetLineIndex = i;
                     break;
                 }
             }
 
-            // Find the last non-empty line before insertIndex.
-            let lastNonEmpty = insertIndex - 1;
-            while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty].trim() === "") {
-                lastNonEmpty--;
+            if (targetLineIndex === -1) {
+                // Section does not exist. Append to the end.
+                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                    lines.push("");
+                }
+                lines.push(...adjustedBlockLines);
+            } else {
+                // Section exists. Find the head of the section (first list item or next heading).
+                let insertIndex = -1;
+                for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (line.startsWith("##") || line.startsWith("###")) {
+                        // We hit the next section. Insert before it.
+                        let j = i;
+                        while (j > targetLineIndex + 1 && lines[j - 1].trim() === "") {
+                            j--;
+                        }
+                        insertIndex = j;
+                        break;
+                    }
+                    if (line.match(/^[-*+]\s+/)) {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+                if (insertIndex === -1) {
+                    // No other sections and no list items, so just insert after targetLineIndex + 1
+                    let j = targetLineIndex + 1;
+                    while (j < lines.length && lines[j].trim() === "") {
+                        j++;
+                    }
+                    insertIndex = j;
+                }
+
+                if (insertIndex === targetLineIndex + 1) {
+                    // Empty section: insert a blank line first.
+                    lines.splice(targetLineIndex + 1, 0, "", ...adjustedBlockLines);
+                } else {
+                    lines.splice(insertIndex, 0, ...adjustedBlockLines);
+                }
+            }
+        } else {
+            // Find `## sectionName` or `### sectionName`
+            let targetLineIndex = -1;
+            const escapedName = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const sectionRe = new RegExp(`^(##+)\\s+${escapedName}\\b`, "i");
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].match(sectionRe)) {
+                    targetLineIndex = i;
+                    break;
+                }
             }
 
-            if (lastNonEmpty === targetLineIndex) {
-                // Empty section: insert a blank line, then the item.
-                lines.splice(targetLineIndex + 1, 0, "", `- [ ] ${text}`);
+            if (targetLineIndex === -1) {
+                // Section does not exist. Append to the end.
+                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                    lines.push("");
+                }
+                lines.push(`## ${sectionName}`);
+                lines.push(...adjustedBlockLines);
             } else {
-                // Has items: insert directly after the last item.
-                lines.splice(lastNonEmpty + 1, 0, `- [ ] ${text}`);
+                const isArchive = sectionName.toLowerCase() === "archive";
+                if (isArchive) {
+                    // Find the head of the Archive section.
+                    let insertIndex = -1;
+                    for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (line.startsWith("##") || line.startsWith("###")) {
+                            // Hit another section heading.
+                            let j = i;
+                            while (j > targetLineIndex + 1 && lines[j - 1].trim() === "") {
+                                j--;
+                            }
+                            insertIndex = j;
+                            break;
+                        }
+                        if (line.match(/^[-*+]\s+/)) {
+                            insertIndex = i;
+                            break;
+                        }
+                    }
+                    if (insertIndex === -1) {
+                        let j = targetLineIndex + 1;
+                        while (j < lines.length && lines[j].trim() === "") {
+                            j++;
+                        }
+                        insertIndex = j;
+                    }
+
+                    if (insertIndex === targetLineIndex + 1) {
+                        lines.splice(targetLineIndex + 1, 0, "", ...adjustedBlockLines);
+                    } else {
+                        lines.splice(insertIndex, 0, ...adjustedBlockLines);
+                    }
+                } else {
+                    // Find the end of the section (for general sections).
+                    let insertIndex = lines.length;
+                    for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                        if (lines[i].trim().startsWith("##") || lines[i].trim().startsWith("###")) {
+                            insertIndex = i;
+                            break;
+                        }
+                    }
+
+                    // Find the last non-empty line before insertIndex.
+                    let lastNonEmpty = insertIndex - 1;
+                    while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty].trim() === "") {
+                        lastNonEmpty--;
+                    }
+
+                    if (lastNonEmpty === targetLineIndex) {
+                        // Empty section: insert a blank line first.
+                        const numBlankLines = insertIndex - (targetLineIndex + 1);
+                        lines.splice(targetLineIndex + 1, numBlankLines, "", ...adjustedBlockLines);
+                    } else {
+                        // Has items: insert directly after the last item.
+                        const numBlankLines = insertIndex - (lastNonEmpty + 1);
+                        lines.splice(lastNonEmpty + 1, numBlankLines, ...adjustedBlockLines);
+                    }
+
+                    // If there's another section following, ensure a single blank line separating them
+                    const newInsertIndex = lastNonEmpty === targetLineIndex
+                        ? targetLineIndex + 1 + 1 + adjustedBlockLines.length
+                        : lastNonEmpty + 1 + adjustedBlockLines.length;
+                    if (newInsertIndex < lines.length && lines[newInsertIndex].trim() !== "") {
+                        lines.splice(newInsertIndex, 0, "");
+                    }
+                }
             }
+        }
+
+        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.load();
+    }
+
+    async archiveTodo(item: TodoItem): Promise<void> {
+        await this.moveTodo(item, "Archive");
+    }
+
+    async deleteSection(item: TodoItem): Promise<void> {
+        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
+        let content: string;
+        try {
+            content = await readFile(filePath, "utf-8");
+        } catch {
+            return;
+        }
+
+        const lines = content.split("\n");
+        let startLine = -1;
+        let endLine = -1;
+
+        if (item.line >= 0) {
+            // General section with header line
+            startLine = item.line;
+            endLine = lines.length;
+            for (let i = startLine + 1; i < lines.length; i++) {
+                if (lines[i].trim().startsWith("#")) {
+                    endLine = i;
+                    break;
+                }
+            }
+        } else if (item.text === "Default") {
+            // Default section (line === -1)
+            startLine = 0;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].trim().startsWith("# ")) {
+                    startLine = i + 1;
+                    break;
+                }
+            }
+            endLine = lines.length;
+            for (let i = startLine; i < lines.length; i++) {
+                if (lines[i].trim().match(/^(##+)\s+(.*)$/)) {
+                    endLine = i;
+                    break;
+                }
+            }
+        }
+
+        if (startLine >= 0 && endLine >= startLine) {
+            lines.splice(startLine, endLine - startLine);
+
+            // Check if we need to insert a blank line between two adjacent headings
+            if (startLine > 0 && startLine < lines.length) {
+                const prevLine = lines[startLine - 1].trim();
+                const currLine = lines[startLine].trim();
+                if (prevLine.startsWith("#") && currLine.startsWith("#")) {
+                    lines.splice(startLine, 0, "");
+                }
+            }
+
+            await writeFile(filePath, lines.join("\n"), "utf-8");
+            await this.load();
+        }
+    }
+
+    async updateText(line: number, newText: string): Promise<void> {
+        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
+        let content: string;
+        try {
+            content = await readFile(filePath, "utf-8");
+        } catch {
+            return;
+        }
+
+        const lines = content.split("\n");
+        if (line < 0 || line >= lines.length) return;
+
+        const re = /^(\s*[-*+]\s+(?:\[[\s|x|X]\]\s+)?)(.*)$/;
+        const m = lines[line].match(re);
+        if (m) {
+            lines[line] = `${m[1]}${newText}`;
+        } else {
+            return;
         }
 
         await writeFile(filePath, lines.join("\n"), "utf-8");

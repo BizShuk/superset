@@ -55,9 +55,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.mdnsShowDetail",
         async (svc: MdnsService | undefined) => {
             if (!svc) return;
+            const cachedResult = registry.getDetailCached(svc);
             const lines: string[] = [
                 `名稱: ${svc.name}`,
-                ...buildMdnsDetailFields(svc).map(
+                ...cachedResult.detail.map(
                     (f) => `${f.label}: ${f.value}`
                 ),
             ];

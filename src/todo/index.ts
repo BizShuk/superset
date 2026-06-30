@@ -82,26 +82,27 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     const changePriorityCmd = vscode.commands.registerCommand(
         "superset.todoChangePriority",
-        async (item: { line: number; checked: boolean; text: string; kind: "checkbox" | "list" } | undefined) => {
+        async (item: { line: number; checked: boolean; text: string; kind: "checkbox" | "list" | "section" } | undefined) => {
             if (!item || item.kind !== "checkbox") return;
 
             // Extract current priority from text
             const currentMatch = item.text.match(/^(\[|\()?(P[0-2])(\]|\))?/i);
-            const currentPriority = currentMatch?.[2]?.toUpperCase() || null;
+            const currentPriority = currentMatch?.[2]?.toUpperCase() || "None";
 
             const pick = await vscode.window.showQuickPick(
                 [
                     { label: "P0", description: "Highest priority" },
                     { label: "P1", description: "Medium priority" },
                     { label: "P2", description: "Low priority" },
+                    { label: "None", description: "No priority" },
                 ],
                 {
-                    placeHolder: currentPriority ? `Current: ${currentPriority} — select new priority` : "Select priority",
+                    placeHolder: `Current: ${currentPriority} — select new priority`,
                 }
             );
 
             if (!pick) return;
-            await store.updatePriority(item, pick.label as "P0" | "P1" | "P2");
+            await store.updatePriority(item as any, pick.label as "P0" | "P1" | "P2" | "None");
         }
     );
 
@@ -168,28 +169,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     const todoNewCmd = vscode.commands.registerCommand(
         "superset.todoNew",
-        async (item?: TodoItem) => {
+        async () => {
             const text = await vscode.window.showInputBox({
                 prompt: "新增待辦事項描述 (New TODO Description)",
                 placeHolder: "輸入待辦事項內容...",
             });
             if (!text || text.trim() === "") return;
 
-            let section = "modify";
-            if (item && item.kind === "section") {
-                section = item.text;
-            } else {
-                const secInput = await vscode.window.showInputBox({
-                    prompt: "請輸入區段名稱 (Section Name)",
-                    value: "modify",
-                });
-                if (secInput === undefined) return; // User cancelled
-                if (secInput.trim() !== "") {
-                    section = secInput.trim();
-                }
-            }
-
-            await store.addTodo(text.trim(), section);
+            await store.addTodo(text.trim(), "Default");
         }
     );
 
@@ -247,6 +234,119 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    const archiveTodoCmd = vscode.commands.registerCommand(
+        "superset.todoArchive",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            await store.archiveTodo(item);
+        }
+    );
+
+    const changeSectionCmd = vscode.commands.registerCommand(
+        "superset.todoChangeSection",
+        async (item?: TodoItem) => {
+            if (!item) return;
+
+            // 1. Get existing sections from memory
+            const rawSections = store.getItems()
+                .filter(i => i.kind === "section")
+                .map(i => i.text);
+
+            // Ensure "Default" is in the options and listed first.
+            const sections = rawSections.includes("Default")
+                ? ["Default", ...rawSections.filter(s => s !== "Default")]
+                : ["Default", ...rawSections];
+
+            const pickOptions = [
+                ...sections.map(s => ({
+                    label: s,
+                    description: s === "Default" ? "預設區段 (No heading)" : `區段: ${s}`
+                })),
+                {
+                    label: "$(plus) Create new section...",
+                    description: "建立並移往新區段"
+                }
+            ];
+
+            const pick = await vscode.window.showQuickPick(pickOptions, {
+                placeHolder: "選擇要移往的區段 (Select target section)",
+            });
+
+            if (!pick) return;
+
+            let targetSection = pick.label;
+            if (pick.label === "$(plus) Create new section...") {
+                const newSectionName = await vscode.window.showInputBox({
+                    prompt: "輸入新區段名稱 (New Section Name)",
+                    placeHolder: "例如: In Progress, Pending...",
+                });
+                if (!newSectionName || newSectionName.trim() === "") return;
+                targetSection = newSectionName.trim();
+            }
+
+            await store.moveTodo(item, targetSection);
+        }
+    );
+
+    const deleteSectionCmd = vscode.commands.registerCommand(
+        "superset.todoDeleteSection",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            if (provider.getViewType() !== "section") {
+                vscode.window.showErrorMessage("Delete Section is only supported in Section View.");
+                return;
+            }
+            const answer = await vscode.window.showWarningMessage(
+                `確定要刪除區段「${item.text}」及其底下的所有待辦事項嗎？`,
+                { modal: true },
+                "確認刪除"
+            );
+            if (answer === "確認刪除") {
+                await store.deleteSection(item);
+            }
+        }
+    );
+
+    const todoRenameCmd = vscode.commands.registerCommand(
+        "superset.todoRename",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            if (item.kind !== "checkbox" && item.kind !== "list") return;
+
+            const newText = await vscode.window.showInputBox({
+                prompt: "重新命名待辦事項 (Rename TODO Item)",
+                value: item.text,
+            });
+
+            if (newText === undefined) return;
+            const trimmed = newText.trim();
+            if (trimmed === "" || trimmed === item.text) return;
+
+            await store.updateText(item.line, trimmed);
+        }
+    );
+
+    const viewSecCmd = vscode.commands.registerCommand(
+        "superset.todoViewSec",
+        () => {
+            provider.setViewType("priority");
+        }
+    );
+
+    const viewPXCmd = vscode.commands.registerCommand(
+        "superset.todoViewPX",
+        () => {
+            provider.setViewType("file");
+        }
+    );
+
+    const viewFileCmd = vscode.commands.registerCommand(
+        "superset.todoViewFile",
+        () => {
+            provider.setViewType("section");
+        }
+    );
+
     ctx.subscriptions.push(
         toggleCmd,
         changePriorityCmd,
@@ -254,6 +354,13 @@ export function register(ctx: FeatureContext): FeatureHandle {
         openTodoFileCmd,
         openTodoLinkCmd,
         copyTodoCmd,
+        archiveTodoCmd,
+        changeSectionCmd,
+        deleteSectionCmd,
+        todoRenameCmd,
+        viewSecCmd,
+        viewPXCmd,
+        viewFileCmd,
         hideCompletedCmd,
         showAllCmd,
         filterP0Cmd,
@@ -276,6 +383,13 @@ export function register(ctx: FeatureContext): FeatureHandle {
             openTodoFileCmd.dispose();
             openTodoLinkCmd.dispose();
             copyTodoCmd.dispose();
+            archiveTodoCmd.dispose();
+            changeSectionCmd.dispose();
+            deleteSectionCmd.dispose();
+            todoRenameCmd.dispose();
+            viewSecCmd.dispose();
+            viewPXCmd.dispose();
+            viewFileCmd.dispose();
             hideCompletedCmd.dispose();
             showAllCmd.dispose();
             filterP0Cmd.dispose();
@@ -289,3 +403,4 @@ export function register(ctx: FeatureContext): FeatureHandle {
         },
     };
 }
+

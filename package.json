@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.3.4",
+    "version": "0.3.6",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -140,7 +140,22 @@
             },
             {
                 "command": "superset.todoChangePriority",
-                "title": "Superset: Change Priority"
+                "title": "Change Priority"
+            },
+            {
+                "command": "superset.todoViewSec",
+                "title": "View: Section",
+                "icon": "resources/view_sec.svg"
+            },
+            {
+                "command": "superset.todoViewPX",
+                "title": "View: Priority",
+                "icon": "resources/view_px.svg"
+            },
+            {
+                "command": "superset.todoViewFile",
+                "title": "View: File",
+                "icon": "resources/view_file.svg"
             },
             {
                 "command": "superset.todoNew",
@@ -154,7 +169,7 @@
             },
             {
                 "command": "superset.todoFilterHideCompleted",
-                "title": "Superset: Hide Completed",
+                "title": "Hide Completed/Archive",
                 "icon": "$(filter)"
             },
             {
@@ -201,6 +216,30 @@
                 "command": "superset.todoCopy",
                 "title": "Copy",
                 "icon": "$(copy)"
+            },
+            {
+                "command": "superset.todoArchive",
+                "title": "Archive",
+                "icon": "$(archive)"
+            },
+            {
+                "command": "superset.todoChangeSection",
+                "title": "Change Section",
+                "icon": "$(arrow-right)"
+            },
+            {
+                "command": "superset.todoDeleteSection",
+                "title": "Delete Section",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "superset.todoRename",
+                "title": "Rename",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "superset.jumpToTerminal",
+                "title": "Superset: Go to Terminal"
             }
         ],
         "viewsContainers": {
@@ -257,6 +296,21 @@
                     "command": "superset.topologyScan",
                     "when": "view == superset.topology",
                     "group": "navigation"
+                },
+                {
+                    "command": "superset.todoViewSec",
+                    "when": "view == superset.todo && superset.todo.viewType == 'section'",
+                    "group": "navigation@0"
+                },
+                {
+                    "command": "superset.todoViewPX",
+                    "when": "view == superset.todo && superset.todo.viewType == 'priority'",
+                    "group": "navigation@0"
+                },
+                {
+                    "command": "superset.todoViewFile",
+                    "when": "view == superset.todo && superset.todo.viewType == 'file'",
+                    "group": "navigation@0"
                 },
                 {
                     "command": "superset.todoNew",
@@ -366,9 +420,14 @@
                     "group": "1_focus"
                 },
                 {
+                    "command": "superset.todoRename",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "group": "2_rename"
+                },
+                {
                     "command": "superset.todoChangePriority",
-                    "when": "viewItem == todoCheckbox",
-                    "group": "3_priority"
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink",
+                    "group": "2_rename@1"
                 },
                 {
                     "command": "superset.todoNew",
@@ -386,9 +445,24 @@
                     "group": "inline"
                 },
                 {
+                    "command": "superset.todoArchive",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "group": "4_archive"
+                },
+                {
+                    "command": "superset.todoChangeSection",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "group": "4_archive@1"
+                },
+                {
                     "command": "superset.todoCopy",
                     "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection",
                     "group": "5_copy"
+                },
+                {
+                    "command": "superset.todoDeleteSection",
+                    "when": "viewItem == todoSection && superset.todo.viewType == 'section'",
+                    "group": "5_delete"
                 }
             ]
         },
@@ -399,10 +473,20 @@
                 "when": "focusedView == superset.terminals && !inputFocus"
             },
             {
+                "command": "superset.todoRename",
+                "key": "F2",
+                "when": "focusedView == superset.todo && !inputFocus"
+            },
+            {
                 "command": "superset.newTerminal",
                 "key": "ctrl+shift+`",
                 "mac": "ctrl+shift+`",
                 "when": "terminalFocus || !terminalFocus"
+            },
+            {
+                "command": "superset.jumpToTerminal",
+                "key": "ctrl+alt+t",
+                "mac": "ctrl+alt+t"
             }
         ]
     },

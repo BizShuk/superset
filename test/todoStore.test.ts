@@ -372,4 +372,266 @@ describe("TodoStore", () => {
         const content = readFileSync(file, "utf8");
         expect(content).toContain("## modify\n- [ ] New Task");
     });
+
+    it("addTodo inserts item at the head of the Default section when there are existing items", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-add-default-head-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 1\n- [ ] Task 2\n\n## Features\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        await store.addTodo("New Task", "Default");
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] New Task\n- [ ] Task 1\n- [ ] Task 2\n\n## Features\n");
+    });
+
+    it("addTodo inserts item at the head of the Default section when it is empty", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-add-default-empty-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n## Features\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        await store.addTodo("New Task", "Default");
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] New Task\n\n## Features\n");
+    });
+
+    it("archiveTodo moves a task and its children, creates Archive section if not exist, and does not check main task", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-archive-create-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 1\n  - [ ] Subtask 1.1\n- [ ] Task 2\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const task1 = store.getItems()[0].children![0]; // Task 1
+        await store.archiveTodo(task1);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] Task 2\n\n## Archive\n- [ ] Task 1\n  - [ ] Subtask 1.1");
+    });
+
+    it("archiveTodo moves a task to the head of the Archive section when it already exists", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-archive-existing-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 1\n- [ ] Task 2\n\n## Archive\n- [x] Old Archived\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const task2 = store.getItems()[0].children![1]; // Task 2
+        await store.archiveTodo(task2);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] Task 1\n\n## Archive\n\n- [ ] Task 2\n- [x] Old Archived\n");
+    });
+
+    it("moveTodo moves a task and its children to an existing section", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-move-existing-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 1\n  - [ ] Subtask 1.1\n- [ ] Task 2\n\n## TargetSection\n- [ ] Existing Target Task\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const task1 = store.getItems()[0].children![0]; // Task 1
+        await store.moveTodo(task1, "TargetSection");
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] Task 2\n\n## TargetSection\n- [ ] Existing Target Task\n- [ ] Task 1\n  - [ ] Subtask 1.1");
+    });
+
+    it("moveTodo moves a task and its children to a new section, creating the heading", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-move-new-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 1\n  - [ ] Subtask 1.1\n- [ ] Task 2\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const task1 = store.getItems()[0].children![0]; // Task 1
+        await store.moveTodo(task1, "NewSection");
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] Task 2\n\n## NewSection\n- [ ] Task 1\n  - [ ] Subtask 1.1");
+    });
+
+    it("moveTodo moves a task from a section to the Default section", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-move-to-default-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 1\n\n## OtherSection\n- [ ] Task 2\n  - [ ] Subtask 2.1\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const task2 = store.getItems()[1].children![0]; // Task 2 under OtherSection
+        await store.moveTodo(task2, "Default");
+
+        const content = readFileSync(file, "utf-8");
+        expect(content).toBe("# TODO\n\n- [ ] Task 2\n  - [ ] Subtask 2.1\n- [ ] Task 1\n\n## OtherSection\n");
+    });
+
+    it("deleteSection removes general section and its todo items from README.todo", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-delete-general-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 0\n\n## Features\n- [ ] Task 1\n  - [ ] Subtask 1.1\n\n## Iteration 2\n- [ ] Task 2\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const featuresSection = store.getItems()[1]; // Features Section
+        expect(featuresSection.text).toBe("Features");
+        expect(featuresSection.kind).toBe("section");
+
+        await store.deleteSection(featuresSection);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] Task 0\n\n## Iteration 2\n- [ ] Task 2\n");
+    });
+
+    it("deleteSection removes Default section items from README.todo", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-delete-default-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 0\n  - [ ] Subtask 0.1\n\n## Features\n- [ ] Task 1\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const defaultSection = store.getItems()[0]; // Default Section
+        expect(defaultSection.text).toBe("Default");
+        expect(defaultSection.kind).toBe("section");
+
+        await store.deleteSection(defaultSection);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n## Features\n- [ ] Task 1\n");
+    });
+
+    it("updateText updates todo text preserving checkbox/list prefix", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-rename-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 0\n  - [x] Subtask 0.1\n- Bare item\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        // 1. Rename a checkbox item (Task 0)
+        const defaultSec = store.getItems()[0];
+        const task0 = defaultSec.children![0];
+        expect(task0.text).toBe("Task 0");
+        expect(task0.line).toBe(2);
+
+        await store.updateText(task0.line, "Renamed Task 0");
+
+        let content = readFileSync(file, "utf8");
+        expect(content).toContain("- [ ] Renamed Task 0");
+
+        // 2. Rename a nested checkbox item (Subtask 0.1)
+        const subtask01 = store.getItems()[0].children![0].children![0];
+        expect(subtask01.text).toBe("Subtask 0.1");
+        expect(subtask01.line).toBe(3);
+
+        await store.updateText(subtask01.line, "Renamed Subtask 0.1");
+        content = readFileSync(file, "utf8");
+        expect(content).toContain("  - [x] Renamed Subtask 0.1");
+
+        // 3. Rename a bare list item (Bare item)
+        const bareItem = store.getItems()[0].children![1];
+        expect(bareItem.text).toBe("Bare item");
+        expect(bareItem.line).toBe(4);
+
+        await store.updateText(bareItem.line, "Renamed Bare item");
+        content = readFileSync(file, "utf8");
+        expect(content).toContain("- Renamed Bare item");
+    });
+
+    it("updatePriority can set P0/P1/P2 and None", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-priority-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 0\n- [ ] [P1] Task 1\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const defaultSec = store.getItems()[0];
+        const task0 = defaultSec.children![0];
+        const task1 = defaultSec.children![1];
+
+        // 1. Add priority to Task 0
+        await store.updatePriority(task0, "P0");
+        let content = readFileSync(file, "utf8");
+        expect(content).toContain("- [ ] [P0] Task 0");
+
+        // 2. Change priority of Task 1 to P2
+        await store.updatePriority(task1, "P2");
+        content = readFileSync(file, "utf8");
+        expect(content).toContain("- [ ] [P2] Task 1");
+
+        // 3. Clear priority of Task 1 by setting to None
+        const updatedTask1 = store.getItems()[0].children![1];
+        await store.updatePriority(updatedTask1, "None");
+        content = readFileSync(file, "utf8");
+        expect(content).toContain("- [ ] Task 1");
+    });
 });
+

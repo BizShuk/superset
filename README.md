@@ -25,6 +25,12 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 新增「Termina
 - 同一台主機以多個 mDNS 實例名稱廣播、或同時走多張網卡 / IPv4+IPv6 時,自動以 `host|port|type` 為網路身分去重,合併成同一列;其餘名稱顯示在該列的「別名」細節欄位,避免面板出現重複項目。
 - 服務一段時間未再廣播即自動過期移除:以 `3 × TTL` 為寬限期(RFC 6762,沒帶 TTL 者 fallback 120 秒),讓面板只保留目前真正在線的服務,不累積已離網的舊紀錄。
 - Markdown `tree` 區塊語法高亮與預覽渲染:在 `.md` 裡用 ```` ```tree ```` fenced block 寫目錄樹,編輯時有 TextMate 高亮,Markdown 預覽則渲染成帶 📁/📄 icon 的結構(原獨立套件 `md-tree-highlight` 併入,見 `features/treePreview/`)。
+- 側欄 `TODO` 面板讀取並列出工作區 `README.todo` 中的所有待辦事項：
+    - 支援帶有縮進的嵌套待辦事項結構。
+    - 在項目上點選右鍵選單「Rename」或在面板聚焦時按下 `F2` 可直接重新命名待辦事項文字，並自動寫回 `README.todo` 檔案中。
+- 命令 `Superset: Go to Terminal` (快捷鍵 `Ctrl+Alt+T`) 提供模糊搜尋 (Fuzzy Pick) 功能，可快速篩選所有開啟中的終端機 (名稱 / pid / 工作目錄) 並進行聚焦切換。
+
+
 
 ---
 
