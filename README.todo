@@ -27,6 +27,7 @@
 - [ ] [P2] [feature] `Superset: Reset All Caches` command — one-button wipe of `context.workspaceState` keys, mDNS in-memory cache, and `TopologyStore` state. Backs the "something's stale, start over" workflow; cheap (~30 LOC) and unblocks debugging. See scan note 2026-06-23#4U.
 - [ ] [P2] [feature] `Superset: Reveal in Tree` command — given a `TerminalHandle`, focus the `superset.terminals` TreeView and select the matching row. Wires `vscode.commands.executeCommand("treeView.reveal", item)` (stable since 1.47). Composes with every panel by reusing the same `(viewId, predicate)` helper. See scan note 2026-06-23#4Q.
 - [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. Avoids clashing with VSCode's own `workbench.panel.defaultLocation`. See scan note 2026-06-23#2D.
+- [ ] [P2] [feature] Default subgroup panel sizes — on first open, set panel heights: Terminals fixed at 200px, TODO expanded to fill remaining space (largest), mDNS/Topology collapsed.
 
 ## Architecture
 
