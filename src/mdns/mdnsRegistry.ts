@@ -103,8 +103,8 @@ export class MdnsRegistry {
      * that resolve to the same network endpoint collapse into one row.
      */
     private byNetworkKey = new Map<string, string>();
-    /** Reverse of `byNetworkKey`: canonical key → its current network key. */
-    private canonKeyToNk = new Map<string, string>();
+    /** Reverse of `byNetworkKey`: canonical key → its set of network keys. */
+    private canonKeyToNk = new Map<string, Set<string>>();
     /** Periodic sweep that removes services past their TTL grace period. */
     private expiryTimer?: ReturnType<typeof setInterval>;
     private readonly detailCache = new DetailCache<readonly MdnsDetailField[]>(60_000);
@@ -141,6 +141,17 @@ export class MdnsRegistry {
             this.expiryTimer = undefined;
         }
         this.transport.stop();
+    }
+
+    reset(): void {
+        this.stop();
+        this.services.clear();
+        this.byNetworkKey.clear();
+        this.canonKeyToNk.clear();
+        this.pending.clear();
+        this.detailCache.clear();
+        this.emit({ type: "reset" });
+        this.start();
     }
 
     // ── Reads ──────────────────────────────────────────────
@@ -360,39 +371,57 @@ export class MdnsRegistry {
                 const service = freeze(p);
                 const nk = networkKey(service);
                 const canonKey = this.byNetworkKey.get(nk);
+                const resolvedKey = canonKey ?? (this.services.has(key) ? key : undefined);
 
-                if (canonKey && canonKey !== key) {
-                    // Same network endpoint already tracked under another
-                    // instance name — merge into the canonical row instead of
-                    // adding a duplicate. First-seen name stays canonical.
-                    const existing = this.services.get(canonKey);
+                if (resolvedKey) {
+                    // Update/merge into the existing canonical service.
+                    const existing = this.services.get(resolvedKey);
                     const merged = existing
                         ? mergeServices(existing, service)
                         : service;
-                    this.services.set(canonKey, merged);
-                    // Drop a stale standalone row under the alt name, if any.
-                    this.services.delete(key);
-                    this.emit({ type: "updated", service: merged });
-                    continue;
-                }
+                    this.services.set(resolvedKey, merged);
 
-                // First sight of this endpoint, or the same name re-discovered.
-                const wasNew = !this.services.has(key);
-                const oldNk = this.canonKeyToNk.get(key);
-                if (oldNk && oldNk !== nk) {
-                    // This instance moved to a new network identity (e.g. port
-                    // changed); release the old slot so a different service may
-                    // claim it without being falsely merged into this one.
-                    this.byNetworkKey.delete(oldNk);
+                    // If the incoming name key is different from resolvedKey,
+                    // ensure it doesn't exist as a standalone service.
+                    if (resolvedKey !== key) {
+                        this.services.delete(key);
+                    }
+
+                    // Clean up any replaced network keys (same host/type but different port).
+                    const oldNks = this.canonKeyToNk.get(resolvedKey);
+                    if (oldNks) {
+                        const [newId, newPort, newType] = nk.split("|");
+                        for (const oldNk of Array.from(oldNks)) {
+                            if (oldNk !== nk) {
+                                const [oldId, oldPort, oldType] = oldNk.split("|");
+                                if (oldId === newId && oldType === newType && oldPort !== newPort) {
+                                    this.byNetworkKey.delete(oldNk);
+                                    oldNks.delete(oldNk);
+                                }
+                            }
+                        }
+                    }
+
+                    // Map the new network key to the canonical service.
+                    this.byNetworkKey.set(nk, resolvedKey);
+                    let nks = this.canonKeyToNk.get(resolvedKey);
+                    if (!nks) {
+                        nks = new Set<string>();
+                        this.canonKeyToNk.set(resolvedKey, nks);
+                    }
+                    nks.add(nk);
+
+                    this.emit({ type: "updated", service: merged });
+                } else {
+                    // First sight of this endpoint and name.
+                    this.services.set(key, service);
+                    this.byNetworkKey.set(nk, key);
+                    
+                    const nks = new Set<string>([nk]);
+                    this.canonKeyToNk.set(key, nks);
+
+                    this.emit({ type: "added", service });
                 }
-                this.services.set(key, service);
-                this.byNetworkKey.set(nk, key);
-                this.canonKeyToNk.set(key, nk);
-                this.emit(
-                    wasNew
-                        ? { type: "added", service }
-                        : { type: "updated", service }
-                );
             }
             this.pending.clear();
         }, 250);
@@ -437,9 +466,11 @@ export class MdnsRegistry {
                 this.services.delete(key);
                 this.invalidateDetail(svc);
                 // Keep the secondary dedup indexes in sync.
-                const nk = this.canonKeyToNk.get(key);
-                if (nk) {
-                    this.byNetworkKey.delete(nk);
+                const nks = this.canonKeyToNk.get(key);
+                if (nks) {
+                    for (const n of nks) {
+                        this.byNetworkKey.delete(n);
+                    }
                     this.canonKeyToNk.delete(key);
                 }
             }

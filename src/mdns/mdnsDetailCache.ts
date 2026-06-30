@@ -25,4 +25,8 @@ export class DetailCache<T> {
     public invalidate(key: string): void {
         this.store.delete(key);
     }
+
+    public clear(): void {
+        this.store.clear();
+    }
 }

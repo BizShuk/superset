@@ -11,6 +11,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const provider = new TopologyTreeProvider(store);
     provider.start();
 
+    ctx.resetHandlers.push(() => {
+        store.reset();
+        provider.refresh();
+    });
+
     const view = vscode.window.createTreeView("superset.topology", {
         treeDataProvider: provider,
         showCollapseAll: true,

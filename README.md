@@ -29,6 +29,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 新增「Termina
     - 支援帶有縮進的嵌套待辦事項結構。
     - 在項目上點選右鍵選單「Rename」或在面板聚焦時按下 `F2` 可直接重新命名待辦事項文字，並自動寫回 `README.todo` 檔案中。
 - 命令 `Superset: Go to Terminal` (快捷鍵 `Ctrl+Alt+T`) 提供模糊搜尋 (Fuzzy Pick) 功能，可快速篩選所有開啟中的終端機 (名稱 / pid / 工作目錄) 並進行聚焦切換。
+- 命令 `Superset: Reset Caches` 可一鍵重置所有快取（清除 `context.workspaceState` 中 `superset.*` 的鍵值、清空 mDNS 快取、網路拓撲狀態，並重新載入 `README.todo` 檔案），並有二次確認彈窗防誤觸。
 
 
 
@@ -38,8 +39,8 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 新增「Termina
 
 | 項目 | 版本 |
 |---|---|
-| VSCode | `^1.85.0` (需要 Shell Integration 穩定 API) |
-| Node.js | 18+ (VSCode 內建 Electron 對應的 Node 版本) |
+| VSCode | `^1.90.0` (需要 Shell Integration API 與 TabInputTerminal 穩定後的版本) |
+| Node.js | `>=20.0.0` (開發環境) |
 | npm | 隨 Node 一起裝 |
 
 ---
@@ -194,7 +195,7 @@ code --uninstall-extension shuk.superset
 | `workbench.view.<viewContainerId>` | 視窗 | 聚焦側欄視圖容器 | 命令呼叫 |
 | `vscode.window.createTreeView` | 視窗 | 建立 TreeView,綁定 TreeDataProvider | 穩定 |
 
-> 版本基線:`engines.vscode` 設為 `^1.85.0`,Shell Integration 系列事件從這個版本才開始可用。低於 1.85 的 VSCode 收不到 shell execution 事件,該終端機只會被列出但不會高亮。
+> 版本基線:`engines.vscode` 設為 `^1.90.0`，對齊到 1.90+ 的語意 (例如唯讀的 `Terminal.name` 屬性)。
 >
 > `TerminalShellExecution` 在 `@types/vscode@1.85.0` 只暴露 `read()` (async iterable),沒有 `onData` / `onEnd`。本擴充在組裝層 (`extension.ts`) 用 `for await (const chunk of event.execution.read())` 逐 chunk 餵給 `OutputWatcher` 的 callback 契約。
 

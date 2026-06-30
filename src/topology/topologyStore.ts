@@ -30,6 +30,13 @@ export class TopologyStore {
         this.activeScanPromise = null;
     }
 
+    reset(): void {
+        this.nodes = [];
+        this.scanning = false;
+        this.activeScanPromise = null;
+        this.emit({ type: "scanned", nodes: [] });
+    }
+
     getRoots(): TopologyNode[] {
         return this.nodes;
     }

@@ -46,7 +46,8 @@ export function mergeServices(a: MdnsService, b: MdnsService): MdnsService {
         a.ttl === 0 ? b.ttl : b.ttl === 0 ? a.ttl : Math.min(a.ttl, b.ttl);
 
     return {
-        ...a,
+        ...b,
+        name: a.name,
         aliases,
         addresses,
         subtypes,

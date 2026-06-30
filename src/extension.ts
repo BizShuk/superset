@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import type { FeatureContext, SharedDeps } from "./shared";
+import { collectSupersetKeys } from "./resetCaches";
 import { register as registerTerminals } from "./terminals";
 import { register as registerMdns } from "./mdns";
 import { register as registerTopology } from "./topology";
@@ -36,12 +37,14 @@ export function activate(
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
 
     const shared: SharedDeps = { statusBar, diag, log };
+    const resetHandlers: (() => void | Promise<void>)[] = [];
 
     const ctx: FeatureContext = {
         context,
         subscriptions,
         workspaceFolder,
         shared,
+        resetHandlers,
     };
 
     // Register all features.
@@ -54,6 +57,25 @@ export function activate(
 
     // Global commands (not tied to a single feature).
     subscriptions.push(
+        vscode.commands.registerCommand("superset.resetCaches", async () => {
+            const choice = await vscode.window.showWarningMessage(
+                "Superset: 確認重置所有快取?",
+                { modal: true },
+                "Reset"
+            );
+            if (choice !== "Reset") return;
+            for (const key of collectSupersetKeys(context.workspaceState)) {
+                await context.workspaceState.update(key, undefined);
+            }
+            for (const handler of resetHandlers) {
+                try {
+                    await handler();
+                } catch (err) {
+                    log(`Error running reset handler: ${err}`);
+                }
+            }
+            vscode.window.showInformationMessage("Superset: 快取已重置");
+        }),
         vscode.commands.registerCommand("superset.focusView", async () => {
             // Open the Superset view container, then focus the terminals
             // view — the "terminal dashboard" the status-bar notification

@@ -20,6 +20,7 @@ export interface FeatureContext {
     readonly subscriptions: vscode.Disposable[];
     readonly workspaceFolder: string;
     readonly shared: SharedDeps;
+    readonly resetHandlers: (() => void | Promise<void>)[];
 }
 
 export interface FeatureHandle {

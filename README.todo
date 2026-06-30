@@ -2,14 +2,12 @@
 
 ## Terminals
 
-- [ ] [P1] [feature] Workspace-aware group suggestions — see [plans/2026-06-23-feature-workspace-aware-group-suggestions.md](plans/2026-06-23-feature-workspace-aware-group-suggestions.md)
 - [x] deal with terminal "Antigravity Agent" terminal life cycle
 - [x] [feature] Terminal jump-to via `Superset: Go to Terminal` quick-pick — fuzzy pick of all open terminals, used as a `Ctrl+Shift+P` target. Composes with [terminal fuzzy search](plans/2026-06-23-feature-terminal-fuzzy-search.md): the pick reuses the same `matchesTerminal` helper. See scan note 2026-06-23#2E.
 
 ## mDNS
 
-- [ ] [P1] [feature] mDNS service dedup by `host|port|type` — multi-NIC / IPv4+IPv6 currently produce duplicate rows. `MdnsRegistry` upserts by name but not by network identity; add secondary key so the tree shows one canonical row per service. See scan note 2026-06-23#3J.
-- [ ] [P2] [feature] mDNS one-click connect — see [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
+- [x] [P1] [feature] mDNS service dedup by `host|port|type` — multi-NIC / IPv4+IPv6 currently produce duplicate rows. `MdnsRegistry` upserts by name but not by network identity; add secondary key so the tree shows one canonical row per service. See scan note 2026-06-23#3J.
 - [x] [feature] mDNS detail-view query cache — `MdnsShowDetail` currently re-resolves on every invocation. Cache `buildMdnsDetailFields` output for 60s keyed by `${name}|${type}|${host}|${port}` to avoid spamming mDNS for already-seen services. Pairs with service expiration. See scan note 2026-06-23#3I.
 
 ## Topology
@@ -23,30 +21,26 @@
 
 ## Platform & UX
 
-- [ ] [P2] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P.
-- [ ] [P2] [feature] `Superset: Reset All Caches` command — one-button wipe of `context.workspaceState` keys, mDNS in-memory cache, and `TopologyStore` state. Backs the "something's stale, start over" workflow; cheap (~30 LOC) and unblocks debugging. See scan note 2026-06-23#4U.
-- [ ] [P2] [feature] `Superset: Reveal in Tree` command — given a `TerminalHandle`, focus the `superset.terminals` TreeView and select the matching row. Wires `vscode.commands.executeCommand("treeView.reveal", item)` (stable since 1.47). Composes with every panel by reusing the same `(viewId, predicate)` helper. See scan note 2026-06-23#4Q.
-- [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. Avoids clashing with VSCode's own `workbench.panel.defaultLocation`. See scan note 2026-06-23#2D.
-- [ ] [P2] [feature] Default subgroup panel sizes — on first open, set panel heights: Terminals fixed at 200px, TODO expanded to fill remaining space (largest), mDNS/Topology collapsed.
+- [ ] [P2] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P. [Open Settings Webview 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-open-settings-webview.md)
+- [x] [P2] [feature] `Superset: Reset All Caches` command — one-button wipe of `context.workspaceState` keys, mDNS in-memory cache, and `TopologyStore` state. Backs the "something's stale, start over" workflow; cheap (~30 LOC) and unblocks debugging. See scan note 2026-06-23#4U. [Reset All Caches 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reset-caches.md)
+- [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. Avoids clashing with VSCode's own `workbench.panel.defaultLocation`. [Panel Layout Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-panel-layout-persistence.md)
+- [x] [P2] [feature] Default subgroup panel sizes — on first open, set panel heights: Terminals fixed at 200px, TODO expanded to fill remaining space (largest), mDNS/Topology collapsed.
 
 ## Architecture
 
-- [ ] [P1] [chore] GitHub Actions CI + issue / PR templates — add `.github/workflows/ci.yml` (3-OS matrix: macos / ubuntu / windows, runs `npm test` + `tsc --noEmit`), `.github/workflows/coverage.yml` (vitest --coverage to PR artifact), `.github/workflows/release.yml` (tag-triggered `vsce package` for [#5A VSIX sanity](plans/2026-06-23-chore-vsix-cross-platform-sanity.md)); add `ISSUE_TEMPLATE/{bug_report,feature_request}.md`, `PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, README CI badge. See [plans/2026-06-24-chore-github-actions-ci.md](plans/2026-06-24-chore-github-actions-ci.md). See scan note 2026-06-24#7A.
-- [ ] [P1] [chore] VSIX cross-platform packaging sanity — `.vscodeignore` exclude dev artifacts (test/, src/, scripts/, **/**tests**/**) while intentionally keeping `@homebridge/node-pty-prebuilt-multiarch/prebuilds/` for all target platforms; add `scripts/verify-vsix.sh` that post-checks the .vsix; wire into `npm run build`. See [plans/2026-06-23-chore-vsix-cross-platform-sanity.md](plans/2026-06-23-chore-vsix-cross-platform-sanity.md). See scan note 2026-06-23#5A.
-- [ ] [P1] [chore] VSCode baseline alignment — bump `engines.vscode` to `^1.90.0` (code already assumes 1.90+ behaviors: `TabInputTerminal`, `Terminal.name` getter-only), pin `@types/vscode` to `~1.90.0`, add `engines.node >=20.0.0`, remove dead `nameWriteSupported` runtime probe in `highlightPresenter.ts`, update docs. See [plans/2026-06-23-chore-vscode-baseline-alignment.md](plans/2026-06-23-chore-vscode-baseline-alignment.md). See scan note 2026-06-23#4A.
-- [ ] [P2] [chore] `Superset: Show Diagnostics` webview — one-click snapshot of every subsystem (terminals / mDNS / topology / todo / engines / activation session), with Copy-to-clipboard and Save-to-file buttons. Complements the existing `superset.showLogs` (time-series log) with a structured "now" view, unblocks GitHub-issue triage. See [plans/2026-06-24-chore-show-diagnostics-webview.md](plans/2026-06-24-chore-show-diagnostics-webview.md). See scan note 2026-06-24#6A.
+- [x] [P1] [chore] VSCode baseline alignment — bump `engines.vscode` to `^1.90.0` (code already assumes 1.90+ behaviors: `TabInputTerminal`, `Terminal.name` getter-only), pin `@types/vscode` to `~1.90.0`, add `engines.node >=20.0.0`, remove dead `nameWriteSupported` runtime probe in `highlightPresenter.ts`, update docs. See [plans/2026-06-23-chore-vscode-baseline-alignment.md](plans/2026-06-23-chore-vscode-baseline-alignment.md). See scan note 2026-06-23#4A.
 
 ## Plans
 
-- [ ] [Group Metadata Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-group-metadata-persistence.md)
-- [ ] [Open Settings Webview 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-open-settings-webview.md)
-- [ ] [Panel Layout Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-panel-layout-persistence.md)
-- [ ] [Reset All Caches 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reset-caches.md)
-- [ ] [Reveal in Tree 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reveal-in-tree.md)
-- [ ] [Plan: Add `window.onDidWriteTerminalData` (deprecated fallback) for TUI detection](plans/dynamic-orbiting-pearl.md)
 
 ## Archive
 
+- [ ] [P2] [feature] `Superset: Reveal in Tree` command — given a `TerminalHandle`, focus the `superset.terminals` TreeView and select the matching row. Wires `vscode.commands.executeCommand("treeView.reveal", item)` (stable since 1.47). Composes with every panel by reusing the same `(viewId, predicate)` helper. See scan note 2026-06-23#4Q. [Reveal in Tree 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reveal-in-tree.md)
+- [ ] [P1] [feature] Workspace-aware group suggestions — see [plans/2026-06-23-feature-workspace-aware-group-suggestions.md](plans/2026-06-23-feature-workspace-aware-group-suggestions.md)
+- [ ] [P2] [feature] mDNS one-click connect — see [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
+- [ ] [P2] [chore] `Superset: Show Diagnostics` webview — one-click snapshot of every subsystem (terminals / mDNS / topology / todo / engines / activation session), with Copy-to-clipboard and Save-to-file buttons. Complements the existing `superset.showLogs` (time-series log) with a structured "now" view, unblocks GitHub-issue triage. See [plans/2026-06-24-chore-show-diagnostics-webview.md](plans/2026-06-24-chore-show-diagnostics-webview.md). See scan note 2026-06-24#6A.
+- [ ] [P1] [chore] VSIX cross-platform packaging sanity — `.vscodeignore` exclude dev artifacts (test/, src/, scripts/, **/**tests**/**) while intentionally keeping `@homebridge/node-pty-prebuilt-multiarch/prebuilds/` for all target platforms; add `scripts/verify-vsix.sh` that post-checks the .vsix; wire into `npm run build`. See [plans/2026-06-23-chore-vsix-cross-platform-sanity.md](plans/2026-06-23-chore-vsix-cross-platform-sanity.md). See scan note 2026-06-23#5A.
+- [ ] [P1] [chore] GitHub Actions CI + issue / PR templates — add `.github/workflows/ci.yml` (3-OS matrix: macos / ubuntu / windows, runs `npm test` + `tsc --noEmit`), `.github/workflows/coverage.yml` (vitest --coverage to PR artifact), `.github/workflows/release.yml` (tag-triggered `vsce package` for [#5A VSIX sanity](plans/2026-06-23-chore-vsix-cross-platform-sanity.md)); add `ISSUE_TEMPLATE/{bug_report,feature_request}.md`, `PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, README CI badge. See [plans/2026-06-24-chore-github-actions-ci.md](plans/2026-06-24-chore-github-actions-ci.md). See scan note 2026-06-24#7A.
 - [ ] [feature] Group metadata persistence — follow-up of [workspace-aware group suggestions](plans/2026-06-23-feature-workspace-aware-group-suggestions.md). Persist `cwd` / `gitRemote` keys in `context.workspaceState` so the auto-group heuristic survives VSCode restart. See scan note 2026-06-23#2A.
 - [ ] [feature] Terminal lifecycle audit log — see [plans/2026-06-23-feature-terminal-lifecycle-audit-log.md](plans/2026-06-23-feature-terminal-lifecycle-audit-log.md)
 - [ ] [feature] Topology background scan — see [plans/2026-06-23-feature-topology-background-scan.md](plans/2026-06-23-feature-topology-background-scan.md)

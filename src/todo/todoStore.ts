@@ -33,6 +33,10 @@ export class TodoStore {
         return count;
     }
 
+    async reset(): Promise<void> {
+        await this.load();
+    }
+
     async load(): Promise<void> {
         const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
         let content: string;
@@ -601,6 +605,43 @@ export class TodoStore {
         } else {
             return;
         }
+
+        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.load();
+    }
+
+    async deleteTodo(item: TodoItem): Promise<void> {
+        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
+        let content: string;
+        try {
+            content = await readFile(filePath, "utf-8");
+        } catch {
+            return;
+        }
+
+        const lines = content.split("\n");
+        if (item.line >= lines.length) return;
+
+        const parentIndentMatch = lines[item.line].match(/^\s*/);
+        const parentIndent = parentIndentMatch ? parentIndentMatch[0].length : 0;
+
+        let lastChildLineIndex = item.line;
+        for (let i = item.line + 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (line.trim() === "") {
+                continue;
+            }
+            const currentIndentMatch = line.match(/^\s*/);
+            const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
+            if (currentIndent > parentIndent) {
+                lastChildLineIndex = i;
+            } else {
+                break;
+            }
+        }
+
+        const numLinesToDelete = lastChildLineIndex - item.line + 1;
+        lines.splice(item.line, numLinesToDelete);
 
         await writeFile(filePath, lines.join("\n"), "utf-8");
         await this.load();

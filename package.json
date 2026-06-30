@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.3.6",
+    "version": "0.3.7",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -11,7 +11,8 @@
     "license": "Apache-2.0",
     "icon": "images/icon.png",
     "engines": {
-        "vscode": "^1.85.0"
+        "vscode": "^1.93.0",
+        "node": ">=20.0.0"
     },
     "categories": [
         "Other",
@@ -53,6 +54,11 @@
             "./styles/tree.css"
         ],
         "commands": [
+            {
+                "command": "superset.resetCaches",
+                "title": "Superset: Reset Caches",
+                "icon": "$(debug-restart)"
+            },
             {
                 "command": "superset.focusView",
                 "title": "Superset: Show Panel"
@@ -238,6 +244,11 @@
                 "icon": "$(edit)"
             },
             {
+                "command": "superset.todoDelete",
+                "title": "Delete",
+                "icon": "$(trash)"
+            },
+            {
                 "command": "superset.jumpToTerminal",
                 "title": "Superset: Go to Terminal"
             }
@@ -256,22 +267,26 @@
                 {
                     "id": "superset.terminals",
                     "name": "Terminals",
-                    "contextualTitle": "SuperSet"
+                    "contextualTitle": "SuperSet",
+                    "visibility": "visible"
                 },
                 {
                     "id": "superset.mdns",
                     "name": "MDNS",
-                    "contextualTitle": "SuperSet"
+                    "contextualTitle": "SuperSet",
+                    "visibility": "collapsed"
                 },
                 {
                     "id": "superset.topology",
                     "name": "Topology",
-                    "contextualTitle": "SuperSet"
+                    "contextualTitle": "SuperSet",
+                    "visibility": "collapsed"
                 },
                 {
                     "id": "superset.todo",
                     "name": "TODO",
-                    "contextualTitle": "SuperSet"
+                    "contextualTitle": "SuperSet",
+                    "visibility": "visible"
                 }
             ]
         },
@@ -420,14 +435,29 @@
                     "group": "1_focus"
                 },
                 {
+                    "command": "superset.todoCopy",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection",
+                    "group": "1_copy"
+                },
+                {
                     "command": "superset.todoRename",
                     "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
-                    "group": "2_rename"
+                    "group": "2_edit@1"
                 },
                 {
                     "command": "superset.todoChangePriority",
                     "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink",
-                    "group": "2_rename@1"
+                    "group": "2_edit@2"
+                },
+                {
+                    "command": "superset.todoChangeSection",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "group": "2_edit@3"
+                },
+                {
+                    "command": "superset.todoArchive",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "group": "2_edit@4"
                 },
                 {
                     "command": "superset.todoNew",
@@ -445,24 +475,14 @@
                     "group": "inline"
                 },
                 {
-                    "command": "superset.todoArchive",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
-                    "group": "4_archive"
-                },
-                {
-                    "command": "superset.todoChangeSection",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
-                    "group": "4_archive@1"
-                },
-                {
-                    "command": "superset.todoCopy",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection",
-                    "group": "5_copy"
-                },
-                {
                     "command": "superset.todoDeleteSection",
                     "when": "viewItem == todoSection && superset.todo.viewType == 'section'",
-                    "group": "5_delete"
+                    "group": "3_delete"
+                },
+                {
+                    "command": "superset.todoDelete",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "group": "3_delete"
                 }
             ]
         },
@@ -501,7 +521,7 @@
     "devDependencies": {
         "@types/multicast-dns": "^7.2.4",
         "@types/node": "^26.0.0",
-        "@types/vscode": "^1.85.0",
+        "@types/vscode": "~1.93.0",
         "typescript": "^5.4.0",
         "vitest": "^4.1.9"
     },

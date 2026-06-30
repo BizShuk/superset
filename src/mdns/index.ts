@@ -13,6 +13,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const provider = new MdnsTreeProvider(registry);
     provider.start();
 
+    ctx.resetHandlers.push(() => {
+        registry.reset();
+        provider.refresh();
+    });
+
     const view = vscode.window.createTreeView("superset.mdns", {
         treeDataProvider: provider,
         showCollapseAll: true,

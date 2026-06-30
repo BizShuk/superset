@@ -50,6 +50,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // Load initial data; re-load on file changes.
     store.load();
 
+    ctx.resetHandlers.push(async () => {
+        await store.reset();
+        refreshTodoFilterBadge();
+    });
+
     const todoFileWatcher = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(ctx.workspaceFolder, "README.todo")
     );
@@ -326,6 +331,23 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    const deleteTodoCmd = vscode.commands.registerCommand(
+        "superset.todoDelete",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            if (item.kind !== "checkbox" && item.kind !== "list") return;
+
+            const answer = await vscode.window.showWarningMessage(
+                `確定要刪除待辦事項「${item.text}」嗎？`,
+                { modal: true },
+                "確認刪除"
+            );
+            if (answer === "確認刪除") {
+                await store.deleteTodo(item);
+            }
+        }
+    );
+
     const viewSecCmd = vscode.commands.registerCommand(
         "superset.todoViewSec",
         () => {
@@ -358,6 +380,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         changeSectionCmd,
         deleteSectionCmd,
         todoRenameCmd,
+        deleteTodoCmd,
         viewSecCmd,
         viewPXCmd,
         viewFileCmd,
@@ -387,6 +410,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             changeSectionCmd.dispose();
             deleteSectionCmd.dispose();
             todoRenameCmd.dispose();
+            deleteTodoCmd.dispose();
             viewSecCmd.dispose();
             viewPXCmd.dispose();
             viewFileCmd.dispose();

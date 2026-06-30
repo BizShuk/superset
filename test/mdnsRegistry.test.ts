@@ -375,4 +375,72 @@ describe("MdnsRegistry", () => {
         const b = registry.getDetailCached(svc);
         expect(b.hit).toBe(false);
     });
+
+    it("merges addresses and does not overwrite when same service name is discovered on different network identities (multi-NIC / IPv4+IPv6)", async () => {
+        const listener = vi.fn();
+        registry.onDidChange(listener);
+        registry.start();
+
+        // First network identity: IPv4
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_http._tcp.local", "MyService._http._tcp.local"),
+                srvRecord("MyService._http._tcp.local", 80, "myservice.local"),
+                aRecord("myservice.local", "192.168.1.10"),
+            ],
+        });
+
+        // Second network identity: IPv6 (different host/IP, same name)
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_http._tcp.local", "MyService._http._tcp.local"),
+                srvRecord("MyService._http._tcp.local", 80, "myservice-v6.local"),
+                aRecord("myservice-v6.local", "fe80::1"),
+            ],
+        });
+
+        const all = registry.getAll();
+        expect(all.length).toBe(1);
+        expect(all[0].name).toBe("MyService._http._tcp.local");
+        expect(all[0].addresses).toEqual(
+            expect.arrayContaining(["192.168.1.10", "fe80::1"])
+        );
+    });
+
+    it("correctly handles port change by releasing old network identity and claiming new one", async () => {
+        registry.start();
+
+        // Service on port 80
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_http._tcp.local", "MyService._http._tcp.local"),
+                srvRecord("MyService._http._tcp.local", 80, "myservice.local"),
+                aRecord("myservice.local", "192.168.1.10"),
+            ],
+        });
+
+        // Port changes to 8080
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_http._tcp.local", "MyService._http._tcp.local"),
+                srvRecord("MyService._http._tcp.local", 8080, "myservice.local"),
+                aRecord("myservice.local", "192.168.1.10"),
+            ],
+        });
+
+        // Now if a different service name arrives on port 80, it should NOT merge into MyService
+        await transport.feedAndFlush({
+            answers: [
+                ptrRecord("_http._tcp.local", "OtherService._http._tcp.local"),
+                srvRecord("OtherService._http._tcp.local", 80, "myservice.local"),
+                aRecord("myservice.local", "192.168.1.10"),
+            ],
+        });
+
+        const all = registry.getAll();
+        expect(all.length).toBe(2);
+        const names = all.map((s) => s.name);
+        expect(names).toContain("MyService._http._tcp.local");
+        expect(names).toContain("OtherService._http._tcp.local");
+    });
 });

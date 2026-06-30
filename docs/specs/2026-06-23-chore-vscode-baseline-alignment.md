@@ -12,24 +12,24 @@
   - `extension.ts:485` 使用 `vscode.TabInputTerminal`(VSCode 1.86 引入)— 1.85 上會 type error / runtime undefined。
 - **結果**:
   - 開發者本機 build 通過 → 推到 marketplace → 1.85-1.89 的使用者安裝後壞掉。
-  - 程式碼為了「支援舊版」維護了 `nameWriteSupported` 的 runtime 探測(`highlightPresenter.ts:75-92`),但因為最低支援版本其實已經是 1.90+,這段 fallback 邏輯是**死代碼**。
+  - 程式碼為了「支援舊版」維護了 `nameWriteSupported` 的 runtime 探測(`highlightPresenter.ts:75-92`),但因為最低支援版本其實已經是 1.93+,這段 fallback 邏輯是**死代碼**。
 - **為何到現在還沒人 bump**:歷史遺留 — `engines` 從初版就寫 1.85,沒人主動更新。
-- **本 plan 是一次性對齊**,之後的 plan 都可以假設「最低支援版本 = 1.90」。
+- **本 plan 是一次性對齊**,之後的 plan 都可以假設「最低支援版本 = 1.93」。
 
 ## 使用者審查要求 (User Review Required)
 
 > [!IMPORTANT]
-> - **Bump `engines.vscode` 到 `^1.90.0` 會擋掉 1.85-1.89 的使用者**(marketplace 的 VSCode Marketplace 篩選)。需要使用者確認:
->   - 目標使用者群是否都跑 1.90+?(截至 2026-06,VSCode 1.90 釋出已 1 年,主流使用者多半已升級)
+> - **Bump `engines.vscode` 到 `^1.93.0` 會擋掉 1.85-1.92 的使用者**(marketplace 的 VSCode Marketplace 篩選)。需要使用者確認:
+>   - 目標使用者群是否都跑 1.93+?(截至 2026-06,VSCode 1.93 釋出已久,主流使用者多半已升級)
 >   - 是否要 bump 到更新的版本(如 `^1.95.0`)?若要,plan 範圍擴大。
-> - 預設採用 `^1.90.0`(最小必要改動)。
+> - 預設採用 `^1.93.0`(最小必要改動)。
 > - **`@types/vscode` 鎖版**策略:
->   - 預設:用 `~1.90.0`(只接受 patch 更新,避免日後 minor 版又引入未驗證的型別)
->   - 替代:用 `^1.90.0`(允許 1.x minor 更新,可能引入新功能型別但 build 仍過)
->   - 推薦 `~1.90.0`:更保守,降低「型別偷偷變了但 runtime 還在 1.90」的風險。
+>   - 預設:用 `~1.93.0`(只接受 patch 更新,避免日後 minor 版又引入未驗證的型別)
+>   - 替代:用 `^1.93.0`(允許 1.x minor 更新,可能引入新功能型別但 build 仍過)
+>   - 推薦 `~1.93.0`:更保守,降低「型別偷偷變了但 runtime 還在 1.93」的風險。
 > - **是否要順便加 `engines.node`?**
 >   - 預設:加 `"engines.node": ">=20.0.0"`,因為:
->     - VSCode 1.90+ 自帶 Node 20.x runtime
+>     - VSCode 1.93+ 自帶 Node 20.x runtime
 >     - `node-pty` prebuild 至少需要 Node 18,但 20 已是 LTS
 >     - 顯式聲明降低貢獻者環境不一致問題
 >   - 替代:不加(保持現狀)。推薦加上。
@@ -43,14 +43,14 @@
 ```diff
  "engines": {
 -    "vscode": "^1.85.0"
-+    "vscode": "^1.90.0",
++    "vscode": "^1.93.0",
 +    "node": ">=20.0.0"
  },
  ...
  "devDependencies": {
      ...
 -    "@types/vscode": "^1.85.0",
-+    "@types/vscode": "~1.90.0",
++    "@types/vscode": "~1.93.0",
      ...
  }
 ```
@@ -87,12 +87,12 @@
 #### [MODIFY] [CLAUDE.md](file:///Users/bytedance/projects/superset/CLAUDE.md)
 
 - 第 33 行的 `> engines.vscode 為 ^1.85.0,需要 Shell Integration API 穩定後的版本。低於 1.85 收不到 shell execution 事件` 改為:
-  - `> engines.vscode 為 ^1.90.0,需要 Shell Integration API 與 TabInputTerminal 穩定後的版本。1.90 之前 Terminal.name 還可寫,之後變 getter-only — 我們對齊到 1.90+ 的語意。`
+  - `> engines.vscode 為 ^1.93.0,需要 Shell Integration API 與 TabInputTerminal 穩定後的版本。1.90 之前 Terminal.name 還可寫,之後變 getter-only — 我們對齊到 1.93+ 的語意。`
 
 #### [MODIFY] [README.md](file:///Users/bytedance/projects/superset/README.md)
 
 - 找到「Requirements」或「Compatibility」段落,加上:
-  - `VSCode 1.90+`
+  - `VSCode 1.93+`
   - `Node 20+`(開發環境)
 
 ---
@@ -103,14 +103,14 @@
 
 - 執行 `npm test`,所有既有 156 個 case 必須全綠。
 - 移除 `nameWriteSupported` 探測邏輯後,既有 1 個依賴此行為的測試要更新,但斷言意圖保留。
-- `npm run watch` 確認 TypeScript 編譯通過(鎖版後 `@types/vscode 1.90` 內沒有移除的 API)。
+- `npm run watch` 確認 TypeScript 編譯通過(鎖版後 `@types/vscode 1.93` 內沒有移除的 API)。
 
 ### 手動驗證
 
-- 在 VSCode 1.90 與 1.95 各別啟動 Extension Development Host:
+- 在 VSCode 1.93 與 1.95 各別啟動 Extension Development Host:
   - 確認 `Terminal.name` 寫入行為如預期(getter-only throw,presenter 內部不 crash)。
   - 確認 `vscode.TabInputTerminal` 實例判斷無誤。
-  - 確認 TUI 偵測、status bar notification、panel focus、filter button 全部正常。
+  - 確認 TUI 偵測、status bar notification, panel focus, filter button 全部正常。
 
 ### Marketplace 驗證(發版前)
 
@@ -121,8 +121,8 @@
 
 | 風險                                       | 緩解                                                                              |
 | ------------------------------------------ | --------------------------------------------------------------------------------- |
-| Bump 後 1.85-1.89 使用者無法更新擴充     | 在 release notes / CHANGELOG 明確標註「Drop VSCode < 1.90 support」;1 年緩衝期應該足夠大部分使用者升級 |
-| `@types/vscode 1.90` 缺少某些新 API       | 列出所有 extension 用到的 API,在表中驗證;若發現缺漏,改用 `~1.95.0`              |
+| Bump 後 1.85-1.92 使用者無法更新擴充     | 在 release notes / CHANGELOG 明確標註「Drop VSCode < 1.93 support」;1 年緩衝期應該足夠大部分使用者升級 |
+| `@types/vscode 1.93` 缺少某些新 API       | 列出所有 extension 用到的 API,在表中驗證;若發現缺漏,改用 `~1.95.0`              |
 | 移除 `nameWriteSupported` 後,fallback 失效 | 既有 fallback 邏輯只為「探測」存在,實際行為(throw → log + 繼續)保留;只是把「永遠 throw」的事實寫死 |
 | `engines.node` 影響 contrib workflow       | 加上後 contrib PR 會在「用 Node 18」時報錯;可在 CONTRIBUTING.md 提示             |
 
@@ -132,7 +132,7 @@
 - 改 `package.json`:5 分鐘
 - 改 `highlightPresenter.ts`(移除 fallback)+ 改 1 個測試:30 分鐘
 - 改 `CLAUDE.md` / `README.md`:15 分鐘
-- 手動驗證(1.90 與 1.95):30 分鐘
+- 手動驗證(1.93 與 1.95):30 分鐘
 - **總計:約 2 小時**
 
 ## 後續 (Follow-ups, 非本次範圍)

@@ -633,5 +633,25 @@ describe("TodoStore", () => {
         content = readFileSync(file, "utf8");
         expect(content).toContain("- [ ] Task 1");
     });
+
+    it("deleteTodo removes a task and its children from README.todo", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-delete-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(file, "# TODO\n\n- [ ] Task 1\n  - [ ] Subtask 1.1\n- [ ] Task 2\n", "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const task1 = store.getItems()[0].children![0]; // Task 1
+        await store.deleteTodo(task1);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe("# TODO\n\n- [ ] Task 2\n");
+    });
 });
 

@@ -32,7 +32,7 @@ Update version in @package.json every change based on <majore,minor,patch>
 | 持續跑測試                     | `npm run test:watch`       |
 | 打包成 `.vsix`                 | `npx @vscode/vsce package` |
 
-> `engines.vscode` 為 `^1.85.0`,需要 Shell Integration API 穩定後的版本。低於 1.85 收不到 shell execution 事件,終端機仍會列出但不會高亮。
+> `engines.vscode` 為 `^1.90.0`，需要 Shell Integration API 與 TabInputTerminal 穩定後的版本。1.90 之前 `Terminal.name` 還可寫，之後變 getter-only — 我們對齊到 1.90+ 的語意。
 
 ---
 
