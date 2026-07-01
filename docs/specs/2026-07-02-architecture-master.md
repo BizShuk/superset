@@ -1,3 +1,13 @@
+> **狀態 (Status):** ✅ 已實作完成 (Implemented) — 整合釋出於 `version 0.6.0`。
+>
+> **對應 commit:** [`6b76ca1`](https://github.com/BizShuk/superset/commit/6b76ca1bda56ea3fabe61c291116c4cee9671436) — `feat: implement plugin architecture with mDNS discovery, topology visualization, and todo preview features`
+>
+> **計劃建立 (Plan authored):** [`abc09c7`](https://github.com/BizShuk/superset/commit/abc09c7f162bae06a8be96c845ab26f4c0811fcf)
+>
+> **驗證 (Validation):** 39 個 test file / 358 個 test case 全綠 (`vitest run`);`tsc --noEmit` 編譯乾淨。
+
+---
+
 # 架構演進與優化計畫 — master (Architecture Evolution & Optimization Plan)
 
 ## 1. 現有架構診斷與技術債 (Architecture Diagnosis & Technical Debt)
