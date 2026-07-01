@@ -27,7 +27,7 @@ export type TokenFactory = (
 
 const FILTER_BAR =
     '<div class="filter-bar">' +
-    '<input type="checkbox" id="hide-done" class="fbox">' +
+    '<input type="checkbox" id="hide-done" class="fbox" checked>' +
     '<label for="hide-done" class="fbtn hide-done"></label>' +
     '<input type="checkbox" id="fold-all" class="fbox">' +
     '<label for="fold-all" class="fbtn fold-all"></label>' +

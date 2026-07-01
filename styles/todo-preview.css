@@ -59,20 +59,33 @@
 }
 
 .todo-preview .sec-head {
-    display: block;
+    display: grid;
+    grid-template-columns: 1.4em 1fr;
+    align-items: baseline;
     cursor: pointer;
+    border-radius: 4px;
+    padding: 2px 4px 2px 0;
 }
-/* Keep the real <hN> inline so the caret sits beside it, not above. */
-.todo-preview .sec-head > :first-child {
-    display: inline;
+.todo-preview .sec-head:hover {
+    background: var(--vscode-list-hoverBackground, rgba(128,128,128,0.1));
 }
+/* Caret column — never gets the hover background, sits outside the indent. */
 .todo-preview .sec-head::before {
-    content: "\25BC  "; /* ▼ expanded */
-    opacity: 0.7;
+    content: "\25BC"; /* ▼ expanded */
+    opacity: 0.6;
+    font-size: 0.6em;
+    text-align: center;
+    justify-self: center;
+    padding-top: 0.15em;
 }
 .todo-preview .sec:has(.sec-tgl:checked) .sec-head::before,
 .todo-preview:has(#fold-all:checked) .sec-head::before {
-    content: "\25B6  "; /* ▶ collapsed */
+    content: "\25B6"; /* ▶ collapsed */
+}
+/* Keep the real <hN> inline so it flows inside its grid cell. */
+.todo-preview .sec-head > :first-child {
+    display: inline;
+    margin: 0;
 }
 
 /* ── Folding ────────────────────────────────────────────────── */
