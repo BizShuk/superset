@@ -16,6 +16,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const view = vscode.window.createTreeView("superset.todo", {
         treeDataProvider: provider,
         showCollapseAll: true,
+        // Manage checkbox state ourselves. With VSCode's default (auto)
+        // management, rendering a checked parent above unchecked children
+        // makes the framework propagate the parent's Checked state down to
+        // every child and fire onDidChangeCheckboxState for them — which our
+        // handler writes back as `[x]`. That surfaced as "saving README.todo
+        // auto-completes the child items". Manual mode fires the event only
+        // for the exact row the user clicks, so no cascade.
+        manageCheckboxStateManually: true,
     });
 
     // Context key + TreeView title reflect current filter state.
