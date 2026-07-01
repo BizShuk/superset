@@ -1,20 +1,26 @@
-import { readFile, writeFile } from "fs/promises";
-import type { TodoChange, TodoItem, TodoListener } from "./types";
+// TodoStore — pure in-memory state holder. Owns the parsed `TodoItem[]`
+// snapshot and an observer-pattern listener set. All filesystem I/O
+// flows through `TodoRepository`; the parsing algorithm lives in
+// `./parser`. The store's public surface is unchanged from before
+// the refactor — see the existing 23-case test suite for the contract.
 
-const TODO_FILE = "README.todo";
+import type { TodoChange, TodoItem, TodoListener } from "./types";
+import { TodoRepository } from "./repository";
 
 /**
  * Pure data layer for the TODO list.
- * Reads/Writes a markdown file with checkbox items.
- * Uses the observer pattern (same as TerminalRegistry).
+ * Reads/Writes a markdown file with checkbox items via the injected
+ * `TodoRepository`. Uses the observer pattern (same as TerminalRegistry).
  */
 export class TodoStore {
     private items: TodoItem[] = [];
     private listeners = new Set<TodoListener>();
-    private workspaceRoot: string;
+    private repository: TodoRepository;
 
-    constructor(workspaceRoot: string) {
-        this.workspaceRoot = workspaceRoot;
+    constructor(workspaceRoot: string, repository?: TodoRepository) {
+        // Allow tests to inject a mock repository in the future; the
+        // default builds a real one bound to the workspace root.
+        this.repository = repository ?? new TodoRepository(workspaceRoot);
     }
 
     getItems(): TodoItem[] {
@@ -23,7 +29,7 @@ export class TodoStore {
 
     getCompletedCount(): number {
         let count = 0;
-        const traverse = (items: TodoItem[]) => {
+        const traverse = (items: TodoItem[]): void => {
             for (const item of items) {
                 if (item.checked) count++;
                 if (item.children) traverse(item.children);
@@ -38,167 +44,51 @@ export class TodoStore {
     }
 
     async load(): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
+        const result = await this.repository.read();
+        if (result.items === null) {
+            // File missing — emit an empty snapshot so listeners can
+            // re-render into a blank state.
             this.items = [];
             this.emit({ type: "loaded", items: [] });
             return;
         }
-
-        const lines = content.split("\n");
-        const sections: TodoItem[] = [];
-        const defaultSection: TodoItem = {
-            line: -1,
-            text: "Default",
-            kind: "section",
-            checked: false,
-            children: [],
-        };
-        let currentSection = defaultSection;
-
-        // `- [ ]` / `- [x]` — actionable checkbox.
-        const checkboxRe = /^(\s*)[-*+]\s+\[(\s|x|X)\]\s+(.*)$/;
-        // `- foo` / `* bar` / `+ baz` (without `[ ]`).
-        const listRe = /^(\s*)[-*+]\s+(\[[^\]]\s*[^\]]*\](.*))?$/;
-        const headingRe = /^(##+)\s+(.*)$/;
-        const stack: { item: TodoItem; indent: number }[] = [];
-
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-
-            // 0. Heading line?
-            const hm = line.match(headingRe);
-            if (hm) {
-                const sectionItem: TodoItem = {
-                    line: i,
-                    text: hm[2].trim(),
-                    kind: "section",
-                    checked: false,
-                    children: [],
-                };
-                sections.push(sectionItem);
-                currentSection = sectionItem;
-                stack.length = 0;
-                continue;
-            }
-
-            // 1. Checkbox line?
-            const cm = line.match(checkboxRe);
-            if (cm) {
-                const indent = cm[1].length;
-                const item: TodoItem = {
-                    line: i,
-                    text: cm[3].trim(),
-                    kind: "checkbox",
-                    checked: cm[2].toLowerCase() === "x",
-                };
-
-                while (
-                    stack.length > 0 &&
-                    stack[stack.length - 1].indent >= indent
-                ) {
-                    stack.pop();
-                }
-
-                if (stack.length > 0) {
-                    const parent = stack[stack.length - 1].item;
-                    if (!parent.children) parent.children = [];
-                    parent.children.push(item);
-                } else {
-                    if (!currentSection.children) currentSection.children = [];
-                    currentSection.children.push(item);
-                }
-
-                stack.push({ item, indent });
-                continue;
-            }
-
-            // 2. Bare list marker?
-            const lm = line.match(/^(\s*)[-*+]\s+(\S.*)$/);
-            if (lm) {
-                const indent = lm[1].length;
-                const item: TodoItem = {
-                    line: i,
-                    text: lm[2].trim(),
-                    kind: "list",
-                    checked: false,
-                };
-
-                while (
-                    stack.length > 0 &&
-                    stack[stack.length - 1].indent >= indent
-                ) {
-                    stack.pop();
-                }
-
-                if (stack.length > 0) {
-                    const parent = stack[stack.length - 1].item;
-                    if (!parent.children) parent.children = [];
-                    parent.children.push(item);
-                } else {
-                    if (!currentSection.children) currentSection.children = [];
-                    currentSection.children.push(item);
-                }
-
-                stack.push({ item, indent: indent + 1 });
-            }
-        }
-        const finalItems: TodoItem[] = [];
-        if (defaultSection.children && defaultSection.children.length > 0) {
-            finalItems.push(defaultSection);
-        }
-        finalItems.push(...sections);
-        this.items = finalItems;
-        this.emit({ type: "loaded", items: finalItems });
+        this.items = result.items;
+        this.emit({ type: "loaded", items: result.items });
     }
 
     async toggle(item: TodoItem): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
-            return;
-        }
-
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const content = fresh.content;
         const lines = content.split("\n");
         if (item.line >= lines.length) return;
 
         const re = /^(\s*[-*+]\s+)\[(\s|x|X)\](\s+.*)$/;
-        const m = lines[item.line].match(re);
+        const m = lines[item.line]!.match(re);
         if (!m) return;
 
-        const isDone = m[2].toLowerCase() === "x";
+        const isDone = m[2]!.toLowerCase() === "x";
         const newMarker = isDone ? " " : "x";
         lines[item.line] = `${m[1]}[${newMarker}]${m[3]}`;
 
-        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.repository.write(lines.join("\n"));
 
         item.checked = !item.checked;
         this.emit({ type: "toggled", item });
     }
 
     async updatePriority(item: TodoItem, newPriority: "P0" | "P1" | "P2" | "None"): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
-            return;
-        }
-
-        const lines = content.split("\n");
+        const result = await this.repository.read();
+        if (result.items === null) return;
+        const lines = result.content.split("\n");
         if (item.line >= lines.length) return;
 
         // Path 1: line already has a priority tag — replace or remove it.
         const replaceRe = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(?:\[|\()P[0-2](?:\]|\))(\s+.*)$/;
-        const m = lines[item.line].match(replaceRe);
+        const m = lines[item.line]!.match(replaceRe);
         if (m) {
             if (newPriority === "None") {
-                lines[item.line] = `${m[1]}${m[2].trimStart()}`;
+                lines[item.line] = `${m[1]}${m[2]!.trimStart()}`;
             } else {
                 lines[item.line] = `${m[1]}[${newPriority}]${m[2]}`;
             }
@@ -207,12 +97,12 @@ export class TodoStore {
                 // Path 2: no priority prefix — insert `[Px] ` after the
                 // optional checkbox marker.
                 const insertRe = /^(\s*[-*+]\s+(?:\[[^\]]*\]\s+)?)(\S.*)$/;
-                const im = lines[item.line].match(insertRe);
+                const im = lines[item.line]!.match(insertRe);
                 if (!im) return;
                 lines[item.line] = `${im[1]}[${newPriority}] ${im[2]}`;
             }
         }
-        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.repository.write(lines.join("\n"));
 
         // Reload so the in-memory `items` reflect the new prefix. The file
         // is the source of truth; we don't mutate `item.text` (it's readonly).
@@ -221,14 +111,20 @@ export class TodoStore {
     }
 
     async addTodo(text: string, sectionName: string): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
-            content = "# TODO\n";
-        }
+        const fresh = await this.repository.read();
+        // Missing file falls back to the same `# TODO` seed the
+        // original code used; an empty string also seeds the file
+        // because `applyAddTodo` always opens with that header.
+        const seed = fresh.content || "# TODO\n";
+        await this.applyAddTodo(seed, text, sectionName);
+        await this.load();
+    }
 
+    private async applyAddTodo(
+        content: string,
+        text: string,
+        sectionName: string
+    ): Promise<void> {
         const lines = content.split("\n");
         const isDefaultSection = sectionName.toLowerCase() === "default";
 
@@ -236,7 +132,7 @@ export class TodoStore {
             // Find `# TODO` or first heading
             let targetLineIndex = -1;
             for (let i = 0; i < lines.length; i++) {
-                if (lines[i].trim().startsWith("# ")) {
+                if (lines[i]!.trim().startsWith("# ")) {
                     targetLineIndex = i;
                     break;
                 }
@@ -244,7 +140,7 @@ export class TodoStore {
 
             if (targetLineIndex === -1) {
                 // Section does not exist. Append to the end.
-                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
                     lines.push("");
                 }
                 lines.push(`- [ ] ${text}`);
@@ -252,11 +148,11 @@ export class TodoStore {
                 // Section exists. Find the head of the section (first list item or next heading).
                 let insertIndex = -1;
                 for (let i = targetLineIndex + 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
+                    const line = lines[i]!.trim();
                     if (line.startsWith("##") || line.startsWith("###")) {
                         // We hit the next section. Insert before it.
                         let j = i;
-                        while (j > targetLineIndex + 1 && lines[j - 1].trim() === "") {
+                        while (j > targetLineIndex + 1 && lines[j - 1]!.trim() === "") {
                             j--;
                         }
                         insertIndex = j;
@@ -270,7 +166,7 @@ export class TodoStore {
                 if (insertIndex === -1) {
                     // No other sections and no list items, so just insert after targetLineIndex + 1
                     let j = targetLineIndex + 1;
-                    while (j < lines.length && lines[j].trim() === "") {
+                    while (j < lines.length && lines[j]!.trim() === "") {
                         j++;
                     }
                     insertIndex = j;
@@ -289,7 +185,7 @@ export class TodoStore {
             const escapedName = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const sectionRe = new RegExp(`^(##+)\\s+${escapedName}\\b`, "i");
             for (let i = 0; i < lines.length; i++) {
-                if (lines[i].match(sectionRe)) {
+                if (lines[i]!.match(sectionRe)) {
                     targetLineIndex = i;
                     break;
                 }
@@ -297,7 +193,7 @@ export class TodoStore {
 
             if (targetLineIndex === -1) {
                 // Section does not exist. Append to the end.
-                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
                     lines.push("");
                 }
                 lines.push(`## ${sectionName}`);
@@ -306,7 +202,7 @@ export class TodoStore {
                 // Section exists. Find the end of the section.
                 let insertIndex = lines.length;
                 for (let i = targetLineIndex + 1; i < lines.length; i++) {
-                    if (lines[i].trim().startsWith("##") || lines[i].trim().startsWith("###")) {
+                    if (lines[i]!.trim().startsWith("##") || lines[i]!.trim().startsWith("###")) {
                         insertIndex = i;
                         break;
                     }
@@ -314,7 +210,7 @@ export class TodoStore {
 
                 // Find the last non-empty line before insertIndex.
                 let lastNonEmpty = insertIndex - 1;
-                while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty].trim() === "") {
+                while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty]!.trim() === "") {
                     lastNonEmpty--;
                 }
 
@@ -328,29 +224,23 @@ export class TodoStore {
             }
         }
 
-        await writeFile(filePath, lines.join("\n"), "utf-8");
-        await this.load();
+        await this.repository.write(lines.join("\n"));
     }
 
     async moveTodo(item: TodoItem, sectionName: string): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
-            return;
-        }
-
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const content = fresh.content;
         const lines = content.split("\n");
         if (item.line >= lines.length) return;
 
         // 1. Find the block of lines to move (the item and its children based on indentation)
-        const parentIndentMatch = lines[item.line].match(/^\s*/);
+        const parentIndentMatch = lines[item.line]!.match(/^\s*/);
         const parentIndent = parentIndentMatch ? parentIndentMatch[0].length : 0;
 
         let lastChildLineIndex = item.line;
         for (let i = item.line + 1; i < lines.length; i++) {
-            const line = lines[i];
+            const line = lines[i]!;
             if (line.trim() === "") {
                 continue;
             }
@@ -367,13 +257,12 @@ export class TodoStore {
         const blockLines = lines.splice(item.line, numLinesToMove);
 
         // Adjust indentation of the moved block so the main item starts at 0 indent
-        const adjustedBlockLines = blockLines.map((line, idx) => {
+        const adjustedBlockLines = blockLines.map((line) => {
             if (line.trim() === "") return line;
             const currentIndentMatch = line.match(/^\s*/);
             const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
             const newIndent = Math.max(0, currentIndent - parentIndent);
-            let newLine = " ".repeat(newIndent) + line.substring(currentIndent);
-            return newLine;
+            return " ".repeat(newIndent) + line.substring(currentIndent);
         });
 
         // 2. Find or create the target section
@@ -383,7 +272,7 @@ export class TodoStore {
             // Find `# TODO` or first heading
             let targetLineIndex = -1;
             for (let i = 0; i < lines.length; i++) {
-                if (lines[i].trim().startsWith("# ")) {
+                if (lines[i]!.trim().startsWith("# ")) {
                     targetLineIndex = i;
                     break;
                 }
@@ -391,7 +280,7 @@ export class TodoStore {
 
             if (targetLineIndex === -1) {
                 // Section does not exist. Append to the end.
-                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
                     lines.push("");
                 }
                 lines.push(...adjustedBlockLines);
@@ -399,11 +288,11 @@ export class TodoStore {
                 // Section exists. Find the head of the section (first list item or next heading).
                 let insertIndex = -1;
                 for (let i = targetLineIndex + 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
+                    const line = lines[i]!.trim();
                     if (line.startsWith("##") || line.startsWith("###")) {
                         // We hit the next section. Insert before it.
                         let j = i;
-                        while (j > targetLineIndex + 1 && lines[j - 1].trim() === "") {
+                        while (j > targetLineIndex + 1 && lines[j - 1]!.trim() === "") {
                             j--;
                         }
                         insertIndex = j;
@@ -417,7 +306,7 @@ export class TodoStore {
                 if (insertIndex === -1) {
                     // No other sections and no list items, so just insert after targetLineIndex + 1
                     let j = targetLineIndex + 1;
-                    while (j < lines.length && lines[j].trim() === "") {
+                    while (j < lines.length && lines[j]!.trim() === "") {
                         j++;
                     }
                     insertIndex = j;
@@ -436,7 +325,7 @@ export class TodoStore {
             const escapedName = sectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
             const sectionRe = new RegExp(`^(##+)\\s+${escapedName}\\b`, "i");
             for (let i = 0; i < lines.length; i++) {
-                if (lines[i].match(sectionRe)) {
+                if (lines[i]!.match(sectionRe)) {
                     targetLineIndex = i;
                     break;
                 }
@@ -444,7 +333,7 @@ export class TodoStore {
 
             if (targetLineIndex === -1) {
                 // Section does not exist. Append to the end.
-                if (lines.length > 0 && lines[lines.length - 1].trim() !== "") {
+                if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
                     lines.push("");
                 }
                 lines.push(`## ${sectionName}`);
@@ -455,11 +344,11 @@ export class TodoStore {
                     // Find the head of the Archive section.
                     let insertIndex = -1;
                     for (let i = targetLineIndex + 1; i < lines.length; i++) {
-                        const line = lines[i].trim();
+                        const line = lines[i]!.trim();
                         if (line.startsWith("##") || line.startsWith("###")) {
                             // Hit another section heading.
                             let j = i;
-                            while (j > targetLineIndex + 1 && lines[j - 1].trim() === "") {
+                            while (j > targetLineIndex + 1 && lines[j - 1]!.trim() === "") {
                                 j--;
                             }
                             insertIndex = j;
@@ -472,7 +361,7 @@ export class TodoStore {
                     }
                     if (insertIndex === -1) {
                         let j = targetLineIndex + 1;
-                        while (j < lines.length && lines[j].trim() === "") {
+                        while (j < lines.length && lines[j]!.trim() === "") {
                             j++;
                         }
                         insertIndex = j;
@@ -487,7 +376,7 @@ export class TodoStore {
                     // Find the end of the section (for general sections).
                     let insertIndex = lines.length;
                     for (let i = targetLineIndex + 1; i < lines.length; i++) {
-                        if (lines[i].trim().startsWith("##") || lines[i].trim().startsWith("###")) {
+                        if (lines[i]!.trim().startsWith("##") || lines[i]!.trim().startsWith("###")) {
                             insertIndex = i;
                             break;
                         }
@@ -495,7 +384,7 @@ export class TodoStore {
 
                     // Find the last non-empty line before insertIndex.
                     let lastNonEmpty = insertIndex - 1;
-                    while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty].trim() === "") {
+                    while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty]!.trim() === "") {
                         lastNonEmpty--;
                     }
 
@@ -513,14 +402,14 @@ export class TodoStore {
                     const newInsertIndex = lastNonEmpty === targetLineIndex
                         ? targetLineIndex + 1 + 1 + adjustedBlockLines.length
                         : lastNonEmpty + 1 + adjustedBlockLines.length;
-                    if (newInsertIndex < lines.length && lines[newInsertIndex].trim() !== "") {
+                    if (newInsertIndex < lines.length && lines[newInsertIndex]!.trim() !== "") {
                         lines.splice(newInsertIndex, 0, "");
                     }
                 }
             }
         }
 
-        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.repository.write(lines.join("\n"));
         await this.load();
     }
 
@@ -529,14 +418,9 @@ export class TodoStore {
     }
 
     async deleteSection(item: TodoItem): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
-            return;
-        }
-
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const content = fresh.content;
         const lines = content.split("\n");
         let startLine = -1;
         let endLine = -1;
@@ -546,7 +430,7 @@ export class TodoStore {
             startLine = item.line;
             endLine = lines.length;
             for (let i = startLine + 1; i < lines.length; i++) {
-                if (lines[i].trim().startsWith("#")) {
+                if (lines[i]!.trim().startsWith("#")) {
                     endLine = i;
                     break;
                 }
@@ -555,14 +439,14 @@ export class TodoStore {
             // Default section (line === -1)
             startLine = 0;
             for (let i = 0; i < lines.length; i++) {
-                if (lines[i].trim().startsWith("# ")) {
+                if (lines[i]!.trim().startsWith("# ")) {
                     startLine = i + 1;
                     break;
                 }
             }
             endLine = lines.length;
             for (let i = startLine; i < lines.length; i++) {
-                if (lines[i].trim().match(/^(##+)\s+(.*)$/)) {
+                if (lines[i]!.trim().match(/^(##+)\s+(.*)$/)) {
                     endLine = i;
                     break;
                 }
@@ -574,60 +458,50 @@ export class TodoStore {
 
             // Check if we need to insert a blank line between two adjacent headings
             if (startLine > 0 && startLine < lines.length) {
-                const prevLine = lines[startLine - 1].trim();
-                const currLine = lines[startLine].trim();
+                const prevLine = lines[startLine - 1]!.trim();
+                const currLine = lines[startLine]!.trim();
                 if (prevLine.startsWith("#") && currLine.startsWith("#")) {
                     lines.splice(startLine, 0, "");
                 }
             }
 
-            await writeFile(filePath, lines.join("\n"), "utf-8");
+            await this.repository.write(lines.join("\n"));
             await this.load();
         }
     }
 
     async updateText(line: number, newText: string): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
-            return;
-        }
-
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const content = fresh.content;
         const lines = content.split("\n");
         if (line < 0 || line >= lines.length) return;
 
         const re = /^(\s*[-*+]\s+(?:\[[\s|x|X]\]\s+)?)(.*)$/;
-        const m = lines[line].match(re);
+        const m = lines[line]!.match(re);
         if (m) {
             lines[line] = `${m[1]}${newText}`;
         } else {
             return;
         }
 
-        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.repository.write(lines.join("\n"));
         await this.load();
     }
 
     async deleteTodo(item: TodoItem): Promise<void> {
-        const filePath = `${this.workspaceRoot}/${TODO_FILE}`;
-        let content: string;
-        try {
-            content = await readFile(filePath, "utf-8");
-        } catch {
-            return;
-        }
-
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const content = fresh.content;
         const lines = content.split("\n");
         if (item.line >= lines.length) return;
 
-        const parentIndentMatch = lines[item.line].match(/^\s*/);
+        const parentIndentMatch = lines[item.line]!.match(/^\s*/);
         const parentIndent = parentIndentMatch ? parentIndentMatch[0].length : 0;
 
         let lastChildLineIndex = item.line;
         for (let i = item.line + 1; i < lines.length; i++) {
-            const line = lines[i];
+            const line = lines[i]!;
             if (line.trim() === "") {
                 continue;
             }
@@ -643,7 +517,7 @@ export class TodoStore {
         const numLinesToDelete = lastChildLineIndex - item.line + 1;
         lines.splice(item.line, numLinesToDelete);
 
-        await writeFile(filePath, lines.join("\n"), "utf-8");
+        await this.repository.write(lines.join("\n"));
         await this.load();
     }
 

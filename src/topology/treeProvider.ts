@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { TopologyListener, TopologyNode } from "./types";
 import type { TopologyStore } from "./topologyStore";
-import { buildTopologySpec } from "./topologyTreeSpec";
+import { buildTopologySpec } from "./treeSpec";
 
 /**
  * vscode-bound TreeDataProvider for network topology.

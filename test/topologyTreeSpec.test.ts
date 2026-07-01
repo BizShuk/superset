@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTopologySpec } from "../src/topology/topologyTreeSpec";
+import { buildTopologySpec } from "../src/topology/treeSpec";
 
 describe("buildTopologySpec", () => {
     it("handles group nodes (with children) correctly", () => {

@@ -1,88 +1,26 @@
+// MdnsRegistry — coordinator over `MdnsStore` (state) +
+// `MdnsExpirationSweeper` (timer) + `parser` (pure transforms).
+// Owns the transport subscription, the coalesce debounce, and the
+// listener fan-out. The public API is unchanged from the pre-refactor
+// version, so the 23-case test suite covers this module verbatim.
+
 import type { MdnsChange, MdnsListener, MdnsService } from "./types";
 import type { MdnsPacket, MdnsTransport } from "./mdnsTransport";
-import { networkKey, mergeServices } from "./mdnsDedup";
-import { DetailCache } from "./mdnsDetailCache";
-import { buildMdnsDetailFields, type MdnsDetailField } from "./mdnsTreeSpec";
+import { MdnsStore } from "./store";
+import { MdnsExpirationSweeper, type ClockSource } from "./expiration";
+import {
+    applyAddress,
+    applyPtr,
+    applySrv,
+    applyTxt,
+    createMutableService,
+    freezeMutable,
+} from "./parser";
 
-/** Injectable clock so tests can control `lastSeen` / grace-period math. */
-export interface ClockSource {
-    now(): number;
-}
-
-/** Grace period as a multiple of a service's TTL (RFC 6762 §10.1 cache-flush). */
-export const TTL_GRACE_MULTIPLIER = 3;
-/** How often the expiry sweep runs. */
-export const EXPIRY_TICK_MS = 5_000;
-/** TTL (seconds) assumed when a record arrives without one. */
-export const TTL_DEFAULT_SECONDS = 120;
+export type { ClockSource };
 
 const DEFAULT_CLOCK: ClockSource = { now: () => Date.now() };
-
-/** Mutable internal representation for coalescing DNS records. */
-interface MutableService {
-    name: string;
-    type: string;
-    domain: string;
-    port: number;
-    priority: number;
-    weight: number;
-    ttl: number;
-    host?: string;
-    addresses: string[];
-    txt: Record<string, string>;
-    subtypes: string[];
-    srcAddress?: string;
-    firstSeen: number;
-    lastSeen: number;
-}
-
-/** Track the minimum TTL across all records for a service. */
-function trackMinTtl(current: number, incoming: number): number {
-    if (current === 0) return incoming;
-    return Math.min(current, incoming);
-}
-
-/**
- * Extract the subtype from a PTR name like "_printer._sub._http._tcp".
- * Returns the subtype string (e.g. "_printer") or undefined.
- */
-function extractSubtype(typeName: string): string | undefined {
-    const parts = typeName.split(".");
-    const subIdx = parts.indexOf("_sub");
-    if (subIdx <= 0) return undefined;
-    const subtype = parts[subIdx - 1];
-    return subtype.startsWith("_") ? subtype : undefined;
-}
-
-/**
- * Strip the subtype segment from a type name.
- * "_printer._sub._http._tcp" → "_http._tcp"
- */
-function stripSubtype(typeName: string): string {
-    const parts = typeName.split(".");
-    const subIdx = parts.indexOf("_sub");
-    if (subIdx <= 0) return typeName;
-    return parts.slice(subIdx + 1).join(".");
-}
-
-function freeze(s: MutableService): MdnsService {
-    return {
-        name: s.name,
-        type: s.type,
-        domain: s.domain,
-        port: s.port,
-        priority: s.priority,
-        weight: s.weight,
-        ttl: s.ttl,
-        host: s.host,
-        addresses: s.addresses.slice(),
-        txt: { ...s.txt },
-        subtypes: s.subtypes.slice(),
-        srcAddress: s.srcAddress,
-        firstSeen: s.firstSeen,
-        lastSeen: s.lastSeen,
-    };
-}
+const COALESCE_MS = 250;
 
 /**
  * Pure data layer for mDNS service discovery.
@@ -92,27 +30,26 @@ function freeze(s: MutableService): MdnsService {
  * No `vscode` imports — testable in plain Node.
  */
 export class MdnsRegistry {
-    private services = new Map<string, MdnsService>();
+    private store: MdnsStore;
+    private sweeper: MdnsExpirationSweeper;
     private listeners = new Set<MdnsListener>();
     private unsubscribeTransport?: () => void;
     private coalesceTimer?: ReturnType<typeof setTimeout>;
     private pending = new Map<string, MutableService>();
-    /**
-     * Secondary index: network identity (`host|port|type`) → canonical
-     * services-key (the first-seen instance name). Lets two instance names
-     * that resolve to the same network endpoint collapse into one row.
-     */
-    private byNetworkKey = new Map<string, string>();
-    /** Reverse of `byNetworkKey`: canonical key → its set of network keys. */
-    private canonKeyToNk = new Map<string, Set<string>>();
-    /** Periodic sweep that removes services past their TTL grace period. */
-    private expiryTimer?: ReturnType<typeof setInterval>;
-    private readonly detailCache = new DetailCache<readonly MdnsDetailField[]>(60_000);
+    private clock: ClockSource;
 
     constructor(
         private readonly transport: MdnsTransport,
-        private readonly clock: ClockSource = DEFAULT_CLOCK
-    ) {}
+        clock: ClockSource = DEFAULT_CLOCK
+    ) {
+        this.clock = clock;
+        this.store = new MdnsStore();
+        this.sweeper = new MdnsExpirationSweeper(
+            this.store,
+            (svc) => this.emit({ type: "expired", service: svc }),
+            clock
+        );
+    }
 
     // ── Lifecycle ──────────────────────────────────────────
 
@@ -123,10 +60,7 @@ export class MdnsRegistry {
         );
         this.transport.start();
         this.transport.browse();
-        this.expiryTimer = setInterval(
-            () => this.expireStale(),
-            EXPIRY_TICK_MS
-        );
+        this.sweeper.start();
     }
 
     stop(): void {
@@ -136,20 +70,14 @@ export class MdnsRegistry {
             clearTimeout(this.coalesceTimer);
             this.coalesceTimer = undefined;
         }
-        if (this.expiryTimer) {
-            clearInterval(this.expiryTimer);
-            this.expiryTimer = undefined;
-        }
+        this.sweeper.stop();
         this.transport.stop();
     }
 
     reset(): void {
         this.stop();
-        this.services.clear();
-        this.byNetworkKey.clear();
-        this.canonKeyToNk.clear();
+        this.store.clear();
         this.pending.clear();
-        this.detailCache.clear();
         this.emit({ type: "reset" });
         this.start();
     }
@@ -157,11 +85,11 @@ export class MdnsRegistry {
     // ── Reads ──────────────────────────────────────────────
 
     getAll(): MdnsService[] {
-        return Array.from(this.services.values());
+        return this.store.getAll();
     }
 
     getByKey(key: string): MdnsService | undefined {
-        return this.services.get(key);
+        return this.store.getByKey(key);
     }
 
     // ── Mutations ──────────────────────────────────────────
@@ -196,7 +124,7 @@ export class MdnsRegistry {
             } else if (r.type === "TXT") {
                 this.handleTxt(r, pkt.srcAddress);
             } else if (r.type === "A" || r.type === "AAAA") {
-                this.handleAddress(r, pkt.srcAddress);
+                this.handleAddress(r);
             }
         }
 
@@ -209,31 +137,13 @@ export class MdnsRegistry {
     ): void {
         const data = r.data as string;
         if (typeof data !== "string") return;
-
-        // r.name is the service type (e.g. "_http._tcp.local" or "_printer._sub._http._tcp.local")
-        // data is the instance name (e.g. "MyPrinter._http._tcp.local")
         if (data === r.name) return; // skip self-referential
-
-        const key = data; // instance name is the key
+        const key = data;
         const pending = this.getPending(key, srcAddress);
-        if (!pending.name) {
-            pending.name = data;
-            // Strip .local suffix and extract subtype from PTR name
-            const basename = r.name.replace(/\.local\.?$/i, "");
-            const subtype = extractSubtype(basename);
-            if (subtype) {
-                pending.type = stripSubtype(basename);
-                if (!pending.subtypes.includes(subtype)) {
-                    pending.subtypes = [...pending.subtypes, subtype];
-                }
-            } else {
-                pending.type = basename;
-            }
-            pending.domain = "local";
-        }
-        pending.ttl = trackMinTtl(pending.ttl, r.ttl);
-        pending.firstSeen = pending.firstSeen || this.clock.now();
-        pending.lastSeen = this.clock.now();
+        // Stamp the pending entry with the time the record arrived —
+        // matches the pre-refactor behaviour where `lastSeen` reflects
+        // packet time, not flush time.
+        applyPtr(r, pending, this.clockNow());
     }
 
     private handleSrv(
@@ -247,18 +157,9 @@ export class MdnsRegistry {
             weight?: number;
         };
         if (!data || typeof data.port !== "number") return;
-
         const key = r.name;
         const pending = this.getPending(key, srcAddress);
-        pending.port = data.port;
-        pending.priority = data.priority ?? 0;
-        pending.weight = data.weight ?? 0;
-        if (data.target) {
-            pending.host = data.target.replace(/\.$/i, "");
-        }
-        pending.ttl = trackMinTtl(pending.ttl, r.ttl);
-        pending.firstSeen = pending.firstSeen || this.clock.now();
-        pending.lastSeen = this.clock.now();
+        applySrv(r, pending, this.clockNow());
     }
 
     private handleTxt(
@@ -267,87 +168,23 @@ export class MdnsRegistry {
     ): void {
         const data = r.data as Record<string, string> | Buffer | undefined;
         if (!data) return;
-
         const key = r.name;
         const pending = this.getPending(key, srcAddress);
-
-        let txt: Record<string, string> = {};
-        if (Buffer.isBuffer(data)) {
-            // Buffer of key=value pairs separated by a length byte
-            let off = 0;
-            while (off < data.length) {
-                const len = data[off];
-                if (len === 0) break;
-                const str = data.slice(off + 1, off + 1 + len).toString("utf-8");
-                const eq = str.indexOf("=");
-                if (eq > 0) {
-                    txt[str.slice(0, eq)] = str.slice(eq + 1);
-                }
-                off += 1 + len;
-            }
-        } else {
-            txt = data;
-        }
-        pending.txt = { ...(pending.txt ?? {}), ...txt };
-        pending.ttl = trackMinTtl(pending.ttl, r.ttl);
-        pending.firstSeen = pending.firstSeen || this.clock.now();
-        pending.lastSeen = this.clock.now();
+        applyTxt(r, pending, this.clockNow());
     }
 
     private handleAddress(
-        r: { name: string; type: string; ttl: number; data: unknown },
-        srcAddress?: string
+        r: { name: string; type: string; ttl: number; data: unknown }
     ): void {
         const data = r.data as string;
         if (typeof data !== "string") return;
-
-        const addr = data;
-        const hostname = r.name.replace(/\.$/i, "");
-
-        // Add address to the hostname entry itself
-        const self = this.getPending(hostname, srcAddress);
-        const selfAddrs = self.addresses ?? [];
-        if (!selfAddrs.includes(addr)) {
-            self.addresses = [...selfAddrs, addr];
-        }
-        self.ttl = trackMinTtl(self.ttl, r.ttl);
-        self.firstSeen = self.firstSeen || this.clock.now();
-        self.lastSeen = this.clock.now();
-
-        // Also add to any service whose host matches this hostname
-        for (const [, p] of this.pending) {
-            if (p.host === hostname) {
-                const existing = p.addresses ?? [];
-                if (!existing.includes(addr)) {
-                    p.addresses = [...existing, addr];
-                }
-                p.ttl = trackMinTtl(p.ttl, r.ttl);
-                p.firstSeen = p.firstSeen || this.clock.now();
-                p.lastSeen = this.clock.now();
-            }
-        }
+        applyAddress(r, this.pending, this.clockNow());
     }
-
-    // ── Private: coalescing ────────────────────────────────
 
     private getPending(key: string, srcAddress?: string): MutableService {
         let p = this.pending.get(key);
         if (!p) {
-            p = {
-                name: "",
-                type: "",
-                domain: "local",
-                port: 0,
-                priority: 0,
-                weight: 0,
-                ttl: 0,
-                addresses: [],
-                txt: {},
-                subtypes: [],
-                srcAddress,
-                firstSeen: 0,
-                lastSeen: 0,
-            };
+            p = createMutableService();
             this.pending.set(key, p);
         } else if (srcAddress && !p.srcAddress) {
             p.srcAddress = srcAddress;
@@ -368,116 +205,39 @@ export class MdnsRegistry {
             this.coalesceTimer = undefined;
             for (const [key, p] of this.pending) {
                 if (!p.name || !p.type) continue;
-                const service = freeze(p);
-                const nk = networkKey(service);
-                const canonKey = this.byNetworkKey.get(nk);
-                const resolvedKey = canonKey ?? (this.services.has(key) ? key : undefined);
-
-                if (resolvedKey) {
-                    // Update/merge into the existing canonical service.
-                    const existing = this.services.get(resolvedKey);
-                    const merged = existing
-                        ? mergeServices(existing, service)
-                        : service;
-                    this.services.set(resolvedKey, merged);
-
-                    // If the incoming name key is different from resolvedKey,
-                    // ensure it doesn't exist as a standalone service.
-                    if (resolvedKey !== key) {
-                        this.services.delete(key);
-                    }
-
-                    // Clean up any replaced network keys (same host/type but different port).
-                    const oldNks = this.canonKeyToNk.get(resolvedKey);
-                    if (oldNks) {
-                        const [newId, newPort, newType] = nk.split("|");
-                        for (const oldNk of Array.from(oldNks)) {
-                            if (oldNk !== nk) {
-                                const [oldId, oldPort, oldType] = oldNk.split("|");
-                                if (oldId === newId && oldType === newType && oldPort !== newPort) {
-                                    this.byNetworkKey.delete(oldNk);
-                                    oldNks.delete(oldNk);
-                                }
-                            }
-                        }
-                    }
-
-                    // Map the new network key to the canonical service.
-                    this.byNetworkKey.set(nk, resolvedKey);
-                    let nks = this.canonKeyToNk.get(resolvedKey);
-                    if (!nks) {
-                        nks = new Set<string>();
-                        this.canonKeyToNk.set(resolvedKey, nks);
-                    }
-                    nks.add(nk);
-
-                    this.emit({ type: "updated", service: merged });
-                } else {
-                    // First sight of this endpoint and name.
-                    this.services.set(key, service);
-                    this.byNetworkKey.set(nk, key);
-                    
-                    const nks = new Set<string>([nk]);
-                    this.canonKeyToNk.set(key, nks);
-
-                    this.emit({ type: "added", service });
-                }
+                const service = freezeMutable(p);
+                const result = this.store.upsert(key, service);
+                this.emit({
+                    type: result.kind === "added" ? "added" : "updated",
+                    service: result.service,
+                });
             }
             this.pending.clear();
-        }, 250);
+        }, COALESCE_MS);
     }
 
     getDetailCached(
         svc: Pick<MdnsService, "name" | "type" | "host" | "port">
-    ): { hit: boolean; detail: readonly MdnsDetailField[] } {
-        const key = `${svc.name}|${svc.type}|${svc.host ?? ""}|${svc.port}`;
-        const cached = this.detailCache.get(key);
-        if (cached.hit && cached.value) {
-            return { hit: true, detail: cached.value };
-        }
-        const full = this.getByKey(svc.name);
-        const detail = full ? buildMdnsDetailFields(full) : [];
-        this.detailCache.set(key, detail);
-        return { hit: false, detail };
+    ): { hit: boolean; detail: import("./mdnsTreeSpec").MdnsDetailField[] } {
+        return this.store.getDetailCached(svc);
     }
 
     invalidateDetail(
         svc: Pick<MdnsService, "name" | "type" | "host" | "port">
     ): void {
-        const key = `${svc.name}|${svc.type}|${svc.host ?? ""}|${svc.port}`;
-        this.detailCache.invalidate(key);
+        this.store.invalidateDetail(svc);
     }
 
     /**
-     * Remove services that have not been re-announced within their TTL grace
-     * period (`ttl × TTL_GRACE_MULTIPLIER`, falling back to
-     * `TTL_DEFAULT_SECONDS` when no TTL is known). Emits an `expired` event
-     * per removed service so the panel can drop stale rows. A service that
-     * keeps receiving packets has its `lastSeen` refreshed and never expires.
+     * Exposed for tests: the expiration sweep itself is in
+     * `MdnsExpirationSweeper`; this is a thin pass-through.
      */
-    private expireStale(): void {
-        const now = this.clock.now();
-        const expired: MdnsService[] = [];
-        for (const [key, svc] of this.services) {
-            const ttl = svc.ttl || TTL_DEFAULT_SECONDS;
-            const graceMs = ttl * 1000 * TTL_GRACE_MULTIPLIER;
-            if (now - svc.lastSeen > graceMs) {
-                expired.push(svc);
-                this.services.delete(key);
-                this.invalidateDetail(svc);
-                // Keep the secondary dedup indexes in sync.
-                const nks = this.canonKeyToNk.get(key);
-                if (nks) {
-                    for (const n of nks) {
-                        this.byNetworkKey.delete(n);
-                    }
-                    this.canonKeyToNk.delete(key);
-                }
-            }
-        }
-        for (const svc of expired) {
-            this.emit({ type: "expired", service: svc });
-        }
+    expireStale(): void {
+        this.sweeper.sweep();
+    }
+
+    private clockNow(): number {
+        return this.clock.now();
     }
 
     private emit(change: MdnsChange): void {
@@ -486,3 +246,7 @@ export class MdnsRegistry {
         }
     }
 }
+
+// re-export the mutable service type for the existing tests / callers
+import type { MutableService } from "./parser";
+export type { MutableService } from "./parser";

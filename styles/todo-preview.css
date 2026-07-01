@@ -1,0 +1,104 @@
+/*
+ * README.todo Markdown-preview styling. Paired with src/todoPreview/ — the
+ * markdown-it core ruler emits the `.todo-preview` wrapper, `.filter-bar`
+ * buttons and per-section `.sec` containers; everything interactive below is
+ * pure CSS (`:has()` + the checkbox hack), so no preview JS is needed.
+ */
+
+/* ── Filter bar ─────────────────────────────────────────────── */
+.todo-preview .filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    gap: 8px;
+    padding: 6px 0;
+    margin-bottom: 4px;
+    background: var(--vscode-editor-background);
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.todo-preview .fbox {
+    display: none;
+}
+
+.todo-preview .fbtn {
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 10px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 4px;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    font-size: 12px;
+    line-height: 18px;
+}
+
+.todo-preview .fbox:checked + .fbtn {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+}
+
+/* Two-state labels — mirrors the todoFilterP0 / P0On icon swap in package.json. */
+.todo-preview .hide-done::before {
+    content: "\2610  Hide done";
+}
+.todo-preview .fbox:checked + .hide-done::before {
+    content: "\2611  Show all";
+}
+.todo-preview .fold-all::before {
+    content: "\229F  Fold all";
+}
+.todo-preview .fbox:checked + .fold-all::before {
+    content: "\229E  Unfold all";
+}
+
+/* ── Section head + fold caret ──────────────────────────────── */
+.todo-preview .sec-tgl {
+    display: none;
+}
+
+.todo-preview .sec-head {
+    display: block;
+    cursor: pointer;
+}
+/* Keep the real <hN> inline so the caret sits beside it, not above. */
+.todo-preview .sec-head > :first-child {
+    display: inline;
+}
+.todo-preview .sec-head::before {
+    content: "\25BC  "; /* ▼ expanded */
+    opacity: 0.7;
+}
+.todo-preview .sec:has(.sec-tgl:checked) .sec-head::before,
+.todo-preview:has(#fold-all:checked) .sec-head::before {
+    content: "\25B6  "; /* ▶ collapsed */
+}
+
+/* ── Folding ────────────────────────────────────────────────── */
+/* Per-section fold. */
+.todo-preview .sec:has(.sec-tgl:checked) .sec-body {
+    display: none;
+}
+/* Fold all — OR-override: forces every body closed while checked. Unchecking
+ * restores each section's own state. (Independent "fold all then expand one"
+ * would need JS; out of scope — see the plan's Decision note.) */
+.todo-preview:has(#fold-all:checked) .sec-body {
+    display: none;
+}
+
+/* ── Hide completed / archived ──────────────────────────────── */
+/* An item's own marker sits either directly under the <li> (tight list) or
+ * inside the li's leading <p> (loose list — happens when the item has
+ * sub-items). Match BOTH, but only the li's own paragraph (`> p`), never a
+ * nested child's checkbox — so a checked parent with plain sub-bullets is
+ * hidden, while an unchecked parent with a checked child is not. */
+.todo-preview:has(#hide-done:checked) li:has(> input[type="checkbox"]:checked),
+.todo-preview:has(#hide-done:checked) li:has(> p > input[type="checkbox"]:checked),
+.todo-preview:has(#hide-done:checked) li:has(> s),
+.todo-preview:has(#hide-done:checked) li:has(> del),
+.todo-preview:has(#hide-done:checked) li:has(> p > s),
+.todo-preview:has(#hide-done:checked) li:has(> p > del),
+.todo-preview:has(#hide-done:checked) .sec--archive {
+    display: none;
+}

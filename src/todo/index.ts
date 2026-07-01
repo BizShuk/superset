@@ -190,6 +190,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
         async () => {
             const uri = vscode.Uri.file(path.join(ctx.workspaceFolder, "README.todo"));
             try {
+                // `README.todo` isn't a `.md` file, so VSCode won't treat it as
+                // markdown by default — force the languageId so the built-in
+                // markdown preview (and our todoPreview markdown-it hook +
+                // previewStyles) apply. No `files.associations` setting needed.
+                const doc = await vscode.workspace.openTextDocument(uri);
+                if (doc.languageId !== "markdown") {
+                    await vscode.languages.setTextDocumentLanguage(doc, "markdown");
+                }
                 await vscode.commands.executeCommand("markdown.showPreview", uri);
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open README.todo: ${err}`);

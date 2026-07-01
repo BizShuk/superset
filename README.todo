@@ -23,6 +23,14 @@
 
 ## Platform & UX
 
+- [x] [P1] [feature] TODO Markdown 預覽:CSS 摺疊與過濾 — 為 `README.todo` 內建預覽加純 CSS 互動 (`:has()` + checkbox hack),不開 Webview、零 preview JS。新 feature module `src/todoPreview/`,沿用 `treePreview` 的 markdown-it hook 路線。See [plans/2026-07-01-feature-todo-css-preview.md](plans/2026-07-01-feature-todo-css-preview.md).
+  - [x] [P1] 共用前置:markdown-it `core` ruler `wrapSections` 把每個 heading section 包成 `.sec` 容器 (`data-title` + 每節唯一 id),抽純函式進 `sectionWrap.ts` 可單測
+  - [x] [P1] 功能 1:一顆按鈕隱藏已完成 (`- [x]` `input:checked`)、刪除線 (`li:has(s)`)、`## Archive` 整區 (`.sec[data-title="Archive" i]`)
+  - [x] [P1] 功能 2:每節從標題 `label` 點擊摺疊 (`.sec:has(.sec-tgl:checked) .sec-body`) + caret ▼/▶ 切換
+  - [x] [P2] 功能 2b:master `fold all` / `unfold all` 按鈕 (OR 覆蓋語意,兩態文字 swap);「先全收再單獨展開」為 JS-only,不在此範圍
+  - [x] [P2] filter bar:`core` ruler 於文件最前注 sticky 工具列,`styles/todo-preview.css` 加進 `package.json` `markdown.previewStyles`
+  - [x] [P1] 接線:`extension.ts` `activate()` 包一層串接 `treePreview` + `todoPreview` 兩個 `extendMarkdownIt`
+  - [x] [P2] 測試:`test/todoPreview.test.ts` 覆蓋 `sectionWrap` / filter-bar 純函式 (8 cases)
 - [x] [P2] [feature] `Superset: Reset All Caches` command — one-button wipe of `context.workspaceState` keys, mDNS in-memory cache, and `TopologyStore` state. Backs the "something's stale, start over" workflow; cheap (~30 LOC) and unblocks debugging. See scan note 2026-06-23#4U. [Reset All Caches 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reset-caches.md)
 - [x] [P2] [feature] Default subgroup panel sizes — on first open, set panel heights: Terminals fixed at 200px, TODO expanded to fill remaining space (largest), mDNS/Topology collapsed.
 
