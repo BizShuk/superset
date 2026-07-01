@@ -109,7 +109,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | `src/topology/`    | 網路拓撲掃描 TreeView                   | TopologyStore, TopologyTreeProvider                       |
 | `src/todo/`        | TODO 清單 TreeView + 過濾器 badge       | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
 | `src/treePreview/` | Markdown `tree` 區塊語法高亮 + 預覽渲染 | createTreePreviewExtension, renderLine                    |
-| `src/todoPreview/` | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕 | createTodoPreviewExtension, wrapSections                   |
+| `src/todoPreview/` | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕  | createTodoPreviewExtension, wrapSections                  |
 
 > `treePreview` 與 `todoPreview` 同屬「Markdown 預覽貢獻」型 feature (不走 `register()`,只交出 `extendMarkdownIt`);`extension.ts` 用 `composeMarkdownExtensions()` 把兩者串到同一個 `md` 再回傳給 VSCode。`todoPreview` 純 CSS 互動 (`:has()` + checkbox hack,見 `styles/todo-preview.css`),無 preview JS;核心 `core` ruler 只在文件首個 heading 為 `# TODO` 時才重組 (`isTodoDoc` gate),其餘 markdown 預覽不受影響。「fold all + 單節獨立展開」共存為 CSS 天花板 (需 JS),刻意不做。
 
@@ -140,13 +140,13 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 `src/plugin/` 引入輕量插件底座,作為後續 Stage 2–5 把四個 feature 模組拆出去的中介層。`FeatureContext` / `FeatureHandle` / `SharedDeps` 暫不替換(那是 Stage 6 的事),這層只做「介面已就緒、treePreview 已先套用」的純增量,讓 `extension.ts` 在 Stage 6 之前不必改動。
 
-| 檔案                       | 職責                                                            |
-| -------------------------- | --------------------------------------------------------------- |
-| `plugin/types.ts`          | `ExtensionPlugin` / `PluginContext` / `MarkdownIt` 介面         |
-| `plugin/context.ts`        | `createPluginContext` 工廠,封裝 `registerDisposable` / `registerResetHandler` |
-| `plugin/manager.ts`        | `PluginManager`:依序 `activate`、錯誤邊界、disposable 託管、`resetAll` / `deactivateAll`、合併 `contributeMarkdownIt` |
-| `plugin/index.ts`          | barrel — 外部統一 `import { PluginManager, ... } from "./plugin"` |
-| `treePreview/plugin.ts`    | `treePreviewPlugin: ExtensionPlugin`,把 `createTreePreviewExtension` 的 hook 包成 `contributeMarkdownIt` |
+| 檔案                    | 職責                                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `plugin/types.ts`       | `ExtensionPlugin` / `PluginContext` / `MarkdownIt` 介面                                                               |
+| `plugin/context.ts`     | `createPluginContext` 工廠,封裝 `registerDisposable` / `registerResetHandler`                                         |
+| `plugin/manager.ts`     | `PluginManager`:依序 `activate`、錯誤邊界、disposable 託管、`resetAll` / `deactivateAll`、合併 `contributeMarkdownIt` |
+| `plugin/index.ts`       | barrel — 外部統一 `import { PluginManager, ... } from "./plugin"`                                                     |
+| `treePreview/plugin.ts` | `treePreviewPlugin: ExtensionPlugin`,把 `createTreePreviewExtension` 的 hook 包成 `contributeMarkdownIt`              |
 
 **錯誤邊界**:`PluginManager.activateAll` 對每個 plugin 各自 `try-catch`,失敗僅 log + 在 `workspaceState` 標 `plugin.failed.<id>`,**不會**中斷其他 plugin。這解決 master plan §1 列的「單一模組掛掉導致整個 extension 啟用失敗」。
 
@@ -156,13 +156,13 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 `src/todo/` 從 661 行單檔拆為 SRP-對齊的三層 (parser / repository / store),純增量、公開介面零變化,所以既有的 25 個 `TodoStore` 黑箱測試**未改任何一行即全部通過**。
 
-| 檔案                | 職責                                                | 行數級距    |
-| ------------------- | --------------------------------------------------- | ----------- |
-| `todo/parser.ts`    | 純函式 `parseTodoFile(content)` — Markdown 字串 → `TodoItem[]` AST;無 I/O,無 `vscode` import | 抽自 store |
-| `todo/repository.ts`| `TodoRepository.read()` / `.write(content)` — 唯一接觸 `fs/promises` 的地方;`read()` 同時回傳 parsed items 與 raw content (store 寫回時需要後者) | 新建        |
-| `todo/todoStore.ts` | 純記憶體狀態 + observer;所有 I/O 委派給 repository,`load()` 改用 `parseTodoFile`;public methods 簽章完全不變 | 從 661 行微縮 |
-| `todo/plugin.ts`    | `todoPlugin: ExtensionPlugin` shim,把 `PluginContext` 包成既有 `FeatureContext` 後呼叫 `register()`;`ctx.subscriptions.push` 攔截轉送到 `pCtx.registerDisposable`,disposable 進 plugin pool | 新建        |
-| `todo/index.ts`     | 既有 `register(ctx: FeatureContext)` 入口;**本 stage 不動**,Stage 6 才清 | 既有         |
+| 檔案                 | 職責                                                                                                                                                                                        | 行數級距      |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `todo/parser.ts`     | 純函式 `parseTodoFile(content)` — Markdown 字串 → `TodoItem[]` AST;無 I/O,無 `vscode` import                                                                                                | 抽自 store    |
+| `todo/repository.ts` | `TodoRepository.read()` / `.write(content)` — 唯一接觸 `fs/promises` 的地方;`read()` 同時回傳 parsed items 與 raw content (store 寫回時需要後者)                                            | 新建          |
+| `todo/todoStore.ts`  | 純記憶體狀態 + observer;所有 I/O 委派給 repository,`load()` 改用 `parseTodoFile`;public methods 簽章完全不變                                                                                | 從 661 行微縮 |
+| `todo/plugin.ts`     | `todoPlugin: ExtensionPlugin` shim,把 `PluginContext` 包成既有 `FeatureContext` 後呼叫 `register()`;`ctx.subscriptions.push` 攔截轉送到 `pCtx.registerDisposable`,disposable 進 plugin pool | 新建          |
+| `todo/index.ts`      | 既有 `register(ctx: FeatureContext)` 入口;**本 stage 不動**,Stage 6 才清                                                                                                                    | 既有          |
 
 **為何不做 AST-level serialize**:`plans/architecture-superset.md` §3 提議「改 AST 後整體序列化」,但本 stage 採**純粹 extract 而非重寫**策略 — 把行數 splice 邏輯原封不動搬進 store,避免 25 個既有 case 行為漂移 (master plan §7 風險一:Markdown 寫回破壞原始排版)。AST 序列化是後續獨立 PR 的事,風險與本 stage 解耦。
 
@@ -172,14 +172,14 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 `src/mdns/mdnsRegistry.ts` (488 行) 拆成 SRP-對齊的三層 (parser / store / expiration),registry 變成 thin coordinator。`MdnsRegistry` 公開介面零變化 → 既有的 23 個 case (`mdnsRegistry.test.ts` 15 + `mdnsRegistry.expiration.test.ts` 8) **未改任何一行** 即全部通過。
 
-| 檔案                  | 職責                                                                 | 行數級距    |
-| --------------------- | -------------------------------------------------------------------- | ----------- |
-| `mdns/parser.ts`      | 純函式 `applyPtr/Srv/Txt/Address` + `extractSubtype` / `stripSubtype` / `freezeMutable` / `trackMinTtl`;無 I/O,無 `vscode` import | 新建        |
-| `mdns/store.ts`       | `MdnsStore`: `services` Map + `byNetworkKey` + `canonKeyToNk` + `DetailCache`;`upsert(key, svc)` 自動 dedup,`remove(key)` 清索引,`getDetailCached` / `invalidateDetail` | 新建        |
-| `mdns/expiration.ts`  | `MdnsExpirationSweeper`: 包 `setInterval` 與 grace-period 計算;接受 `MdnsStore` + `ClockSource` + `ExpireListener`;`sweep()` 可手動觸發供測試用 | 新建        |
-| `mdns/mdnsRegistry.ts`| 改寫為 coordinator:持有 `store` + `sweeper` + `coalesceTimer` + `pending` map;`handlePtr/Srv/Txt/Address` **立即** apply parser 函式(保留原本 packet 進來時 stamp `lastSeen` 的時序,master plan §7 風險一防範) | 縮小        |
-| `mdns/plugin.ts`      | `mdnsPlugin: ExtensionPlugin` shim(同 todo plugin 模式)               | 新建        |
-| `mdns/index.ts`       | 既有 `register(ctx: FeatureContext)` 入口;**本 stage 不動**         | 既有         |
+| 檔案                   | 職責                                                                                                                                                                                                           | 行數級距 |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `mdns/parser.ts`       | 純函式 `applyPtr/Srv/Txt/Address` + `extractSubtype` / `stripSubtype` / `freezeMutable` / `trackMinTtl`;無 I/O,無 `vscode` import                                                                              | 新建     |
+| `mdns/store.ts`        | `MdnsStore`: `services` Map + `byNetworkKey` + `canonKeyToNk` + `DetailCache`;`upsert(key, svc)` 自動 dedup,`remove(key)` 清索引,`getDetailCached` / `invalidateDetail`                                        | 新建     |
+| `mdns/expiration.ts`   | `MdnsExpirationSweeper`: 包 `setInterval` 與 grace-period 計算;接受 `MdnsStore` + `ClockSource` + `ExpireListener`;`sweep()` 可手動觸發供測試用                                                                | 新建     |
+| `mdns/mdnsRegistry.ts` | 改寫為 coordinator:持有 `store` + `sweeper` + `coalesceTimer` + `pending` map;`handlePtr/Srv/Txt/Address` **立即** apply parser 函式(保留原本 packet 進來時 stamp `lastSeen` 的時序,master plan §7 風險一防範) | 縮小     |
+| `mdns/plugin.ts`       | `mdnsPlugin: ExtensionPlugin` shim(同 todo plugin 模式)                                                                                                                                                        | 新建     |
+| `mdns/index.ts`        | 既有 `register(ctx: FeatureContext)` 入口;**本 stage 不動**                                                                                                                                                    | 既有     |
 
 **為何不重做防抖合併的時序**:`plans/architecture-mdns.md` §7 風險一強調「`coalesceTimer` 與防抖調度必須留在 coordinator 層,所有暫存記錄統一以批次形式提交給 store」。本 stage 把 `handlePtr/Srv/Txt` 維持為「packet 進來立即 apply 到 pending,250ms 後 flush 凍結成 service」。Address 例外:因 `applyAddress` 需要走整個 pending map(`host` 比對),只能在 flush 階段跑 — 與原 `handleAddress` 行為一致。
 
@@ -194,6 +194,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 - `TerminalLifecycleCoordinator` 抽取 260 行 `index.ts` 內 4 個 `onDid*` 事件源與 `decideAutoReplace` / `ptyFactory.isPtyBacked` 交叉邏輯,風險高。
 
 **本 stage 範圍收斂為兩項**:
+
 - `src/terminals/plugin.ts` (`terminalsPlugin: ExtensionPlugin` shim,模式同 todo/mdns)
 - `test/ptyProcessContract.test.ts` (12 case,獨立鎖住 `PtyProcess` 介面契約 — open/handleInput/setDimensions/close 冪等/markUnseen 觸發條件/process exit → onClose/未 open 時為 no-op)
 
@@ -203,13 +204,13 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 `topologyStore.scan()` 原本是 171 行的 God Function(子計畫 §1 點名批評),把 interfaces / routing / DNS / ARP 四段樹狀組裝 + `/24` subnet 遞迴插入演算法 + local IP 推導全部揉在一個 closure 裡。本 stage 抽成 SRP-對齊的三層 + 加 timeout。
 
-| 檔案                       | 職責                                                                       |
-| -------------------------- | -------------------------------------------------------------------------- |
-| `topology/transformer.ts`  | 純函式 `transformScan(ScanInputs)` → `TopologyNode[]`;內部由 `buildInterfacesNode` / `buildTraceNode` / `buildRoutingNode` / `buildDnsNode` / `buildArpNode` 五個小組件構成,`subnet24` 與 `insertInto` 為私有輔助 |
-| `topology/topologyStore.ts`| 改寫為 thin coordinator:`runScan` 委派給 `transformScan`;**新增 `SCAN_TIMEOUT_MS = 10_000` 與 `Promise.race` 熔斷**,子計畫 §6 stage 3 風險防範 |
-| `topology/treeProvider.ts` | rename 自 `topologyTreeProvider.ts`,對齊 todo / terminals 命名風格 |
-| `topology/treeSpec.ts`     | rename 自 `topologyTreeSpec.ts`                                            |
-| `topology/plugin.ts`       | `topologyPlugin: ExtensionPlugin` shim(模式同 todo/mdns/terminals)         |
+| 檔案                        | 職責                                                                                                                                                                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `topology/transformer.ts`   | 純函式 `transformScan(ScanInputs)` → `TopologyNode[]`;內部由 `buildInterfacesNode` / `buildTraceNode` / `buildRoutingNode` / `buildDnsNode` / `buildArpNode` 五個小組件構成,`subnet24` 與 `insertInto` 為私有輔助 |
+| `topology/topologyStore.ts` | 改寫為 thin coordinator:`runScan` 委派給 `transformScan`;**新增 `SCAN_TIMEOUT_MS = 10_000` 與 `Promise.race` 熔斷**,子計畫 §6 stage 3 風險防範                                                                    |
+| `topology/treeProvider.ts`  | rename 自 `topologyTreeProvider.ts`,對齊 todo / terminals 命名風格                                                                                                                                                |
+| `topology/treeSpec.ts`      | rename 自 `topologyTreeSpec.ts`                                                                                                                                                                                   |
+| `topology/plugin.ts`        | `topologyPlugin: ExtensionPlugin` shim(模式同 todo/mdns/terminals)                                                                                                                                                |
 
 **為何保留 `TopologyNode` 形狀耦合 vscode TreeItem**:子計畫 §1 把這個當技術債,但本 stage **沒做解耦** — 改形狀會破壞 9 個 `topologyStore.test.ts` 黑箱 case,風險超過效益(子計畫自己也說是 follow-up)。
 
@@ -359,17 +360,17 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 | `treePreview.test.ts`             | tree 區塊 renderLine 純函式       | 7      |
 | `todoPreview.test.ts`             | section 包裹 + TODO gate 純函式   | 8      |
 | `treePreviewPlugin.test.ts`       | treePreview ExtensionPlugin 介面  | 3      |
-| `todoParser.test.ts`              | TodoParser 純函式                  | 8      |
-| `todoPlugin.test.ts`              | todoPlugin 介面契約                | 3      |
-| `mdnsParser.test.ts`              | MdnsParser 純函式                  | 15     |
-| `mdnsStore.test.ts`               | MdnsStore state + dedup            | 8      |
-| `mdnsPlugin.test.ts`              | mdnsPlugin 介面契約                | 3      |
-| `ptyProcessContract.test.ts`      | PtyProcess 介面契約                | 12     |
-| `terminalsPlugin.test.ts`         | terminalsPlugin 介面契約           | 3      |
-| `topologyTransformer.test.ts`     | TopologyTransformer 純函式          | 8      |
-| `topologyPlugin.test.ts`          | topologyPlugin 介面契約             | 3      |
-| `todoPreviewPlugin.test.ts`       | todoPreviewPlugin 介面契約          | 3      |
-| `extensionActivate.test.ts`       | extension.ts end-to-end activate    | 5      |
+| `todoParser.test.ts`              | TodoParser 純函式                 | 8      |
+| `todoPlugin.test.ts`              | todoPlugin 介面契約               | 3      |
+| `mdnsParser.test.ts`              | MdnsParser 純函式                 | 15     |
+| `mdnsStore.test.ts`               | MdnsStore state + dedup           | 8      |
+| `mdnsPlugin.test.ts`              | mdnsPlugin 介面契約               | 3      |
+| `ptyProcessContract.test.ts`      | PtyProcess 介面契約               | 12     |
+| `terminalsPlugin.test.ts`         | terminalsPlugin 介面契約          | 3      |
+| `topologyTransformer.test.ts`     | TopologyTransformer 純函式        | 8      |
+| `topologyPlugin.test.ts`          | topologyPlugin 介面契約           | 3      |
+| `todoPreviewPlugin.test.ts`       | todoPreviewPlugin 介面契約        | 3      |
+| `extensionActivate.test.ts`       | extension.ts end-to-end activate  | 5      |
 | `pluginManager.test.ts`           | PluginManager 生命週期 + 錯誤隔離 | 7      |
 | `smoke.test.ts`                   | 整體 smoke                        | 1      |
 
