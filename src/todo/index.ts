@@ -190,8 +190,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         async () => {
             const uri = vscode.Uri.file(path.join(ctx.workspaceFolder, "README.todo"));
             try {
-                const doc = await vscode.workspace.openTextDocument(uri);
-                await vscode.window.showTextDocument(doc);
+                await vscode.commands.executeCommand("markdown.showPreview", uri);
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open README.todo: ${err}`);
             }

@@ -1,5 +1,7 @@
 # TODO
 
+- [x] TODO subgroup banner `Open README.todo` button should open with markdown preview
+
 ## Terminals
 
 - [x] deal with terminal "Antigravity Agent" terminal life cycle
@@ -27,15 +29,14 @@
 ## Architecture
 
 - [x] [P1] [chore] VSCode baseline alignment — bump `engines.vscode` to `^1.90.0` (code already assumes 1.90+ behaviors: `TabInputTerminal`, `Terminal.name` getter-only), pin `@types/vscode` to `~1.90.0`, add `engines.node >=20.0.0`, remove dead `nameWriteSupported` runtime probe in `highlightPresenter.ts`, update docs. See [plans/2026-06-23-chore-vscode-baseline-alignment.md](plans/2026-06-23-chore-vscode-baseline-alignment.md). See scan note 2026-06-23#4A.
-- [ ] [P1] [chore] 整體系統架構整合與演進計畫實作 — 根據 plans/architecture-master.md 進行全系統重構與模組解耦的逐步整合
-- [ ] [P1] [chore] 架構解耦與優化計畫實作 — 根據 plans/architecture-superset.md 進行 `todo` 模組的解析層、持久化層與狀態層拆分解耦
-- [ ] [P1] [chore] mDNS 模組解耦與優化計畫實作 — 根據 plans/architecture-mdns.md 進行 `mdns` 模組的解析層、狀態與去重層以及過期清理層的拆分解耦
-- [ ] [P1] [chore] terminals 模組解耦與優化計畫實作 — 根據 plans/architecture-terminals.md 進行 `terminals` 模組的生命週期協調器、進程控制層與狀態持久化層的拆分解耦
-- [ ] [P1] [chore] topology 模組解耦與優化計畫實作 — 根據 plans/architecture-topology.md 進行 `topology` 模組的轉換解析層、狀態管理與命名風格對齊之拆分解耦
-- [ ] [P1] [chore] 整體擴充套件插件化與生命週期治理計畫實作 — 根據 plans/architecture-pluginization.md 進行 Composition Root 的解耦與模組插件化改進
+- [ ] [P1] [chore] 整體系統架構整合與演進計畫實作 — 根據 [plans/architecture-master.md](plans/architecture-master.md) 進行全系統重構與模組解耦的逐步整合
+- [ ] [P1] [chore] 架構解耦與優化計畫實作 — 根據 [plans/architecture-superset.md](plans/architecture-superset.md) 進行 `todo` 模組的解析層、持久化層與狀態層拆分解耦
+- [ ] [P1] [chore] mDNS 模組解耦與優化計畫實作 — 根據 [plans/architecture-mdns.md](plans/architecture-mdns.md) 進行 `mdns` 模組的解析層、狀態與去重層以及過期清理層的拆分解耦
+- [ ] [P1] [chore] terminals 模組解耦與優化計畫實作 — 根據 [plans/architecture-terminals.md](plans/architecture-terminals.md) 進行 `terminals` 模組的生命週期協調器、進程控制層與狀態持久化層的拆分解耦
+- [ ] [P1] [chore] topology 模組解耦與優化計畫實作 — 根據 [plans/architecture-topology.md](plans/architecture-topology.md) 進行 `topology` 模組的轉換解析層、狀態管理與命名風格對齊之拆分解耦
+- [ ] [P1] [chore] 整體擴充套件插件化與生命週期治理計畫實作 — 根據 [plans/architecture-pluginization.md](plans/architecture-pluginization.md) 進行 Composition Root 的解耦與模組插件化改進
 
 ## Plans
-
 
 ## Archive
 
