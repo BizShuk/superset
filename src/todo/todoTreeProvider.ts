@@ -447,20 +447,37 @@ function filterItem(item: TodoItem): TodoItem | null {
     const filteredChildren = item.children
         ? filterCompleted(item.children)
         : undefined;
-    const hasSurvivingChild =
-        filteredChildren !== undefined && filteredChildren.length > 0;
-    // "Fully completed" = self checked AND no surviving child to act on.
-    // We treat "no children at all" the same as "children all filtered
-    // out" — both mean there is nothing left to do under this node.
-    // List-only nodes have no `checked` state, so the rule is N/A
-    // for them: they always survive (the user wrote them intentionally).
-    if (item.kind === "checkbox" && item.checked && !hasSurvivingChild) {
+    // "Fully completed" = self checked AND no *actionable* descendant left.
+    // Actionable = an unchecked checkbox somewhere in the subtree. Plain
+    // `list` notes always survive filtering, but they carry no work, so
+    // they must NOT keep a completed parent visible — otherwise a checked
+    // task whose only children are free-form notes lingers in the panel.
+    // A checked parent with an unchecked checkbox child stays (there is
+    // still something to do); one whose children are checkbox-free is hidden.
+    const hasActionableChild =
+        filteredChildren !== undefined &&
+        filteredChildren.some(hasPendingCheckbox);
+    if (item.kind === "checkbox" && item.checked && !hasActionableChild) {
         return null;
     }
     return {
         ...item,
         children: filteredChildren,
     };
+}
+
+/**
+ * True iff `item`'s subtree contains at least one unchecked checkbox —
+ * i.e. there is still actionable work under it. `list` and `section`
+ * nodes have no checkbox state of their own, so they only count via
+ * their descendants. Used to decide whether a completed parent should
+ * remain visible.
+ */
+function hasPendingCheckbox(item: TodoItem): boolean {
+    if (item.kind === "checkbox" && !item.checked) {
+        return true;
+    }
+    return (item.children ?? []).some(hasPendingCheckbox);
 }
 
 /**

@@ -221,6 +221,63 @@ describe("filterCompleted", () => {
         expect(result[0].children![0].text).toBe("pending-grandchild");
     });
 
+    it("keeps a checked parent when a child checkbox is still unchecked", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "parent",
+                kind: "checkbox",
+                checked: true,
+                children: [
+                    { line: 1, text: "pending-child", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const result = filterCompleted(input);
+        expect(result).toHaveLength(1);
+        expect(result[0].children).toHaveLength(1);
+        expect(result[0].children![0].text).toBe("pending-child");
+    });
+
+    it("hides a checked parent whose children are checkbox-free list notes", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "parent",
+                kind: "checkbox",
+                checked: true,
+                children: [
+                    { line: 1, text: "just a note", kind: "list", checked: false },
+                    { line: 2, text: "another note", kind: "list", checked: false },
+                ],
+            },
+        ];
+        expect(filterCompleted(input)).toHaveLength(0);
+    });
+
+    it("keeps a checked parent when a pending checkbox is nested under a list note", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "parent",
+                kind: "checkbox",
+                checked: true,
+                children: [
+                    {
+                        line: 1,
+                        text: "note",
+                        kind: "list",
+                        checked: false,
+                        children: [
+                            { line: 2, text: "buried-todo", kind: "checkbox", checked: false },
+                        ],
+                    },
+                ],
+            },
+        ];
+        expect(filterCompleted(input)).toHaveLength(1);
+    });
+
     it("removes a leaf checkbox that is checked", () => {
         const input: TodoItem[] = [
             { line: 0, text: "done", kind: "checkbox", checked: true },
