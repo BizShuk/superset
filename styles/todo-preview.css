@@ -88,17 +88,20 @@
 }
 
 /* ── Hide completed / archived ──────────────────────────────── */
-/* An item's own marker sits either directly under the <li> (tight list) or
- * inside the li's leading <p> (loose list — happens when the item has
- * sub-items). Match BOTH, but only the li's own paragraph (`> p`), never a
- * nested child's checkbox — so a checked parent with plain sub-bullets is
- * hidden, while an unchecked parent with a checked child is not. */
-.todo-preview:has(#hide-done:checked) li:has(> input[type="checkbox"]:checked),
-.todo-preview:has(#hide-done:checked) li:has(> p > input[type="checkbox"]:checked),
-.todo-preview:has(#hide-done:checked) li:has(> s),
-.todo-preview:has(#hide-done:checked) li:has(> del),
-.todo-preview:has(#hide-done:checked) li:has(> p > s),
-.todo-preview:has(#hide-done:checked) li:has(> p > del),
+/* Hide a completed item, but KEEP it when any descendant checkbox is still
+ * unchecked. An item's own marker sits either directly under the <li> (tight
+ * list) or inside its leading <p> (loose list — when it has sub-items), so we
+ * match both. The `:not(:has(input:not(:checked)))` guard encodes the rule:
+ *   - child has an unchecked checkbox  → still show (guard fails)
+ *   - all child checkboxes checked + parent checked → hide
+ *   - children are plain items (no checkbox) + parent checked → hide
+ * The item's own marker is checked, so it never trips the unchecked guard. */
+.todo-preview:has(#hide-done:checked) li:has(> input[type="checkbox"]:checked):not(:has(input[type="checkbox"]:not(:checked))),
+.todo-preview:has(#hide-done:checked) li:has(> p > input[type="checkbox"]:checked):not(:has(input[type="checkbox"]:not(:checked))),
+.todo-preview:has(#hide-done:checked) li:has(> s):not(:has(input[type="checkbox"]:not(:checked))),
+.todo-preview:has(#hide-done:checked) li:has(> del):not(:has(input[type="checkbox"]:not(:checked))),
+.todo-preview:has(#hide-done:checked) li:has(> p > s):not(:has(input[type="checkbox"]:not(:checked))),
+.todo-preview:has(#hide-done:checked) li:has(> p > del):not(:has(input[type="checkbox"]:not(:checked))),
 .todo-preview:has(#hide-done:checked) .sec--archive {
     display: none;
 }
