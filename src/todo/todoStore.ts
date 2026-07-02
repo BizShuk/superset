@@ -417,6 +417,99 @@ export class TodoStore {
         await this.moveTodo(item, "Archive");
     }
 
+    /**
+     * Move an entire top-level section (its heading line + everything
+     * up to the next heading of the same-or-shallower level) under the
+     * `## Archive` section, demoting its own heading to `###` so it
+     * nests visually under Archive. Creates `## Archive` if it doesn't
+     * exist yet. No-op for the synthetic Default section / priority-
+     * file view groups (`item.level === undefined`).
+     *
+     * Always appended at the *end* of Archive's existing content, never
+     * right after the `## Archive` heading. Markdown has no explicit
+     * closing marker for a heading's section — content only ends at the
+     * next heading. Inserting at the head would put the new `###` block
+     * directly above Archive's pre-existing flat (headless) items, which
+     * would then read as nested *under* that `###` heading instead of
+     * as Archive's own direct content.
+     */
+    async archiveSection(item: TodoItem): Promise<void> {
+        if (item.line < 0 || item.level === undefined) return;
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const lines = fresh.content.split("\n");
+        if (item.line >= lines.length) return;
+
+        const endLine = findSectionBlockEnd(lines, item.line, item.level);
+        const rawBlock = lines.slice(item.line, endLine);
+        lines.splice(item.line, endLine - item.line);
+        fixAdjacentHeadings(lines, item.line);
+
+        const blockLines = stripTrailingBlank(rawBlock);
+        blockLines[0] = blockLines[0]!.replace(/^#+/, "###");
+
+        const archiveIndex = findArchiveHeadingIndex(lines);
+        if (archiveIndex === -1) {
+            if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
+                lines.push("");
+            }
+            lines.push("## Archive", "", ...blockLines);
+        } else {
+            const sectionEnd = findSectionBlockEnd(lines, archiveIndex, 2);
+            let lastNonBlank = sectionEnd - 1;
+            while (lastNonBlank > archiveIndex && lines[lastNonBlank]!.trim() === "") {
+                lastNonBlank--;
+            }
+            const insertAt = lastNonBlank === archiveIndex ? archiveIndex + 1 : lastNonBlank + 1;
+            lines.splice(insertAt, sectionEnd - insertAt, "", ...blockLines);
+
+            // If Archive isn't the last section, keep a single blank line
+            // separating our appended block from whatever heading follows.
+            const afterBlock = insertAt + 1 + blockLines.length;
+            if (afterBlock < lines.length && lines[afterBlock]!.trim() !== "") {
+                lines.splice(afterBlock, 0, "");
+            }
+        }
+
+        await this.repository.write(lines.join("\n"));
+        await this.load();
+    }
+
+    /**
+     * Reverse of `archiveSection`: move a `###` subsection nested under
+     * `## Archive` back out to the top level, promoting its heading to
+     * `##`. Inserted right before the `## Archive` heading so Archive
+     * stays the last section. No-op unless `item.level === 3`.
+     */
+    async unarchiveSection(item: TodoItem): Promise<void> {
+        if (item.line < 0 || item.level !== 3) return;
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const lines = fresh.content.split("\n");
+        if (item.line >= lines.length) return;
+
+        const endLine = findSectionBlockEnd(lines, item.line, item.level);
+        const rawBlock = lines.slice(item.line, endLine);
+        lines.splice(item.line, endLine - item.line);
+        fixAdjacentHeadings(lines, item.line);
+
+        const blockLines = stripTrailingBlank(rawBlock);
+        blockLines[0] = blockLines[0]!.replace(/^#+/, "##");
+
+        const archiveIndex = findArchiveHeadingIndex(lines);
+        if (archiveIndex === -1) {
+            if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
+                lines.push("");
+            }
+            lines.push(...blockLines);
+        } else {
+            lines.splice(archiveIndex, 0, ...blockLines, "");
+        }
+
+        await this.repository.write(lines.join("\n"));
+        await this.load();
+    }
+
     async deleteSection(item: TodoItem): Promise<void> {
         const fresh = await this.repository.read();
         if (fresh.items === null) return;
@@ -531,6 +624,51 @@ export class TodoStore {
     private emit(change: TodoChange): void {
         for (const l of this.listeners) {
             l(change);
+        }
+    }
+}
+
+/**
+ * Find the end (exclusive) of a section block starting at `startLine`:
+ * the first subsequent `##+` heading whose depth is <= `level`, or EOF.
+ * Mirrors `HEADING_RE` in `parser.ts`.
+ */
+function findSectionBlockEnd(lines: string[], startLine: number, level: number): number {
+    for (let i = startLine + 1; i < lines.length; i++) {
+        const hm = lines[i]!.match(/^(#{2,})\s+/);
+        if (hm && hm[1]!.length <= level) return i;
+    }
+    return lines.length;
+}
+
+/** Index of the top-level `## Archive` heading, or -1 if it doesn't exist. */
+function findArchiveHeadingIndex(lines: string[]): number {
+    const re = /^##(?!#)\s+archive\s*$/i;
+    for (let i = 0; i < lines.length; i++) {
+        if (re.test(lines[i]!.trim())) return i;
+    }
+    return -1;
+}
+
+/** Drop trailing blank lines from an extracted block (keeps the heading line). */
+function stripTrailingBlank(block: string[]): string[] {
+    const copy = [...block];
+    while (copy.length > 1 && copy[copy.length - 1]!.trim() === "") {
+        copy.pop();
+    }
+    return copy;
+}
+
+/**
+ * After splicing a block out at `at`, insert a blank line if that left
+ * two heading lines directly adjacent (mirrors `deleteSection`'s fixup).
+ */
+function fixAdjacentHeadings(lines: string[], at: number): void {
+    if (at > 0 && at < lines.length) {
+        const prev = lines[at - 1]!.trim();
+        const curr = lines[at]!.trim();
+        if (prev.startsWith("#") && curr.startsWith("#")) {
+            lines.splice(at, 0, "");
         }
     }
 }

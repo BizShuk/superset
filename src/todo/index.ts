@@ -262,6 +262,22 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    const archiveSectionCmd = vscode.commands.registerCommand(
+        "superset.todoArchiveSection",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            await store.archiveSection(item);
+        }
+    );
+
+    const unarchiveSectionCmd = vscode.commands.registerCommand(
+        "superset.todoUnarchiveSection",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            await store.unarchiveSection(item);
+        }
+    );
+
     const changeSectionCmd = vscode.commands.registerCommand(
         "superset.todoChangeSection",
         async (item?: TodoItem) => {
@@ -392,6 +408,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
         openTodoLinkCmd,
         copyTodoCmd,
         archiveTodoCmd,
+        archiveSectionCmd,
+        unarchiveSectionCmd,
         changeSectionCmd,
         deleteSectionCmd,
         todoRenameCmd,
@@ -422,6 +440,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
             openTodoLinkCmd.dispose();
             copyTodoCmd.dispose();
             archiveTodoCmd.dispose();
+            archiveSectionCmd.dispose();
+            unarchiveSectionCmd.dispose();
             changeSectionCmd.dispose();
             deleteSectionCmd.dispose();
             todoRenameCmd.dispose();

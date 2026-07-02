@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.6.0",
+    "version": "0.7.2",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -230,6 +230,16 @@
                 "icon": "$(archive)"
             },
             {
+                "command": "superset.todoArchiveSection",
+                "title": "Archive Section",
+                "icon": "$(archive)"
+            },
+            {
+                "command": "superset.todoUnarchiveSection",
+                "title": "Unarchive Section",
+                "icon": "$(arrow-up)"
+            },
+            {
                 "command": "superset.todoChangeSection",
                 "title": "Change Section",
                 "icon": "$(arrow-right)"
@@ -437,7 +447,7 @@
                 },
                 {
                     "command": "superset.todoCopy",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection || viewItem == todoSectionArchivable || viewItem == todoSectionArchived",
                     "group": "1_copy"
                 },
                 {
@@ -461,13 +471,23 @@
                     "group": "2_edit@4"
                 },
                 {
+                    "command": "superset.todoArchiveSection",
+                    "when": "viewItem == todoSectionArchivable",
+                    "group": "2_edit@1"
+                },
+                {
+                    "command": "superset.todoUnarchiveSection",
+                    "when": "viewItem == todoSectionArchived",
+                    "group": "2_edit@1"
+                },
+                {
                     "command": "superset.todoNew",
-                    "when": "viewItem == todoSection",
+                    "when": "viewItem == todoSection || viewItem == todoSectionArchivable || viewItem == todoSectionArchived",
                     "group": "inline"
                 },
                 {
                     "command": "superset.todoOpen",
-                    "when": "viewItem == todoSection",
+                    "when": "viewItem == todoSection || viewItem == todoSectionArchivable || viewItem == todoSectionArchived",
                     "group": "inline"
                 },
                 {
@@ -477,7 +497,7 @@
                 },
                 {
                     "command": "superset.todoDeleteSection",
-                    "when": "viewItem == todoSection && superset.todo.viewType == 'section'",
+                    "when": "(viewItem == todoSection || viewItem == todoSectionArchivable || viewItem == todoSectionArchived) && superset.todo.viewType == 'section'",
                     "group": "3_delete"
                 },
                 {

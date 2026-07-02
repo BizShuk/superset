@@ -16,6 +16,13 @@ export interface TodoItem {
     readonly kind: "checkbox" | "list" | "section";
     checked: boolean;
     children?: TodoItem[];
+    /**
+     * Heading depth for `kind: "section"` items parsed from a real
+     * `##+` line (2 = `##`, 3 = `###`, ...). `undefined` for the
+     * synthetic "Default" section and for the priority/file view's
+     * synthetic groups, which have no corresponding heading line.
+     */
+    readonly level?: number;
 }
 
 export type TodoViewType = "section" | "priority" | "file";

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { parseTodoFile } from "../src/todo/parser";
+import { parseTodoFile, isArchivedSubsection } from "../src/todo/parser";
+import type { TodoItem } from "../src/todo/types";
 
 describe("parseTodoFile", () => {
     it("returns [] for an empty string", () => {
@@ -70,5 +71,77 @@ describe("parseTodoFile", () => {
         const items = parseTodoFile("## Only\n- [x] feat\n");
         expect(items).toHaveLength(1);
         expect(items[0]!.text).toBe("Only");
+    });
+
+    it("records heading depth on section items via `level`", () => {
+        const items = parseTodoFile(
+            "## Features\n- [ ] a\n### Iteration 2\n- [ ] b\n"
+        );
+        expect(items[0]).toMatchObject({ text: "Features", level: 2 });
+        expect(items[1]).toMatchObject({ text: "Iteration 2", level: 3 });
+    });
+
+    it("leaves `level` undefined for the synthetic Default section", () => {
+        const items = parseTodoFile("- [ ] a\n");
+        expect(items[0]!.level).toBeUndefined();
+    });
+});
+
+describe("isArchivedSubsection", () => {
+    const section = (text: string, line: number, level?: number): TodoItem => ({
+        line,
+        text,
+        kind: "section",
+        checked: false,
+        level,
+    });
+
+    it("is true for a level-3 heading whose nearest <=2 ancestor is Archive", () => {
+        const sections = [
+            section("Features", 0, 2),
+            section("Archive", 5, 2),
+            section("Terminals", 7, 3),
+        ];
+        expect(isArchivedSubsection(sections, sections[2]!)).toBe(true);
+    });
+
+    it("is false when the nearest <=2 ancestor is not Archive", () => {
+        const sections = [
+            section("Features", 0, 2),
+            section("Iteration 2", 2, 3),
+        ];
+        expect(isArchivedSubsection(sections, sections[1]!)).toBe(false);
+    });
+
+    it("is false for a level-2 heading, even inside Archive's document range", () => {
+        const sections = [
+            section("Archive", 0, 2),
+            section("Standalone", 5, 2),
+        ];
+        expect(isArchivedSubsection(sections, sections[1]!)).toBe(false);
+    });
+
+    it("is false for the synthetic Default section (no level)", () => {
+        const sections = [section("Default", -1, undefined)];
+        expect(isArchivedSubsection(sections, sections[0]!)).toBe(false);
+    });
+
+    it("matches Archive case-insensitively", () => {
+        const sections = [
+            section("archive", 0, 2),
+            section("Terminals", 2, 3),
+        ];
+        expect(isArchivedSubsection(sections, sections[1]!)).toBe(true);
+    });
+
+    it("skips undefined-level ancestors (Default) when scanning backward", () => {
+        // Default has no heading line, so it can never mask a real
+        // level-<=2 ancestor found earlier in the scan.
+        const sections = [
+            section("Archive", 0, 2),
+            section("Default", -1, undefined),
+            section("Terminals", 2, 3),
+        ];
+        expect(isArchivedSubsection(sections, sections[2]!)).toBe(true);
     });
 });

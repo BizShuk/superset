@@ -52,6 +52,7 @@ export function parseTodoFile(content: string): TodoItem[] {
                 text: hm[2]!.trim(),
                 kind: "section",
                 checked: false,
+                level: hm[1]!.length,
                 children: [],
             };
             sections.push(sectionItem);
@@ -98,6 +99,26 @@ export function parseTodoFile(content: string): TodoItem[] {
     }
     finalItems.push(...sections);
     return finalItems;
+}
+
+/**
+ * True iff `target` is a level-3 (`###`) heading nested directly under
+ * the top-level `## Archive` section — i.e. its nearest preceding
+ * level-<=2 heading is "Archive" (case-insensitive). `sections` must be
+ * the ordered top-level list from `parseTodoFile` / `TodoStore.getItems()`
+ * so that document order and each item's `level` are available; items
+ * without a `level` (the synthetic "Default" section, or the priority/
+ * file view's synthetic groups) are skipped when looking for the
+ * nearest ancestor, since they never correspond to a real heading.
+ */
+export function isArchivedSubsection(sections: TodoItem[], target: TodoItem): boolean {
+    if (target.level !== 3) return false;
+    let nearestAncestor: TodoItem | undefined;
+    for (const s of sections) {
+        if (s.line === target.line) break;
+        if (s.level !== undefined && s.level <= 2) nearestAncestor = s;
+    }
+    return nearestAncestor?.text.toLowerCase() === "archive";
 }
 
 function attachToParent(

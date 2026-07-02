@@ -634,6 +634,166 @@ describe("TodoStore", () => {
         expect(content).toContain("- [ ] Task 1");
     });
 
+    it("archiveSection moves a whole section under Archive, demoted to h3, creating Archive if missing", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-archive-section-create-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(
+            file,
+            "# TODO\n\n## Terminals\n\n- [x] item1\n- [x] item2\n\n## mDNS\n\n- [ ] item3\n",
+            "utf8"
+        );
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const terminals = store.getItems().find((i) => i.text === "Terminals")!;
+        await store.archiveSection(terminals);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe(
+            "# TODO\n\n## mDNS\n\n- [ ] item3\n\n## Archive\n\n### Terminals\n\n- [x] item1\n- [x] item2"
+        );
+    });
+
+    it("archiveSection appends the demoted h3 after an existing Archive section's content, not at its head", async () => {
+        // Regression: inserting the new h3 right after the "## Archive"
+        // heading would put it directly above the pre-existing flat
+        // (headless) archive item, which markdown would then read as
+        // nested *under* that h3 instead of as Archive's own content.
+        const dir = mkdtempSync(join(tmpdir(), "todo-archive-section-existing-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(
+            file,
+            "# TODO\n\n## Terminals\n\n- [x] item1\n\n## Archive\n\n- [ ] old archived item\n",
+            "utf8"
+        );
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const terminals = store.getItems().find((i) => i.text === "Terminals")!;
+        await store.archiveSection(terminals);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe(
+            "# TODO\n\n## Archive\n\n- [ ] old archived item\n\n### Terminals\n\n- [x] item1"
+        );
+    });
+
+    it("archiveSection keeps a blank line before a section that follows Archive", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-archive-section-followed-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(
+            file,
+            "# TODO\n\n## Terminals\n\n- [x] item1\n\n## Archive\n\n- [ ] old archived item\n\n## Plans\n",
+            "utf8"
+        );
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const terminals = store.getItems().find((i) => i.text === "Terminals")!;
+        await store.archiveSection(terminals);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe(
+            "# TODO\n\n## Archive\n\n- [ ] old archived item\n\n### Terminals\n\n- [x] item1\n\n## Plans\n"
+        );
+    });
+
+    it("archiveSection appends a second archived section after the first as a sibling h3", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-archive-section-second-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(
+            file,
+            "# TODO\n\n## Terminals\n\n- [x] item1\n\n## mDNS\n\n- [x] item2\n\n## Archive\n\n- [ ] old archived item\n",
+            "utf8"
+        );
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const terminals = store.getItems().find((i) => i.text === "Terminals")!;
+        await store.archiveSection(terminals);
+        const mdns = store.getItems().find((i) => i.text === "mDNS")!;
+        await store.archiveSection(mdns);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe(
+            "# TODO\n\n## Archive\n\n- [ ] old archived item\n\n### Terminals\n\n- [x] item1\n\n### mDNS\n\n- [x] item2"
+        );
+    });
+
+    it("unarchiveSection promotes an h3 Archive subsection back to a top-level h2, moved before Archive", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-unarchive-section-"));
+        const file = join(dir, "README.todo");
+        writeFileSync(
+            file,
+            "# TODO\n\n## mDNS\n\n- [ ] item3\n\n## Archive\n\n### Terminals\n\n- [x] item1\n- [x] item2\n",
+            "utf8"
+        );
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const archived = store.getItems().find((i) => i.text === "Terminals")!;
+        expect(archived.level).toBe(3);
+        await store.unarchiveSection(archived);
+
+        const content = readFileSync(file, "utf8");
+        expect(content).toBe(
+            "# TODO\n\n## mDNS\n\n- [ ] item3\n\n## Terminals\n\n- [x] item1\n- [x] item2\n\n## Archive\n"
+        );
+    });
+
+    it("archiveSection/unarchiveSection are no-ops for the synthetic Default section", async () => {
+        const dir = mkdtempSync(join(tmpdir(), "todo-archive-section-noop-"));
+        const file = join(dir, "README.todo");
+        const original = "# TODO\n\n- [ ] Task 0\n";
+        writeFileSync(file, original, "utf8");
+        vi.mocked(readFile).mockImplementation((async (p: string) =>
+            readFileSync(p, "utf8")) as typeof readFile);
+        vi.mocked(writeFile).mockImplementation((async (p: string, data: string) => {
+            writeFileSync(p, data, "utf8");
+        }) as typeof writeFile);
+
+        const store = new TodoStore(dir);
+        await store.load();
+
+        const defaultSection = store.getItems()[0];
+        expect(defaultSection.text).toBe("Default");
+        await store.archiveSection(defaultSection);
+        await store.unarchiveSection(defaultSection);
+
+        expect(readFileSync(file, "utf8")).toBe(original);
+        expect(writeFile).not.toHaveBeenCalled();
+    });
+
     it("deleteTodo removes a task and its children from README.todo", async () => {
         const dir = mkdtempSync(join(tmpdir(), "todo-delete-"));
         const file = join(dir, "README.todo");

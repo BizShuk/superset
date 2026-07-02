@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import type { TodoChange, TodoItem, TodoViewType } from "./types";
 import type { TodoStore } from "./todoStore";
+import { isArchivedSubsection } from "./parser";
 
 /**
  * vscode-bound TreeDataProvider for the TODO list.
@@ -216,8 +217,22 @@ export class TodoTreeProvider
         item.description = element.description;
         item.tooltip = element.description ? `${element.description}/${element.text}` : element.text;
         item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-        item.contextValue = "todoSection";
+        item.contextValue = this.computeSectionContextValue(element);
         return item;
+    }
+
+    /**
+     * `todoSection` (Default / Archive itself / synthetic priority-file
+     * groups) never offers archive/unarchive. Real top-level headings
+     * get `todoSectionArchivable`; `###` headings nested under
+     * `## Archive` get `todoSectionArchived` — see the two-command
+     * pattern already used for the P0/P1/P2 filter toggles.
+     */
+    private computeSectionContextValue(element: TodoItem): string {
+        if (element.level === undefined) return "todoSection";
+        if (element.level === 2 && element.text.toLowerCase() === "archive") return "todoSection";
+        if (isArchivedSubsection(this.store.getItems(), element)) return "todoSectionArchived";
+        return "todoSectionArchivable";
     }
 
     private collectAllItems(items: TodoItem[]): TodoItem[] {
@@ -432,20 +447,34 @@ export function applyPriorityFilter(
  * filtered children so the tree stays consistent (no orphan sub-tasks
  * popping up under a still-visible parent).
  *
+ * `topLevelSections` is the ordered top-level list (`TodoStore.getItems()`)
+ * needed to resolve `isArchivedSubsection` for `###` headings nested
+ * under `## Archive` — see `archiveSection`/`unarchiveSection` in
+ * `todoStore.ts`. Defaults to `items` itself, which is correct for the
+ * initial (top-level) call; recursive calls into a section's own
+ * children pass it through unchanged since children are never
+ * `kind: "section"`.
+ *
  * Exported for unit testing without needing the vscode-bound provider.
  */
-export function filterCompleted(items: TodoItem[]): TodoItem[] {
+export function filterCompleted(
+    items: TodoItem[],
+    topLevelSections: TodoItem[] = items
+): TodoItem[] {
     return items
-        .map((item) => filterItem(item))
+        .map((item) => filterItem(item, topLevelSections))
         .filter((t): t is TodoItem => t !== null);
 }
 
-function filterItem(item: TodoItem): TodoItem | null {
-    if (item.kind === "section" && item.text.toLowerCase() === "archive") {
-        return null;
+function filterItem(item: TodoItem, topLevelSections: TodoItem[]): TodoItem | null {
+    if (item.kind === "section") {
+        const isArchiveItself = item.text.toLowerCase() === "archive";
+        if (isArchiveItself || isArchivedSubsection(topLevelSections, item)) {
+            return null;
+        }
     }
     const filteredChildren = item.children
-        ? filterCompleted(item.children)
+        ? filterCompleted(item.children, topLevelSections)
         : undefined;
     // "Fully completed" = self checked AND no *actionable* descendant left.
     // Actionable = an unchecked checkbox somewhere in the subtree. Plain

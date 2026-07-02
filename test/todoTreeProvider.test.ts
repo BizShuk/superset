@@ -323,6 +323,69 @@ describe("filterCompleted", () => {
         ];
         expect(filterCompleted(input)).toHaveLength(0);
     });
+
+    it("filters out h3 subsections nested under Archive", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Features",
+                kind: "section",
+                checked: false,
+                level: 2,
+                children: [
+                    { line: 1, text: "pending-feature", kind: "checkbox", checked: false },
+                ],
+            },
+            {
+                line: 2,
+                text: "Archive",
+                kind: "section",
+                checked: false,
+                level: 2,
+                children: [],
+            },
+            {
+                line: 3,
+                text: "Terminals",
+                kind: "section",
+                checked: false,
+                level: 3,
+                children: [
+                    // Even a still-pending item is hidden — the whole
+                    // archived subsection goes away, not just its
+                    // completed descendants.
+                    { line: 4, text: "still-pending", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const result = filterCompleted(input);
+        expect(result.map((i) => i.text)).toEqual(["Features"]);
+    });
+
+    it("keeps a level-3 heading that is not nested under Archive", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Features",
+                kind: "section",
+                checked: false,
+                level: 2,
+                children: [],
+            },
+            {
+                line: 1,
+                text: "Iteration 2",
+                kind: "section",
+                checked: false,
+                level: 3,
+                children: [
+                    { line: 2, text: "task", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const result = filterCompleted(input);
+        expect(result.map((i) => i.text)).toEqual(["Features", "Iteration 2"]);
+    });
 });
 
 describe("TodoTreeProvider", () => {
