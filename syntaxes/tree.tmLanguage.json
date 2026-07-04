@@ -13,11 +13,11 @@
         },
         {
             "name": "entity.name.directory.tree",
-            "match": "[^\\s│├└─#][^#\\n]*?/(?=\\s|$)"
+            "match": "[^\\s│├└─#][^#\\n]*?/(?=\\s|#|$)"
         },
         {
             "name": "string.unquoted.filename.tree",
-            "match": "[^\\s│├└─#][^#\\n]*$"
+            "match": "[^\\s│├└─#][^#\\n]*"
         }
     ]
 }

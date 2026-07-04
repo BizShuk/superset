@@ -22,11 +22,11 @@ export function renderLine(md: MarkdownItLike, raw: string): string {
 
     // Trailing comment (kept outside the entry name).
     let comment = "";
-    const hashIdx = line.indexOf(" #");
+    const hashIdx = line.indexOf("#");
     let body = line;
     if (hashIdx !== -1) {
-        comment = line.slice(hashIdx + 1);
-        body = line.slice(0, hashIdx);
+        comment = line.slice(hashIdx);
+        body = line.slice(0, hashIdx).replace(/\s+$/, "");
     }
 
     // The connector prefix is the leading run of box-drawing chars + spaces.
