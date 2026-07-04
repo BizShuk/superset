@@ -16,32 +16,30 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 新增「Termina
 - 主側欄面板列出當前所有終端機,點擊任一列直接聚焦該終端機。
 - 背景終端機 (例如跑 Claude Code 的那個) 有新輸出時,在三處同步高亮:
     - 面板該列換成加重圖示 + `● 新輸出` 描述。
-    - 終端機分頁名稱前綴加 `● `。
+    - 終端機分頁名稱前綴加 `●`。
     - 狀態列顯示 `N 個終端機有新輸出`。
 - 重新聚焦該終端機時,所有高亮自動解除。
-- 若使用者在高亮期間手動改了終端機名稱,清除時 Presenter 只剝 `● ` 前綴、不還原舊名,避免覆蓋使用者意圖。
+- 若使用者在高亮期間手動改了終端機名稱,清除時 Presenter 只剝 `●` 前綴、不還原舊名,避免覆蓋使用者意圖。
 - 命令 `Superset: Open TUI Terminal` 開啟 PTY-backed terminal,內部用 `node-pty` 100% 攔截 TUI app (`claude`、`vim`、`htop`) 的所有輸出。建議在跑 TUI app 前用此命令開新 terminal。
 - 側欄 `MDNS` 面板列出同網段以 DNS-SD / mDNS 廣播的服務(印表機、AirPlay、SSH 等),展開可看位址、埠號、TXT 屬性等細節,並可一鍵複製 `host:port`。
 - 同一台主機以多個 mDNS 實例名稱廣播、或同時走多張網卡 / IPv4+IPv6 時,自動以 `host|port|type` 為網路身分去重,合併成同一列;其餘名稱顯示在該列的「別名」細節欄位,避免面板出現重複項目。
 - 服務一段時間未再廣播即自動過期移除:以 `3 × TTL` 為寬限期(RFC 6762,沒帶 TTL 者 fallback 120 秒),讓面板只保留目前真正在線的服務,不累積已離網的舊紀錄。
-- Markdown `tree` 區塊語法高亮與預覽渲染:在 `.md` 裡用 ```` ```tree ```` fenced block 寫目錄樹,編輯時有 TextMate 高亮,Markdown 預覽則渲染成帶 📁/📄 icon 的結構(原獨立套件 `md-tree-highlight` 併入,見 `features/treePreview/`)。
+- Markdown `tree` 區塊語法高亮與預覽渲染:在 `.md` 裡用 ` ```tree ` fenced block 寫目錄樹,編輯時有 TextMate 高亮,Markdown 預覽則渲染成帶 📁/📄 icon 的結構(原獨立套件 `md-tree-highlight` 併入,見 `features/treePreview/`)。
 - 側欄 `TODO` 面板讀取並列出工作區 `README.todo` 中的所有待辦事項：
     - 支援帶有縮進的嵌套待辦事項結構。
     - 在項目上點選右鍵選單「Rename」或在面板聚焦時按下 `F2` 可直接重新命名待辦事項文字，並自動寫回 `README.todo` 檔案中。
 - 命令 `Superset: Go to Terminal` (快捷鍵 `Ctrl+Alt+T`) 提供模糊搜尋 (Fuzzy Pick) 功能，可快速篩選所有開啟中的終端機 (名稱 / pid / 工作目錄) 並進行聚焦切換。
 - 命令 `Superset: Reset Caches` 可一鍵重置所有快取（清除 `context.workspaceState` 中 `superset.*` 的鍵值、清空 mDNS 快取、網路拓撲狀態，並重新載入 `README.todo` 檔案），並有二次確認彈窗防誤觸。
 
-
-
 ---
 
 ## 系統需求 (Requirements)
 
-| 項目 | 版本 |
-|---|---|
-| VSCode | `^1.90.0` (需要 Shell Integration API 與 TabInputTerminal 穩定後的版本) |
-| Node.js | `>=20.0.0` (開發環境) |
-| npm | 隨 Node 一起裝 |
+| 項目    | 版本                                                                    |
+| ------- | ----------------------------------------------------------------------- |
+| VSCode  | `^1.90.0` (需要 Shell Integration API 與 TabInputTerminal 穩定後的版本) |
+| Node.js | `>=20.0.0` (開發環境)                                                   |
+| npm     | 隨 Node 一起裝                                                          |
 
 ---
 
@@ -80,9 +78,9 @@ npm test
 1. 用 VSCode 打開這個資料夾 (`superset/`)。
 2. 按 `F5` (或選單 `Run` → `Start Debugging`)。
 3. 會跳出一個新的「Extension Development Host」視窗;這個視窗已載入本擴充。
-4. 在新視窗開幾個終端機 (例如 `Ctrl+`` 開一個、然後再開一個跑 `claude` 之類的長輸出命令)。
+4. 在新視窗開幾個終端機 (例如 `Ctrl+`` 開一個、然後再開一個跑`claude` 之類的長輸出命令)。
 5. 切回主側欄,應能看到 `Terminals` 圖示;點開後列出所有終端機。
-6. 切換終端機後,看背景那個的圖示與 tab 名稱是否帶 `● `,狀態列是否顯示計數。
+6. 切換終端機後,看背景那個的圖示與 tab 名稱是否帶 `●`,狀態列是否顯示計數。
 
 ### 打包成 `.vsix` (Package)
 
@@ -108,9 +106,11 @@ superset-0.0.1.vsix
 打包出 `superset-0.0.1.vsix` 後,選一個方式:
 
 - 命令列:
+
     ```bash
     code --install-extension superset-0.0.1.vsix
     ```
+
 - VSCode UI:
     1. 打開 Extensions 面板 (`Ctrl+Shift+X` / `Cmd+Shift+X`)。
     2. 點右上角 `⋯` → `Install from VSIX...`。
@@ -160,12 +160,12 @@ code --uninstall-extension shuk.superset
 
 四個獨立單元,以 `TerminalRegistry` 為唯一資料來源,其餘三者只讀它並訂閱其變更事件:
 
-| 元件 | 職責 | 依賴 |
-| --- | --- | --- |
-| `TerminalRegistry` | 維護終端機清單與各自的 unseen 旗標;發出 `onDidChange` 事件 | 無 (純狀態) |
-| `OutputWatcher` | 訂閱 `onDidStartTerminalShellExecution`;當該終端機非作用中 → 標記 unseen | Registry |
-| `TerminalTreeProvider` | `vscode.TreeDataProvider` 實作;讀 Registry 渲染面板;點擊 → `superset.focus` 命令 | Registry |
-| `HighlightPresenter` | 訂閱 Registry 變更;更新 tab 名稱前綴與狀態列文字 | Registry |
+| 元件                   | 職責                                                                             | 依賴        |
+| ---------------------- | -------------------------------------------------------------------------------- | ----------- |
+| `TerminalRegistry`     | 維護終端機清單與各自的 unseen 旗標;發出 `onDidChange` 事件                       | 無 (純狀態) |
+| `OutputWatcher`        | 訂閱 `onDidStartTerminalShellExecution`;當該終端機非作用中 → 標記 unseen         | Registry    |
+| `TerminalTreeProvider` | `vscode.TreeDataProvider` 實作;讀 Registry 渲染面板;點擊 → `superset.focus` 命令 | Registry    |
+| `HighlightPresenter`   | 訂閱 Registry 變更;更新 tab 名稱前綴與狀態列文字                                 | Registry    |
 
 `vscode` API 集中在 `src/extension.ts` 組裝層;核心三元件接受注入依賴,在 Vitest 下無需 Extension Host 即可測試。`HighlightPresenter` 與 `OutputWatcher` 都從 `./treeSpec` import 純輔助函式,確保 import graph 不污染 `vscode`。
 
@@ -177,23 +177,23 @@ code --uninstall-extension shuk.superset
 
 本擴充訂閱 / 使用的所有 VSCode 終端機 API。`src/extension.ts` 的任何事件訂閱都應對應本表中的某列。
 
-| 事件 API | 層級 | 觸發時機 | 狀態 |
-| --- | --- | --- | --- |
-| `window.onDidOpenTerminal` | Window | 新終端機被建立 | 穩定 |
-| `window.onDidCloseTerminal` | Window | 終端機被關閉 | 穩定 |
-| `window.onDidChangeActiveTerminal` | Window | 作用中的終端機切換 | 穩定 |
-| `window.onDidExecuteTerminal` | Window | 使用者在終端機內按 Enter 執行程式 | Deprecated |
-| `window.onDidExecuteTerminalCommand` | Window | 同上,結構化命令物件 (`TerminalCommand`) | Deprecated (1.93+) |
-| `window.onDidWriteTerminalData` | Window | 任何終端機寫入資料 | Deprecated |
-| `Terminal.onDidWriteData` | 物件 | 該終端機寫入原始 bytes | 已移除 (本擴充走 Shell Integration,免依賴 proposed API) |
-| `window.onDidStartTerminalShellExecution` | Shell | Shell 開始執行一個命令 | 穩定 (1.85+) |
-| `window.onDidEndTerminalShellExecution` | Shell | Shell 命令執行結束 (含 exit code) | 穩定 (1.85+) |
-| `TerminalShellExecution.read` | Shell | 命令執行期間的 stdout/stderr (async iterator) | 穩定 (1.85+) |
-| `TerminalShellExecution.commandLine` | Shell | 該次執行的完整命令列 | 屬性 |
-| `TerminalShellExecution.cwd` | Shell | 該次執行的工作目錄 (若可得) | 屬性 |
-| `TerminalShellExecution.executionLine` | Shell | 該次執行落在終端機的哪一行 | 屬性 |
-| `workbench.view.<viewContainerId>` | 視窗 | 聚焦側欄視圖容器 | 命令呼叫 |
-| `vscode.window.createTreeView` | 視窗 | 建立 TreeView,綁定 TreeDataProvider | 穩定 |
+| 事件 API                                  | 層級   | 觸發時機                                      | 狀態                                                    |
+| ----------------------------------------- | ------ | --------------------------------------------- | ------------------------------------------------------- |
+| `window.onDidOpenTerminal`                | Window | 新終端機被建立                                | 穩定                                                    |
+| `window.onDidCloseTerminal`               | Window | 終端機被關閉                                  | 穩定                                                    |
+| `window.onDidChangeActiveTerminal`        | Window | 作用中的終端機切換                            | 穩定                                                    |
+| `window.onDidExecuteTerminal`             | Window | 使用者在終端機內按 Enter 執行程式             | Deprecated                                              |
+| `window.onDidExecuteTerminalCommand`      | Window | 同上,結構化命令物件 (`TerminalCommand`)       | Deprecated (1.93+)                                      |
+| `window.onDidWriteTerminalData`           | Window | 任何終端機寫入資料                            | Deprecated                                              |
+| `Terminal.onDidWriteData`                 | 物件   | 該終端機寫入原始 bytes                        | 已移除 (本擴充走 Shell Integration,免依賴 proposed API) |
+| `window.onDidStartTerminalShellExecution` | Shell  | Shell 開始執行一個命令                        | 穩定 (1.85+)                                            |
+| `window.onDidEndTerminalShellExecution`   | Shell  | Shell 命令執行結束 (含 exit code)             | 穩定 (1.85+)                                            |
+| `TerminalShellExecution.read`             | Shell  | 命令執行期間的 stdout/stderr (async iterator) | 穩定 (1.85+)                                            |
+| `TerminalShellExecution.commandLine`      | Shell  | 該次執行的完整命令列                          | 屬性                                                    |
+| `TerminalShellExecution.cwd`              | Shell  | 該次執行的工作目錄 (若可得)                   | 屬性                                                    |
+| `TerminalShellExecution.executionLine`    | Shell  | 該次執行落在終端機的哪一行                    | 屬性                                                    |
+| `workbench.view.<viewContainerId>`        | 視窗   | 聚焦側欄視圖容器                              | 命令呼叫                                                |
+| `vscode.window.createTreeView`            | 視窗   | 建立 TreeView,綁定 TreeDataProvider           | 穩定                                                    |
 
 > 版本基線:`engines.vscode` 設為 `^1.90.0`，對齊到 1.90+ 的語意 (例如唯讀的 `Terminal.name` 屬性)。
 >
@@ -220,14 +220,14 @@ flowchart TD
     J -->|"是"| K["Shell Integration<br/>read + executionLine"]
 ```
 
-| 你的情境 | 推薦事件 | 備註 |
-| --- | --- | --- |
-| 偵測「使用者下了什麼命令」 | `onDidStartTerminalShellExecution` | 拿 `commandLine`,可同時拿 `cwd` |
-| 偵測「命令是否成功 / 拿到 exit code」 | `onDidEndTerminalShellExecution` | payload 含 `exitCode` 與 `durationMs` |
-| 偵測「命令輸出內容」 | `TerminalShellExecution.read` | 需自行 parse ANSI/CRLF |
-| 需要去重與冷卻的場景 | Shell Integration 完整鏈 | start + read + end 三段式最清楚 |
-| 只要追蹤「誰開了幾個分頁」 | `onDidOpenTerminal` / `onDidCloseTerminal` | 不需要 shell 整合 |
-| 切換到某個 terminal 時做事 | `onDidChangeActiveTerminal` | 可拿到 `undefined` (全部關閉時) |
+| 你的情境                              | 推薦事件                                   | 備註                                  |
+| ------------------------------------- | ------------------------------------------ | ------------------------------------- |
+| 偵測「使用者下了什麼命令」            | `onDidStartTerminalShellExecution`         | 拿 `commandLine`,可同時拿 `cwd`       |
+| 偵測「命令是否成功 / 拿到 exit code」 | `onDidEndTerminalShellExecution`           | payload 含 `exitCode` 與 `durationMs` |
+| 偵測「命令輸出內容」                  | `TerminalShellExecution.read`              | 需自行 parse ANSI/CRLF                |
+| 需要去重與冷卻的場景                  | Shell Integration 完整鏈                   | start + read + end 三段式最清楚       |
+| 只要追蹤「誰開了幾個分頁」            | `onDidOpenTerminal` / `onDidCloseTerminal` | 不需要 shell 整合                     |
+| 切換到某個 terminal 時做事            | `onDidChangeActiveTerminal`                | 可拿到 `undefined` (全部關閉時)       |
 
 ---
 
@@ -283,13 +283,13 @@ npm run test:watch  # watch 模式
 
 ## 疑難排解 (Troubleshooting)
 
-| 現象 | 可能原因 | 解法 |
-| --- | --- | --- |
-| 高亮完全沒反應 | 終端機沒裝 shell integration (例如 Windows 的 `cmd.exe`) | 改用 PowerShell、bash、zsh 或 fish (VSCode 預設內建整合腳本) |
-| `tsc` 編譯後 runtime 找不到 `vscode` | `main` 欄位路徑不對 | 確認 `package.json` 的 `main` 指向 `./out/extension.js` (不是 `./out/src/...`) |
-| `vsce package` 報 `Missing publisher` | `package.json` 缺 `publisher` | 已預設填 `shuk`,若有調整請同步 |
-| F5 沒跳出新視窗 | VSCode 沒抓到 launch config | 按 `Ctrl+Shift+P` → `Debug: Start Debugging` 重新選一次 |
-| `npm test` 找不到 `vscode` 模組 | TypeScript 編譯時把 `import * as vscode from "vscode"` 拉進測試 graph | 確認被測模組沒有直接 import `vscode`;若需要,拆出純邏輯到獨立檔案 (參考 `treeSpec.ts` / `treeProvider.ts` 的分工) |
+| 現象                                  | 可能原因                                                              | 解法                                                                                                             |
+| ------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 高亮完全沒反應                        | 終端機沒裝 shell integration (例如 Windows 的 `cmd.exe`)              | 改用 PowerShell、bash、zsh 或 fish (VSCode 預設內建整合腳本)                                                     |
+| `tsc` 編譯後 runtime 找不到 `vscode`  | `main` 欄位路徑不對                                                   | 確認 `package.json` 的 `main` 指向 `./out/extension.js` (不是 `./out/src/...`)                                   |
+| `vsce package` 報 `Missing publisher` | `package.json` 缺 `publisher`                                         | 已預設填 `shuk`,若有調整請同步                                                                                   |
+| F5 沒跳出新視窗                       | VSCode 沒抓到 launch config                                           | 按 `Ctrl+Shift+P` → `Debug: Start Debugging` 重新選一次                                                          |
+| `npm test` 找不到 `vscode` 模組       | TypeScript 編譯時把 `import * as vscode from "vscode"` 拉進測試 graph | 確認被測模組沒有直接 import `vscode`;若需要,拆出純邏輯到獨立檔案 (參考 `treeSpec.ts` / `treeProvider.ts` 的分工) |
 
 ---
 

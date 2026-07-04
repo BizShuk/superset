@@ -1,7 +1,7 @@
 # TODO
 
 - [ ] Create highlight regex functionality
-- [ ] [P1] markdown tree syntax: distinguish color for comment
+- [x] [P1] markdown tree syntax: distinguish color for comment
 - [x] TODO subgroup banner `Open README.todo` button should open with markdown preview
 - [x] [Bug] save README.todo with sub todo item (parent checked) will cause sub todo item auto marked as completed — TreeView 用 `manageCheckboxStateManually: true` 停掉框架的父→子勾選傳播 (`src/todo/index.ts`)
 
