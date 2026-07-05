@@ -262,6 +262,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    const rollbackTodoCmd = vscode.commands.registerCommand(
+        "superset.todoRollback",
+        async (item?: TodoItem) => {
+            if (!item) return;
+            await store.rollbackTodo(item);
+        }
+    );
+
     const archiveSectionCmd = vscode.commands.registerCommand(
         "superset.todoArchiveSection",
         async (item?: TodoItem) => {
@@ -408,6 +416,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         openTodoLinkCmd,
         copyTodoCmd,
         archiveTodoCmd,
+        rollbackTodoCmd,
         archiveSectionCmd,
         unarchiveSectionCmd,
         changeSectionCmd,
@@ -440,6 +449,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             openTodoLinkCmd.dispose();
             copyTodoCmd.dispose();
             archiveTodoCmd.dispose();
+            rollbackTodoCmd.dispose();
             archiveSectionCmd.dispose();
             unarchiveSectionCmd.dispose();
             changeSectionCmd.dispose();

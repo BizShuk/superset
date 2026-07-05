@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import type { TodoChange, TodoItem, TodoViewType } from "./types";
 import type { TodoStore } from "./todoStore";
-import { isArchivedSubsection } from "./parser";
+import { isArchivedSubsection, cleanTags, isArchivedTask } from "./parser";
 
 /**
  * vscode-bound TreeDataProvider for the TODO list.
@@ -115,19 +115,20 @@ export class TodoTreeProvider
             return this.buildListItem(element);
         }
 
-        const priorityMatch = element.text.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
-        // Strip the [P0]/[P1]/[P2] prefix from the label — the priority
-        // is conveyed by the SVG icon, so the label just shows the task name.
-        let labelText = priorityMatch
-            ? element.text.substring(priorityMatch[0].length).trim()
-            : element.text;
+        let labelText = element.text;
+        labelText = cleanTags(labelText);
 
-        const hasLink = extractLink(labelText) !== null;
+        const priorityMatch = labelText.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
+        let labelTextCleaned = priorityMatch
+            ? labelText.substring(priorityMatch[0].length).trim()
+            : labelText;
+
+        const hasLink = extractLink(labelTextCleaned) !== null;
         if (hasLink) {
-            labelText = cleanLabelText(labelText);
+            labelTextCleaned = cleanLabelText(labelTextCleaned);
         }
 
-        const item = new vscode.TreeItem(labelText);
+        const item = new vscode.TreeItem(labelTextCleaned);
 
         if (priorityMatch && !element.checked && this.extensionUri) {
             const p = priorityMatch[2].toUpperCase();
@@ -145,8 +146,8 @@ export class TodoTreeProvider
 
         item.description = element.checked ? "✓" : undefined;
         item.tooltip = element.checked
-            ? `${element.text} (completed)`
-            : `${element.text} (pending)`;
+            ? `${cleanTags(element.text)} (completed)`
+            : `${cleanTags(element.text)} (pending)`;
         item.collapsibleState =
             element.children && element.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Expanded
@@ -158,7 +159,13 @@ export class TodoTreeProvider
         item.checkboxState = element.checked
             ? vscode.TreeItemCheckboxState.Checked
             : vscode.TreeItemCheckboxState.Unchecked;
-        item.contextValue = hasLink ? "todoCheckboxWithLink" : "todoCheckbox";
+
+        const isArchived = isArchivedTask(element.text) || element.parentSection?.toLowerCase() === "archive";
+        if (isArchived) {
+            item.contextValue = hasLink ? "todoCheckboxWithLinkArchived" : "todoCheckboxArchived";
+        } else {
+            item.contextValue = hasLink ? "todoCheckboxWithLink" : "todoCheckbox";
+        }
         return item;
     }
 
@@ -170,17 +177,20 @@ export class TodoTreeProvider
      * can target it if needed in the future.
      */
     private buildListItem(element: TodoItem): vscode.TreeItem {
-        const priorityMatch = element.text.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
-        let labelText = priorityMatch
-            ? element.text.substring(priorityMatch[0].length).trim()
-            : element.text;
+        let labelText = element.text;
+        labelText = cleanTags(labelText);
 
-        const hasLink = extractLink(labelText) !== null;
+        const priorityMatch = labelText.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
+        let labelTextCleaned = priorityMatch
+            ? labelText.substring(priorityMatch[0].length).trim()
+            : labelText;
+
+        const hasLink = extractLink(labelTextCleaned) !== null;
         if (hasLink) {
-            labelText = cleanLabelText(labelText);
+            labelTextCleaned = cleanLabelText(labelTextCleaned);
         }
 
-        const item = new vscode.TreeItem(labelText);
+        const item = new vscode.TreeItem(labelTextCleaned);
 
         if (priorityMatch && this.extensionUri) {
             const p = priorityMatch[2].toUpperCase();
@@ -192,13 +202,18 @@ export class TodoTreeProvider
             );
         }
 
-        item.tooltip = element.text;
+        item.tooltip = cleanTags(element.text);
         item.collapsibleState =
             element.children && element.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Expanded
                 : vscode.TreeItemCollapsibleState.None;
         // No command → click does nothing for list items.
-        item.contextValue = hasLink ? "todoListWithLink" : "todoList";
+        const isArchived = isArchivedTask(element.text) || element.parentSection?.toLowerCase() === "archive";
+        if (isArchived) {
+            item.contextValue = hasLink ? "todoListWithLinkArchived" : "todoListArchived";
+        } else {
+            item.contextValue = hasLink ? "todoListWithLink" : "todoList";
+        }
         return item;
     }
 

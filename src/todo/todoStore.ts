@@ -6,6 +6,7 @@
 
 import type { TodoChange, TodoItem, TodoListener } from "./types";
 import { TodoRepository } from "./repository";
+import { isArchivedTask, parseTagsFromLine, constructTags, TAGS_RE } from "./parser";
 
 /**
  * Pure data layer for the TODO list.
@@ -68,13 +69,50 @@ export class TodoStore {
         if (!m) return;
 
         const isDone = m[2]!.toLowerCase() === "x";
-        const newMarker = isDone ? " " : "x";
-        lines[item.line] = `${m[1]}[${newMarker}]${m[3]}`;
+        const isArchived = isArchivedTask(lines[item.line]!) || item.parentSection?.toLowerCase() === "archive";
 
-        await this.repository.write(lines.join("\n"));
+        if (isArchived) {
+            const newMarker = isDone ? " " : "x";
+            let mainLine = lines[item.line]!;
+            mainLine = mainLine.replace(/^(\s*[-*+]\s+)\[(\s|x|X)\]/, `$1[${newMarker}]`);
+            
+            const parsed = parseTagsFromLine(mainLine);
+            if (parsed) {
+                const newState = isDone ? "Archived" : "Completed";
+                const dateStr = getFormattedDateTime();
+                mainLine = mainLine.replace(TAGS_RE, "");
+                const tags = constructTags(dateStr, newState, parsed.sectionName || "Default");
+                mainLine = mainLine + tags;
+            }
+            lines[item.line] = mainLine;
+            await this.writeAndLoad(lines);
+        } else {
+            const parentIndentMatch = lines[item.line]!.match(/^\s*/);
+            const parentIndent = parentIndentMatch ? parentIndentMatch[0].length : 0;
 
-        item.checked = !item.checked;
-        this.emit({ type: "toggled", item });
+            if (!isDone) {
+                if (parentIndent === 0) {
+                    const dateStr = getFormattedDateTime();
+                    const { blockLines } = applyArchiveOrComplete(lines, item.line, true, dateStr);
+                    insertBlockIntoArchive(lines, blockLines);
+                    await this.writeAndLoad(lines);
+                } else {
+                    const newMarker = "x";
+                    lines[item.line] = `${m[1]}[${newMarker}]${m[3]}`;
+                    const cleanedLines = ensureArchiveIsLastSection(lines);
+                    await this.repository.write(cleanedLines.join("\n"));
+                    item.checked = !item.checked;
+                    this.emit({ type: "toggled", item });
+                }
+            } else {
+                const newMarker = " ";
+                lines[item.line] = `${m[1]}[${newMarker}]${m[3]}`;
+                const cleanedLines = ensureArchiveIsLastSection(lines);
+                await this.repository.write(cleanedLines.join("\n"));
+                item.checked = !item.checked;
+                this.emit({ type: "toggled", item });
+            }
+        }
     }
 
     async updatePriority(item: TodoItem, newPriority: "P0" | "P1" | "P2" | "None"): Promise<void> {
@@ -102,12 +140,7 @@ export class TodoStore {
                 lines[item.line] = `${im[1]}[${newPriority}] ${im[2]}`;
             }
         }
-        await this.repository.write(lines.join("\n"));
-
-        // Reload so the in-memory `items` reflect the new prefix. The file
-        // is the source of truth; we don't mutate `item.text` (it's readonly).
-        // Emitting "loaded" makes TodoTreeProvider re-render with fresh data.
-        await this.load();
+        await this.writeAndLoad(lines);
     }
 
     async addTodo(text: string, sectionName: string): Promise<void> {
@@ -117,7 +150,6 @@ export class TodoStore {
         // because `applyAddTodo` always opens with that header.
         const seed = fresh.content || "# TODO\n";
         await this.applyAddTodo(seed, text, sectionName);
-        await this.load();
     }
 
     private async applyAddTodo(
@@ -126,7 +158,7 @@ export class TodoStore {
         sectionName: string
     ): Promise<void> {
         const lines = content.split("\n");
-        const isDefaultSection = sectionName.toLowerCase() === "default";
+        const isDefaultSection = sectionName.toLowerCase() === "default" || sectionName.toLowerCase() === "todo";
 
         if (isDefaultSection) {
             // Find `# TODO` or first heading
@@ -224,7 +256,7 @@ export class TodoStore {
             }
         }
 
-        await this.repository.write(lines.join("\n"));
+        await this.writeAndLoad(lines);
     }
 
     async moveTodo(item: TodoItem, sectionName: string): Promise<void> {
@@ -266,7 +298,7 @@ export class TodoStore {
         });
 
         // 2. Find or create the target section
-        const isDefaultSection = sectionName.toLowerCase() === "default";
+        const isDefaultSection = sectionName.toLowerCase() === "default" || sectionName.toLowerCase() === "todo";
 
         if (isDefaultSection) {
             // Find `# TODO` or first heading
@@ -409,12 +441,167 @@ export class TodoStore {
             }
         }
 
-        await this.repository.write(lines.join("\n"));
-        await this.load();
+        await this.writeAndLoad(lines);
     }
 
     async archiveTodo(item: TodoItem): Promise<void> {
-        await this.moveTodo(item, "Archive");
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const lines = fresh.content.split("\n");
+        if (item.line >= lines.length) return;
+
+        const dateStr = getFormattedDateTime();
+        const re = /^(\s*[-*+]\s+)\[(\s|x|X)\]/;
+        const m = lines[item.line]!.match(re);
+        const isCompleted = m ? m[2]!.toLowerCase() === "x" : false;
+
+        const { blockLines } = applyArchiveOrComplete(lines, item.line, isCompleted, dateStr);
+        insertBlockIntoArchive(lines, blockLines);
+
+        await this.writeAndLoad(lines);
+    }
+
+    async rollbackTodo(item: TodoItem): Promise<void> {
+        const fresh = await this.repository.read();
+        if (fresh.items === null) return;
+        const lines = fresh.content.split("\n");
+        if (item.line >= lines.length) return;
+
+        const line = lines[item.line]!;
+        const parsed = parseTagsFromLine(line);
+        const targetSection = parsed?.sectionName || "Default";
+
+        let mainLine = line.replace(TAGS_RE, "");
+        lines[item.line] = mainLine;
+
+        const parentIndentMatch = mainLine.match(/^\s*/);
+        const parentIndent = parentIndentMatch ? parentIndentMatch[0].length : 0;
+
+        let lastChildLineIndex = item.line;
+        for (let i = item.line + 1; i < lines.length; i++) {
+            const l = lines[i]!;
+            if (l.trim() === "") continue;
+            const currentIndentMatch = l.match(/^\s*/);
+            const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
+            if (currentIndent > parentIndent) {
+                lastChildLineIndex = i;
+            } else {
+                break;
+            }
+        }
+
+        const numLinesToMove = lastChildLineIndex - item.line + 1;
+        const blockLines = lines.splice(item.line, numLinesToMove);
+
+        const adjustedBlockLines = blockLines.map((l) => {
+            if (l.trim() === "") return l;
+            const currentIndentMatch = l.match(/^\s*/);
+            const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
+            const newIndent = Math.max(0, currentIndent - parentIndent);
+            return " ".repeat(newIndent) + l.substring(currentIndent);
+        });
+
+        const isDefaultSection = targetSection.toLowerCase() === "default" || targetSection.toLowerCase() === "todo";
+
+        if (isDefaultSection) {
+            let targetLineIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i]!.trim().startsWith("# ")) {
+                    targetLineIndex = i;
+                    break;
+                }
+            }
+
+            if (targetLineIndex === -1) {
+                if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
+                    lines.push("");
+                }
+                lines.push(...adjustedBlockLines);
+            } else {
+                let insertIndex = -1;
+                for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                    const l = lines[i]!.trim();
+                    if (l.startsWith("##") || l.startsWith("###")) {
+                        let j = i;
+                        while (j > targetLineIndex + 1 && lines[j - 1]!.trim() === "") {
+                            j--;
+                        }
+                        insertIndex = j;
+                        break;
+                    }
+                    if (l.match(/^[-*+]\s+/)) {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+                if (insertIndex === -1) {
+                    let j = targetLineIndex + 1;
+                    while (j < lines.length && lines[j]!.trim() === "") {
+                        j++;
+                    }
+                    insertIndex = j;
+                }
+
+                if (insertIndex === targetLineIndex + 1) {
+                    lines.splice(targetLineIndex + 1, 0, "", ...adjustedBlockLines);
+                } else {
+                    lines.splice(insertIndex, 0, ...adjustedBlockLines);
+                }
+            }
+        } else {
+            let targetLineIndex = -1;
+            const escapedName = targetSection.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const sectionRe = new RegExp(`^(##+)\\s+${escapedName}\\b`, "i");
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i]!.match(sectionRe)) {
+                    targetLineIndex = i;
+                    break;
+                }
+            }
+
+            if (targetLineIndex === -1) {
+                const archiveIndex = findArchiveHeadingIndex(lines);
+                if (archiveIndex !== -1) {
+                    lines.splice(archiveIndex, 0, `## ${targetSection}`, ...adjustedBlockLines, "");
+                } else {
+                    if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
+                        lines.push("");
+                    }
+                    lines.push(`## ${targetSection}`);
+                    lines.push(...adjustedBlockLines);
+                }
+            } else {
+                let insertIndex = lines.length;
+                for (let i = targetLineIndex + 1; i < lines.length; i++) {
+                    if (lines[i]!.trim().startsWith("##") || lines[i]!.trim().startsWith("###")) {
+                        insertIndex = i;
+                        break;
+                    }
+                }
+
+                let lastNonEmpty = insertIndex - 1;
+                while (lastNonEmpty > targetLineIndex && lines[lastNonEmpty]!.trim() === "") {
+                    lastNonEmpty--;
+                }
+
+                if (lastNonEmpty === targetLineIndex) {
+                    const numBlankLines = insertIndex - (targetLineIndex + 1);
+                    lines.splice(targetLineIndex + 1, numBlankLines, "", ...adjustedBlockLines);
+                } else {
+                    const numBlankLines = insertIndex - (lastNonEmpty + 1);
+                    lines.splice(lastNonEmpty + 1, numBlankLines, ...adjustedBlockLines);
+                }
+
+                const newInsertIndex = lastNonEmpty === targetLineIndex
+                    ? targetLineIndex + 1 + 1 + adjustedBlockLines.length
+                    : lastNonEmpty + 1 + adjustedBlockLines.length;
+                if (newInsertIndex < lines.length && lines[newInsertIndex]!.trim() !== "") {
+                    lines.splice(newInsertIndex, 0, "");
+                }
+            }
+        }
+
+        await this.writeAndLoad(lines);
     }
 
     /**
@@ -471,8 +658,7 @@ export class TodoStore {
             }
         }
 
-        await this.repository.write(lines.join("\n"));
-        await this.load();
+        await this.writeAndLoad(lines);
     }
 
     /**
@@ -506,8 +692,7 @@ export class TodoStore {
             lines.splice(archiveIndex, 0, ...blockLines, "");
         }
 
-        await this.repository.write(lines.join("\n"));
-        await this.load();
+        await this.writeAndLoad(lines);
     }
 
     async deleteSection(item: TodoItem): Promise<void> {
@@ -558,8 +743,7 @@ export class TodoStore {
                 }
             }
 
-            await this.repository.write(lines.join("\n"));
-            await this.load();
+            await this.writeAndLoad(lines);
         }
     }
 
@@ -578,8 +762,7 @@ export class TodoStore {
             return;
         }
 
-        await this.repository.write(lines.join("\n"));
-        await this.load();
+        await this.writeAndLoad(lines);
     }
 
     async deleteTodo(item: TodoItem): Promise<void> {
@@ -610,8 +793,7 @@ export class TodoStore {
         const numLinesToDelete = lastChildLineIndex - item.line + 1;
         lines.splice(item.line, numLinesToDelete);
 
-        await this.repository.write(lines.join("\n"));
-        await this.load();
+        await this.writeAndLoad(lines);
     }
 
     onDidChange(listener: TodoListener): () => void {
@@ -625,6 +807,12 @@ export class TodoStore {
         for (const l of this.listeners) {
             l(change);
         }
+    }
+
+    private async writeAndLoad(lines: string[]): Promise<void> {
+        const cleanedLines = ensureArchiveIsLastSection(lines);
+        await this.repository.write(cleanedLines.join("\n"));
+        await this.load();
     }
 }
 
@@ -669,6 +857,146 @@ function fixAdjacentHeadings(lines: string[], at: number): void {
         const curr = lines[at]!.trim();
         if (prev.startsWith("#") && curr.startsWith("#")) {
             lines.splice(at, 0, "");
+        }
+    }
+}
+
+/** Find the original section name of a line by scanning backwards to the nearest heading. */
+function findSectionNameOfLine(lines: string[], lineIndex: number): string {
+    for (let i = lineIndex - 1; i >= 0; i--) {
+        const m = lines[i]!.match(/^(##+)\s+(.*)$/);
+        if (m) {
+            const sectionName = m[2]!.trim();
+            if (sectionName.toLowerCase() === "archive") {
+                return "Default";
+            }
+            return sectionName;
+        }
+    }
+    return "Default";
+}
+
+/** Get current date time formatted as YYYY-MM-DD_HH:mm:ss. */
+function getFormattedDateTime(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}_${hours}:${minutes}:${seconds}`;
+}
+
+/** Ensure the ## Archive section (and its contents) is the last section of the document. */
+function ensureArchiveIsLastSection(lines: string[]): string[] {
+    const archiveIndex = findArchiveHeadingIndex(lines);
+    if (archiveIndex === -1) return lines;
+
+    const endLine = findSectionBlockEnd(lines, archiveIndex, 2);
+    const archiveBlock = lines.slice(archiveIndex, endLine);
+    
+    lines.splice(archiveIndex, endLine - archiveIndex);
+    fixAdjacentHeadings(lines, archiveIndex);
+
+    while (lines.length > 0 && lines[lines.length - 1]!.trim() === "") {
+        lines.pop();
+    }
+
+    if (lines.length > 0) {
+        lines.push("");
+    }
+    lines.push(...archiveBlock);
+    return lines;
+}
+
+/** Extract and format a task (with children) for archiving or completing. */
+function applyArchiveOrComplete(
+    lines: string[],
+    lineIndex: number,
+    isCompleted: boolean,
+    dateStr: string
+): { blockLines: string[]; originalSection: string } {
+    const line = lines[lineIndex]!;
+    const originalSection = findSectionNameOfLine(lines, lineIndex);
+
+    const parentIndentMatch = line.match(/^\s*/);
+    const parentIndent = parentIndentMatch ? parentIndentMatch[0].length : 0;
+
+    let lastChildLineIndex = lineIndex;
+    for (let i = lineIndex + 1; i < lines.length; i++) {
+        const l = lines[i]!;
+        if (l.trim() === "") continue;
+        const currentIndentMatch = l.match(/^\s*/);
+        const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
+        if (currentIndent > parentIndent) {
+            lastChildLineIndex = i;
+        } else {
+            break;
+        }
+    }
+
+    const numLinesToMove = lastChildLineIndex - lineIndex + 1;
+    const blockLines = lines.splice(lineIndex, numLinesToMove);
+
+    const adjustedBlockLines = blockLines.map((l) => {
+        if (l.trim() === "") return l;
+        const currentIndentMatch = l.match(/^\s*/);
+        const currentIndent = currentIndentMatch ? currentIndentMatch[0].length : 0;
+        const newIndent = Math.max(0, currentIndent - parentIndent);
+        return " ".repeat(newIndent) + l.substring(currentIndent);
+    });
+
+    let mainLine = adjustedBlockLines[0]!;
+    mainLine = mainLine.replace(TAGS_RE, "");
+
+    const marker = isCompleted ? "x" : " ";
+    mainLine = mainLine.replace(/^(\s*[-*+]\s+)\[(\s|x|X)\]/, `$1[${marker}]`);
+
+    const state = isCompleted ? "Completed" : "Archived";
+    const tags = constructTags(dateStr, state, originalSection);
+    adjustedBlockLines[0] = mainLine + tags;
+
+    return { blockLines: adjustedBlockLines, originalSection };
+}
+
+/** Insert a block of lines at the head of ## Archive section (creating ## Archive if missing). */
+function insertBlockIntoArchive(lines: string[], blockLines: string[]): void {
+    const archiveIndex = findArchiveHeadingIndex(lines);
+    if (archiveIndex === -1) {
+        if (lines.length > 0 && lines[lines.length - 1]!.trim() !== "") {
+            lines.push("");
+        }
+        lines.push("## Archive", "", ...blockLines);
+    } else {
+        let insertIndex = -1;
+        for (let i = archiveIndex + 1; i < lines.length; i++) {
+            const line = lines[i]!.trim();
+            if (line.startsWith("##") || line.startsWith("###")) {
+                let j = i;
+                while (j > archiveIndex + 1 && lines[j - 1]!.trim() === "") {
+                    j--;
+                }
+                insertIndex = j;
+                break;
+            }
+            if (line.match(/^[-*+]\s+/)) {
+                insertIndex = i;
+                break;
+            }
+        }
+        if (insertIndex === -1) {
+            let j = archiveIndex + 1;
+            while (j < lines.length && lines[j]!.trim() === "") {
+                j++;
+            }
+            insertIndex = j;
+        }
+
+        if (insertIndex === archiveIndex + 1) {
+            lines.splice(archiveIndex + 1, 0, "", ...blockLines);
+        } else {
+            lines.splice(insertIndex, 0, ...blockLines);
         }
     }
 }

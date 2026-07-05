@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TodoStore } from "../src/todo/todoStore";
 import { readFile, writeFile } from "fs/promises";
 import { mkdtempSync, writeFileSync, readFileSync } from "fs";
@@ -15,6 +15,12 @@ describe("TodoStore", () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-07-05T10:44:41"));
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
     });
 
     it("parses non-nested checkboxes correctly", async () => {
@@ -38,12 +44,14 @@ describe("TodoStore", () => {
             text: "Task 1",
             kind: "checkbox",
             checked: false,
+            parentSection: "Default",
         });
         expect(items[0].children![1]).toEqual({
             line: 2,
             text: "Task 2",
             kind: "checkbox",
             checked: true,
+            parentSection: "Default",
         });
         expect(store.getCompletedCount()).toBe(1);
     });
@@ -428,7 +436,7 @@ describe("TodoStore", () => {
         await store.archiveTodo(task1);
 
         const content = readFileSync(file, "utf8");
-        expect(content).toBe("# TODO\n\n- [ ] Task 2\n\n## Archive\n- [ ] Task 1\n  - [ ] Subtask 1.1");
+        expect(content).toBe("# TODO\n\n- [ ] Task 2\n\n## Archive\n\n- [ ] Task 1 @2026-07-05_10:44:41 @Archived\n  - [ ] Subtask 1.1");
     });
 
     it("archiveTodo moves a task to the head of the Archive section when it already exists", async () => {
@@ -448,7 +456,7 @@ describe("TodoStore", () => {
         await store.archiveTodo(task2);
 
         const content = readFileSync(file, "utf8");
-        expect(content).toBe("# TODO\n\n- [ ] Task 1\n\n## Archive\n\n- [ ] Task 2\n- [x] Old Archived\n");
+        expect(content).toBe("# TODO\n\n- [ ] Task 1\n\n## Archive\n\n- [ ] Task 2 @2026-07-05_10:44:41 @Archived\n- [x] Old Archived\n");
     });
 
     it("moveTodo moves a task and its children to an existing section", async () => {
@@ -712,7 +720,7 @@ describe("TodoStore", () => {
 
         const content = readFileSync(file, "utf8");
         expect(content).toBe(
-            "# TODO\n\n## Archive\n\n- [ ] old archived item\n\n### Terminals\n\n- [x] item1\n\n## Plans\n"
+            "# TODO\n\n## Plans\n\n## Archive\n\n- [ ] old archived item\n\n### Terminals\n\n- [x] item1\n"
         );
     });
 

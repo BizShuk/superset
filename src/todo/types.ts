@@ -23,6 +23,7 @@ export interface TodoItem {
      * synthetic groups, which have no corresponding heading line.
      */
     readonly level?: number;
+    parentSection?: string;
 }
 
 export type TodoViewType = "section" | "priority" | "file";

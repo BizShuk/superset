@@ -230,6 +230,11 @@
                 "icon": "$(archive)"
             },
             {
+                "command": "superset.todoRollback",
+                "title": "Rollback",
+                "icon": "$(history)"
+            },
+            {
                 "command": "superset.todoArchiveSection",
                 "title": "Archive Section",
                 "icon": "$(archive)"
@@ -447,27 +452,32 @@
                 },
                 {
                     "command": "superset.todoCopy",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection || viewItem == todoSectionArchivable || viewItem == todoSectionArchived",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoSection || viewItem == todoSectionArchivable || viewItem == todoSectionArchived || viewItem == todoCheckboxArchived || viewItem == todoCheckboxWithLinkArchived || viewItem == todoListArchived || viewItem == todoListWithLinkArchived",
                     "group": "1_copy"
                 },
                 {
                     "command": "superset.todoRename",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoCheckboxArchived || viewItem == todoCheckboxWithLinkArchived || viewItem == todoListArchived || viewItem == todoListWithLinkArchived",
                     "group": "2_edit@1"
                 },
                 {
                     "command": "superset.todoChangePriority",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoCheckboxArchived || viewItem == todoCheckboxWithLinkArchived",
                     "group": "2_edit@2"
                 },
                 {
                     "command": "superset.todoChangeSection",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoCheckboxArchived || viewItem == todoCheckboxWithLinkArchived || viewItem == todoListArchived || viewItem == todoListWithLinkArchived",
                     "group": "2_edit@3"
                 },
                 {
                     "command": "superset.todoArchive",
                     "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "group": "2_edit@4"
+                },
+                {
+                    "command": "superset.todoRollback",
+                    "when": "viewItem == todoCheckboxArchived || viewItem == todoCheckboxWithLinkArchived || viewItem == todoListArchived || viewItem == todoListWithLinkArchived",
                     "group": "2_edit@4"
                 },
                 {
@@ -492,7 +502,7 @@
                 },
                 {
                     "command": "superset.todoOpenLink",
-                    "when": "viewItem == todoCheckboxWithLink || viewItem == todoListWithLink",
+                    "when": "viewItem == todoCheckboxWithLink || viewItem == todoListWithLink || viewItem == todoCheckboxWithLinkArchived || viewItem == todoListWithLinkArchived",
                     "group": "inline"
                 },
                 {
@@ -502,7 +512,7 @@
                 },
                 {
                     "command": "superset.todoDelete",
-                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink",
+                    "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoCheckboxArchived || viewItem == todoCheckboxWithLinkArchived || viewItem == todoListArchived || viewItem == todoListWithLinkArchived",
                     "group": "3_delete"
                 }
             ]

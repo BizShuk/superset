@@ -70,6 +70,7 @@ export function parseTodoFile(content: string): TodoItem[] {
                 text: cm[3]!.trim(),
                 kind: "checkbox",
                 checked: cm[2]!.toLowerCase() === "x",
+                parentSection: currentSection.text,
             };
             attachToParent(item, indent, stack, currentSection);
             stack.push({ item, indent });
@@ -85,6 +86,7 @@ export function parseTodoFile(content: string): TodoItem[] {
                 text: lm[2]!.trim(),
                 kind: "list",
                 checked: false,
+                parentSection: currentSection.text,
             };
             attachToParent(item, indent, stack, currentSection);
             // Push with indent+1 so a sibling at the same indent does not
@@ -142,3 +144,44 @@ function attachToParent(
         currentSection.children.push(item);
     }
 }
+
+/** Pattern matching completion/archiving tags at the end of a line. */
+export const TAGS_RE = /\s+@\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2}\s+@(Completed|Archived)(?:\s+@\S+)?$/;
+
+/** Remove completion/archiving tags from the end of the text. */
+export function cleanTags(text: string): string {
+    return text.replace(TAGS_RE, "");
+}
+
+/** Check if the task text contains completed or archived tags. */
+export function isArchivedTask(text: string): boolean {
+    return TAGS_RE.test(text);
+}
+
+interface ParsedTags {
+    dateTime: string;
+    state: "Completed" | "Archived";
+    sectionName?: string;
+}
+
+/** Extract date-time, state, and original section name from task line. */
+export function parseTagsFromLine(line: string): ParsedTags | null {
+    const match = line.match(/\s+@(\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2})\s+@(Completed|Archived)(?:\s+@(\S+))?$/);
+    if (!match) return null;
+    return {
+        dateTime: match[1]!,
+        state: match[2] as "Completed" | "Archived",
+        sectionName: match[3] ? match[3].replace(/_/g, " ") : undefined,
+    };
+}
+
+/** Construct tags to append to the task line. */
+export function constructTags(dateStr: string, state: "Completed" | "Archived", sectionName: string): string {
+    const sanitized = sectionName.trim();
+    if (sanitized.toLowerCase() === "default" || sanitized.toLowerCase() === "todo") {
+        return ` @${dateStr} @${state}`;
+    }
+    const sectionTag = sanitized.replace(/\s+/g, "_");
+    return ` @${dateStr} @${state} @${sectionTag}`;
+}
+
