@@ -334,14 +334,14 @@ yarn.lock.bak
 .claude/
 !.claude/commands/
 !.claude/agents/
-.claude/settings.local.json
-.claude/memories/
-.claude/scheduled_tasks.json
+!.claude/skills/
+!.claude/settings.local.json
+!.claude/memories/
+!.claude/scheduled_tasks.json
 
 # Gemini CLI / Gemini Code Assist
 
 .gemini/
-.geminiignore
 .gemini-scratch/
 .gemini-tmp/
 
