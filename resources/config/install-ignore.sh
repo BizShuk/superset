@@ -15,10 +15,9 @@
 #    .claudeignore   (Claude Code LLM 語境, 排除 .claude/ 自身以外的規則)
 #
 #  行為:
-#    - 若目標檔已存在且未傳 --force → 跳過(不覆蓋),改以 <target>.ignore.stamp
-#      留下「已套用過模板」的標記供日後 diff。
-#    - 首次安裝 → 寫入完整 .ignore 內容。
-#    - --print 模式只把內容印到 stdout, 不在磁碟上寫任何東西。
+#    - 若目標檔已存在且未傳 --force → 跳過(不覆蓋)
+#    - 首次安裝 → 寫入完整 .ignore 內容
+#    - --print 模式只把內容印到 stdout, 不在磁碟上寫任何東西
 # =============================================================================
 
 set -euo pipefail
@@ -89,14 +88,11 @@ for target in "${TARGETS[@]}"; do
 
   if [[ -e "$out" && $FORCE -eq 0 ]]; then
     echo "[skip]  $out  (already exists; use --force to overwrite)"
-    # 留 stamp 標記此 target 已被模板管轄
-    touch "${out}.ignore.stamp.${target}"
     continue
   fi
 
   cp "$TEMPLATE" "$out"
   echo "[write] $out  ($(wc -l < "$TEMPLATE") lines, target=$target)"
-  touch "${out}.ignore.stamp.${target}"
 done
 
 # ── 結尾說明 ────────────────────────────────────────────────────────────────

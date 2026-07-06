@@ -5,8 +5,8 @@
 // alongside the feature plugins. Replaces the inline command block
 // that used to live in the bottom of `src/extension.ts`.
 
+import * as fs from "node:fs";
 import * as path from "node:path";
-import { spawn } from "node:child_process";
 import * as vscode from "vscode";
 import {
     type ExtensionPlugin,
@@ -122,10 +122,56 @@ export const globalCommandsPlugin: ExtensionPlugin = {
                         "config",
                         "install-ignore.sh"
                     );
+
+                    // Decide which targets to act on. When the user
+                    // invokes from the command palette (no args),
+                    // default to all three (.gitignore /
+                    // .geminiignore / .claudeignore).
+                    const requested = args?.targets ?? [
+                        "git",
+                        "gemini",
+                        "claude",
+                    ];
+
+                    // Safety: if any requested target file already
+                    // exists, ask the user before overwriting.
+                    // Hand-rolled .gitignore in this repo is exactly
+                    // the case the user might want to *keep* if they
+                    // customised it — don't silently clobber.
+                    let force = args?.force ?? false;
+                    if (!force) {
+                        const outNames: Record<string, string> = {
+                            git: ".gitignore",
+                            gemini: ".geminiignore",
+                            claude: ".claudeignore",
+                        };
+                        const existing = requested
+                            .map((t) => outNames[t])
+                            .filter((n) =>
+                                fs.existsSync(path.join(ctx.workspaceFolder, n))
+                            );
+                        if (existing.length > 0) {
+                            const choice = await vscode.window.showWarningMessage(
+                                `Superset: 以下檔案已存在,將被模板覆蓋:\n  ${existing.join(
+                                    ", "
+                                )}\n\n繼續?`,
+                                { modal: true },
+                                "Overwrite",
+                                "Cancel"
+                            );
+                            if (choice !== "Overwrite") {
+                                ctx.log(
+                                    "globalCommands: installIgnoreTemplate cancelled by user"
+                                );
+                                return;
+                            }
+                            force = true;
+                        }
+                    }
+
                     const argv = ["bash", scriptPath];
-                    const targets = args?.targets ?? [];
-                    for (const t of targets) argv.push(t);
-                    if (args?.force) argv.push("--force");
+                    for (const t of requested) argv.push(t);
+                    if (force) argv.push("--force");
 
                     const terminal = vscode.window.createTerminal({
                         name: "Superset: Install Ignore Template",

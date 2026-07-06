@@ -427,7 +427,3 @@ plans/draft.md
 # Submodule artifacts (本專案使用 git submodule)
 
 .md-tree-highlight/
-
-# Ignore-template stamps (from resources/config/install-ignore.sh)
-
-*.ignore.stamp.*
