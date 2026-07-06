@@ -1,10 +1,12 @@
 // globalCommandsPlugin — aggregates the cross-cutting commands that
 // don't belong to a single feature (resetCaches, focusView, showLogs,
-// focusPanel). Implemented as an `ExtensionPlugin` so the
-// `PluginManager` owns its disposable / reset-handler lifecycle
+// focusPanel, installIgnoreTemplate). Implemented as an `ExtensionPlugin`
+// so the `PluginManager` owns its disposable / reset-handler lifecycle
 // alongside the feature plugins. Replaces the inline command block
 // that used to live in the bottom of `src/extension.ts`.
 
+import * as path from "node:path";
+import { spawn } from "node:child_process";
 import * as vscode from "vscode";
 import {
     type ExtensionPlugin,
@@ -106,6 +108,38 @@ export const globalCommandsPlugin: ExtensionPlugin = {
             })
         );
 
+        // Install the ignore template (resources/config/.ignore) into
+        // the workspace as .gitignore / .geminiignore / .claudeignore.
+        // Resolves the script relative to the extension's install root
+        // (not the workspace) so it works regardless of cwd.
+        ctx.registerDisposable(
+            vscode.commands.registerCommand(
+                "superset.installIgnoreTemplate",
+                async (args?: { targets?: string[]; force?: boolean }) => {
+                    const scriptPath = path.join(
+                        ctx.extensionUri.fsPath,
+                        "resources",
+                        "config",
+                        "install-ignore.sh"
+                    );
+                    const argv = ["bash", scriptPath];
+                    const targets = args?.targets ?? [];
+                    for (const t of targets) argv.push(t);
+                    if (args?.force) argv.push("--force");
+
+                    const terminal = vscode.window.createTerminal({
+                        name: "Superset: Install Ignore Template",
+                        cwd: ctx.workspaceFolder,
+                    });
+                    terminal.show(true);
+                    terminal.sendText(argv.map(quoteShellArg).join(" "));
+                    ctx.log(
+                        `globalCommands: installIgnoreTemplate ${argv.join(" ")}`
+                    );
+                }
+            )
+        );
+
         ctx.log("globalCommands: registered");
     },
     deactivate(): void {
@@ -113,3 +147,11 @@ export const globalCommandsPlugin: ExtensionPlugin = {
         // are released by the manager. Nothing extra to do.
     },
 };
+
+/** Quote a single argv entry for safe inclusion in a `bash -c` command
+ *  string. Wraps the value in single quotes and escapes any embedded
+ *  single quotes (`'` → `'\''`). Empty string becomes `''`. */
+function quoteShellArg(value: string): string {
+    if (value === "") return "''";
+    return `'${value.replace(/'/g, `'\\''`)}'`;
+}

@@ -1,60 +1,433 @@
-# If you prefer the allow list template instead of the deny list, see community template:
+# =============================================================================
 
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+# Universal Ignore Template
+
+# =============================================================================
+
+# 用於 `.gitignore` / `.geminiignore` / `.claudeignore` (後兩者為 LLM 語境過濾)
+
+# 安裝: `bash resources/config/install-ignore.sh`  (見同目錄腳本)
 
 #
 
-# Binaries for programs and plugins
+# 結構分區
 
-_.exe
-_.exe~
-_.dll
-_.so
-\*.dylib
+# A. OS / FS metadata
 
-# Test binary, built with `go test -c`
+# B. Editor / IDE
 
-\*.test
+# C. Language toolchains — Node / JS / TS
 
-# Output of the go coverage tool, specifically when used with LiteIDE
+# D. Language toolchains — Go
 
-\*.out
+# E. Language toolchains — Python / Rust / JVM
 
-# Dependency directories (remove the comment below to include it)
+# F. Build / Dist artifacts
 
-# vendor/
+# G. Tests / Coverage
 
-# Go workspace file
+# H. Logs / Runtime dumps
+
+# I. Secrets / Env / Local config
+
+# J. Lockfile noise
+
+# K. AI assistant caches (Claude / Gemini / Aider / Copilot / Cursor)
+
+# L. Misc (project-local noise)
+
+# =============================================================================
+
+# ── A. OS / File system metadata ──────────────────────────────────────────────
+
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*~
+
+# ── B. Editor / IDE ─────────────────────────────────────────────────────────
+
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.iml
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
+.fleet/
+.cursor/
+.codium/
+*.code-workspace
+.project
+.classpath
+.settings/
+
+# ── C. Node / JavaScript / TypeScript ────────────────────────────────────────
+
+node_modules/
+jspm_packages/
+.npm/
+.yarn/
+.pnp.*
+.pnpm-store/
+.pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+npm-debug.log*
+.eslintcache
+.stylelintcache
+.prettiercache
+.parcel-cache/
+.cache/
+.next/
+.nuxt/
+.svelte-kit/
+.turbo/
+.vercel/
+.netlify/
+.bun/
+
+# TypeScript build info
+
+*.tsbuildinfo
+
+# Compiled output
+
+out/
+dist/
+build/
+lib/
+*.js.map
+*.mjs.map
+*.cjs.map
+*.d.ts.map
+*.d.ts
+
+# Bundle / minified
+
+*.min.js
+*.min.mjs
+*.min.css
+*.bundle.js
+*.chunk.js
+*.hot-update.js
+*.hot-update.json
+
+# Coverage
+
+coverage/
+.nyc_output/
+*.lcov
+
+# Jest / Vitest
+
+.jest-cache/
+
+# Framework
+
+.nuxt/
+.nest/
+.tmp/
+
+# ── D. Go ────────────────────────────────────────────────────────────────────
+
+# Binaries
+
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace
 
 go.work
+go.work.sum
 
-# env file
+# Coverage
 
+coverage.txt
+coverage.html
+cover.out
+cover.html
+
+# Dependency dirs
+
+vendor/
+
+# Cobra / stringer generated
+
+__debug_bin
+*_string.go
+*_stringer.go
+
+# ── E. Python / Rust / JVM ───────────────────────────────────────────────────
+
+# Python
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+htmlcov/
+.coverage
+.coverage.*
+
+# Rust
+
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# JVM
+
+*.class
+*.jar
+*.war
+*.ear
+.gradle/
+build/
+hs_err_pid*
+
+# ── F. Build / Dist / Packages ───────────────────────────────────────────────
+
+*.vsix
+*.tgz
+*.tar.gz
+*.zip
+*.dmg
+*.deb
+*.rpm
+*.app
+
+# ── G. Tests / Coverage (general) ───────────────────────────────────────────
+
+test-results/
+playwright-report/
+playwright/.cache/
+cypress/videos/
+cypress/screenshots/
+junit.xml
+*.trx
+*.coverage
+*.lcov
+
+# ── H. Logs / Runtime dumps ──────────────────────────────────────────────────
+
+logs/
+*.log
+*.log.*
+!.npmrc.log
+!yarn.log
+!yarn-error.log
+!npm-debug.log*
+.pids
+*.pid
+*.seed
+*.pid.lock
+
+# Heap / core dumps
+
+heapdump.*
+*.core
+core.*
+
+# ── I. Secrets / Env / Local config ─────────────────────────────────────────
+
+.env
+.env.*
+!.env.example
 .env.tmp
 .env.local
+.env.*.local
 
-# vscode
+# SSH keys (private keys, configs, known_hosts, agent sockets)
 
-\_\_debug_bin
-.vscode
+id_rsa
+id_rsa.*
+id_dsa
+id_dsa.*
+id_ecdsa
+id_ecdsa.*
+id_ed25519
+id_ed25519.*
+id_xmss
+id_xmss.*
+*.pub
+!*.ignore.pub
+known_hosts
+authorized_keys
+ssh_config
+.ssh/
+.ssh/known_hosts
+.ssh/authorized_keys
+*.ppk
+ssh-agent-sock
+agent.sock
 
-# git
+# GPG / PGP
 
-.git
+*.asc
+*.gpg
+*.pgp
+secring.gpg
+pubring.gpg
+.gnupg/
 
-# project
+# SSL / TLS
 
-gosdk
-.DS_Store
+*.pem
+*.key
+*.crt
+*.cer
+*.csr
+*.p12
+*.pfx
+keystore.jks
+truststore.jks
 
-_\_string.go
-.aider_
-.env
-.env
+secrets/
+.secrets/
+config/local.json
+config/local.yaml
+config/local.yml
+config/local.toml
+
+# ── J. Lockfile noise (node_modules 內大量 json,通常不需索引) ────────────────
+
+# package-lock.json / yarn.lock / pnpm-lock.yaml 在多數專案要進版控
+
+# 這裡只忽略常見的"次要"或備份
+
+*.lock.bak
+package-lock.json.bak
+yarn.lock.bak
+
+# ── K. AI assistant caches / scratch ─────────────────────────────────────────
+
+# Claude Code
+
+.claude/
+!.claude/commands/
+!.claude/agents/
 .claude/settings.local.json
-bin/server
-sample/config/sample.db
-plans/implementation_plan.md
-.gitignore
+.claude/memories/
+.claude/scheduled_tasks.json
+
+# Gemini CLI / Gemini Code Assist
+
+.gemini/
+.geminiignore
+.gemini-scratch/
+.gemini-tmp/
+
+# Aider
+
+.aider*
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache.v3/
+
+# Cursor
+
+.cursor/
+.cursorignore
+.cursor-tmp/
+
+# GitHub Copilot
+
+.copilot/
+.vscode/copilot-chat/
+
+# Windsurf / Codeium
+
+.windsurf/
+.codeium/
+.codeiumignore
+
+# Continue.dev
+
+.continue/
+
+# Cody (Sourcegraph)
+
+.cody/
+
+# Tabby
+
+.tabby/
+
+# Generic LLM scratch
+
+.llm/
+.llm-scratch/
+.ai-cache/
+.ai-tmp/
+
+# ── L. Misc (project-local noise) ────────────────────────────────────────────
+
+tmp/
+temp/
+scratch/
+samples/
+sample/
+example/
+docs/_build/
+docs/build/
+site/
+gh-pages/
+public/uploads/
+uploads/
+downloads/
+backup/
+backups/
+archive/
+*.bak
+*.tmp
+*.temp
+*.orig
+*.rej
+*.swp
+*.patch
+
+# Task / planning scratch (常見散落)
+
+todo.md
+TODO.tmp
 plans/walkthrough.md
+plans/implementation_plan.md
 plans/task.md
+plans/scratch.md
+plans/draft.md
+
+# Submodule artifacts (本專案使用 git submodule)
+
+.md-tree-highlight/
+
+# Ignore-template stamps (from resources/config/install-ignore.sh)
+
+*.ignore.stamp.*
