@@ -21,6 +21,7 @@
 - [ ] architecture-open-settings-webview: 使用者在 Webview 介面中集中管理所有 Superset 設定，並能即時看見各面板的資料狀態標章與更新設定 — [plans/architecture-open-settings-webview.md](plans/architecture-open-settings-webview.md)
 - [ ] architecture-panel-layout-persistence: 記住 superset viewContainer 內最後一次 active 的子 view，並在下次啟動 VS Code 時自動恢復該焦點 — [plans/architecture-panel-layout-persistence.md](plans/architecture-panel-layout-persistence.md)
 - [ ] architecture-reveal-in-tree: 設計一個能在 TreeView 中自動 focus 並定位特定節點的共用機制，支援 terminals、mdns 等所有面板 — [plans/architecture-reveal-in-tree.md](plans/architecture-reveal-in-tree.md)
+- [ ] architecture-workspace-aware-group-suggestions: 當新 PTY 終端機開啟時，自動偵測其 cwd/git remote 並與既有群組比對自動歸類 — [plans/architecture-workspace-aware-group-suggestions.md](plans/architecture-workspace-aware-group-suggestions.md)
 
 ## Archive
 
