@@ -79,6 +79,20 @@ export const globalCommandsPlugin: ExtensionPlugin = {
         );
 
         ctx.registerDisposable(
+            vscode.commands.registerCommand(
+                "superset.focusOverallView",
+                async () => {
+                    await vscode.commands.executeCommand(
+                        "workbench.view.extension.superset-overall"
+                    );
+                    await vscode.commands.executeCommand(
+                        "superset.projects.focus"
+                    );
+                }
+            )
+        );
+
+        ctx.registerDisposable(
             vscode.commands.registerCommand("superset.showLogs", () => {
                 diagnosticChannel?.show(true);
             })

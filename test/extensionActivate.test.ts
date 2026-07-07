@@ -152,6 +152,7 @@ describe("extension activation via PluginManager", () => {
         for (const id of [
             "superset.resetCaches",
             "superset.focusView",
+            "superset.focusOverallView",
             "superset.showLogs",
             "superset.focusPanel",
         ]) {

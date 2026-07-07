@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.7.3",
+    "version": "0.7.4",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -146,6 +146,10 @@
                 "title": "Superset: Focus Panel"
             },
             {
+                "command": "superset.focusOverallView",
+                "title": "Superset: Focus Overall Panel"
+            },
+            {
                 "command": "superset.todoToggle",
                 "title": "Superset: Toggle Todo"
             },
@@ -271,6 +275,123 @@
             {
                 "command": "superset.jumpToTerminal",
                 "title": "Superset: Go to Terminal"
+            },
+            {
+                "command": "superset.openProject",
+                "title": "Superset: Open Project"
+            },
+            {
+                "command": "superset.refreshProjects",
+                "title": "Superset: Refresh Projects",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "superset.projectsTodoToggle",
+                "title": "Superset: Toggle Projects Todo"
+            },
+            {
+                "command": "superset.projectsTodoChangePriority",
+                "title": "Change Priority"
+            },
+            {
+                "command": "superset.projectsTodoNew",
+                "title": "Superset: New Projects TODO",
+                "icon": "$(add)"
+            },
+            {
+                "command": "superset.projectsTodoOpen",
+                "title": "Superset: Open README.todo",
+                "icon": "$(go-to-file)"
+            },
+            {
+                "command": "superset.projectsTodoFilterHideCompleted",
+                "title": "Hide Completed/Archive",
+                "icon": "$(filter)"
+            },
+            {
+                "command": "superset.projectsTodoFilterShowAll",
+                "title": "Superset: Show All",
+                "icon": "$(filter-filled)"
+            },
+            {
+                "command": "superset.projectsTodoFilterP0",
+                "title": "Superset: Filter P0",
+                "icon": "resources/p0_dim.svg"
+            },
+            {
+                "command": "superset.projectsTodoFilterP0On",
+                "title": "Superset: Filter P0",
+                "icon": "resources/p0.svg"
+            },
+            {
+                "command": "superset.projectsTodoFilterP1",
+                "title": "Superset: Filter P1",
+                "icon": "resources/p1_dim.svg"
+            },
+            {
+                "command": "superset.projectsTodoFilterP1On",
+                "title": "Superset: Filter P1",
+                "icon": "resources/p1.svg"
+            },
+            {
+                "command": "superset.projectsTodoFilterP2",
+                "title": "Superset: Filter P2",
+                "icon": "resources/p2_dim.svg"
+            },
+            {
+                "command": "superset.projectsTodoFilterP2On",
+                "title": "Superset: Filter P2",
+                "icon": "resources/p2.svg"
+            },
+            {
+                "command": "superset.projectsTodoOpenLink",
+                "title": "Superset: Open Link",
+                "icon": "$(link-external)"
+            },
+            {
+                "command": "superset.projectsTodoCopy",
+                "title": "Copy",
+                "icon": "$(copy)"
+            },
+            {
+                "command": "superset.projectsTodoArchive",
+                "title": "Archive",
+                "icon": "$(archive)"
+            },
+            {
+                "command": "superset.projectsTodoRollback",
+                "title": "Rollback",
+                "icon": "$(history)"
+            },
+            {
+                "command": "superset.projectsTodoArchiveSection",
+                "title": "Archive Section",
+                "icon": "$(archive)"
+            },
+            {
+                "command": "superset.projectsTodoUnarchiveSection",
+                "title": "Unarchive Section",
+                "icon": "$(arrow-up)"
+            },
+            {
+                "command": "superset.projectsTodoChangeSection",
+                "title": "Change Section",
+                "icon": "$(arrow-right)"
+            },
+            {
+                "command": "superset.projectsTodoDeleteSection",
+                "title": "Delete Section",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "superset.projectsTodoRename",
+                "title": "Rename",
+                "icon": "$(edit)"
+            },
+            {
+                "command": "superset.projectsTodoDelete",
+                "title": "Delete",
+                "icon": "$(trash)"
             }
         ],
         "viewsContainers": {
@@ -278,6 +399,11 @@
                 {
                     "id": "superset",
                     "title": "SuperSet",
+                    "icon": "images/icon.png"
+                },
+                {
+                    "id": "superset-overall",
+                    "title": "Overall",
                     "icon": "images/icon.png"
                 }
             ]
@@ -306,6 +432,20 @@
                     "id": "superset.todo",
                     "name": "TODO",
                     "contextualTitle": "SuperSet",
+                    "visibility": "visible"
+                }
+            ],
+            "superset-overall": [
+                {
+                    "id": "superset.projects",
+                    "name": "Projects",
+                    "contextualTitle": "Overall",
+                    "visibility": "visible"
+                },
+                {
+                    "id": "superset.projectsTodo",
+                    "name": "Projects TODO",
+                    "contextualTitle": "Overall",
                     "visibility": "visible"
                 }
             ]
@@ -395,6 +535,61 @@
                 {
                     "command": "superset.todoOpen",
                     "when": "view == superset.todo",
+                    "group": "navigation@6"
+                },
+                {
+                    "command": "superset.refreshProjects",
+                    "when": "view == superset.projects",
+                    "group": "navigation"
+                },
+                {
+                    "command": "superset.projectsTodoNew",
+                    "when": "view == superset.projectsTodo",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "superset.projectsTodoFilterP0",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filterP0 != true",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "superset.projectsTodoFilterP0On",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filterP0 == true",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "superset.projectsTodoFilterP1",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filterP1 != true",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "superset.projectsTodoFilterP1On",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filterP1 == true",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "superset.projectsTodoFilterP2",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filterP2 != true",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "superset.projectsTodoFilterP2On",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filterP2 == true",
+                    "group": "navigation@4"
+                },
+                {
+                    "command": "superset.projectsTodoFilterHideCompleted",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filtering != true",
+                    "group": "navigation@5"
+                },
+                {
+                    "command": "superset.projectsTodoFilterShowAll",
+                    "when": "view == superset.projectsTodo && superset.projectsTodo.filtering == true",
+                    "group": "navigation@5"
+                },
+                {
+                    "command": "superset.projectsTodoOpen",
+                    "when": "view == superset.projectsTodo",
                     "group": "navigation@6"
                 }
             ],
@@ -518,6 +713,71 @@
                     "command": "superset.todoDelete",
                     "when": "viewItem == todoCheckbox || viewItem == todoCheckboxWithLink || viewItem == todoList || viewItem == todoListWithLink || viewItem == todoCheckboxArchived || viewItem == todoCheckboxWithLinkArchived || viewItem == todoListArchived || viewItem == todoListWithLinkArchived",
                     "group": "3_delete"
+                },
+                {
+                    "command": "superset.projectsTodoCopy",
+                    "when": "viewItem == projectsTodoCheckbox || viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoSection || viewItem == projectsTodoSectionArchivable || viewItem == projectsTodoSectionArchived || viewItem == projectsTodoCheckboxArchived || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoList || viewItem == projectsTodoListWithLink || viewItem == projectsTodoListArchived || viewItem == projectsTodoListWithLinkArchived || viewItem == projectsTodoProject",
+                    "group": "1_copy"
+                },
+                {
+                    "command": "superset.projectsTodoRename",
+                    "when": "viewItem == projectsTodoCheckbox || viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoList || viewItem == projectsTodoListWithLink || viewItem == projectsTodoCheckboxArchived || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoListArchived || viewItem == projectsTodoListWithLinkArchived",
+                    "group": "2_edit@1"
+                },
+                {
+                    "command": "superset.projectsTodoChangePriority",
+                    "when": "viewItem == projectsTodoCheckbox || viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoCheckboxArchived || viewItem == projectsTodoCheckboxWithLinkArchived",
+                    "group": "2_edit@2"
+                },
+                {
+                    "command": "superset.projectsTodoChangeSection",
+                    "when": "viewItem == projectsTodoCheckbox || viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoList || viewItem == projectsTodoListWithLink || viewItem == projectsTodoCheckboxArchived || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoListArchived || viewItem == projectsTodoListWithLinkArchived",
+                    "group": "2_edit@3"
+                },
+                {
+                    "command": "superset.projectsTodoArchive",
+                    "when": "viewItem == projectsTodoCheckbox || viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoList || viewItem == projectsTodoListWithLink",
+                    "group": "2_edit@4"
+                },
+                {
+                    "command": "superset.projectsTodoRollback",
+                    "when": "viewItem == projectsTodoCheckboxArchived || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoListArchived || viewItem == projectsTodoListWithLinkArchived",
+                    "group": "2_edit@4"
+                },
+                {
+                    "command": "superset.projectsTodoArchiveSection",
+                    "when": "viewItem == projectsTodoSectionArchivable",
+                    "group": "2_edit@1"
+                },
+                {
+                    "command": "superset.projectsTodoUnarchiveSection",
+                    "when": "viewItem == projectsTodoSectionArchived",
+                    "group": "2_edit@1"
+                },
+                {
+                    "command": "superset.projectsTodoNew",
+                    "when": "viewItem == projectsTodoSection || viewItem == projectsTodoSectionArchivable || viewItem == projectsTodoSectionArchived || viewItem == projectsTodoProject",
+                    "group": "inline"
+                },
+                {
+                    "command": "superset.projectsTodoOpen",
+                    "when": "viewItem == projectsTodoSection || viewItem == projectsTodoSectionArchivable || viewItem == projectsTodoSectionArchived || viewItem == projectsTodoProject",
+                    "group": "inline"
+                },
+                {
+                    "command": "superset.projectsTodoOpenLink",
+                    "when": "viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoListWithLink || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoListWithLinkArchived",
+                    "group": "inline"
+                },
+                {
+                    "command": "superset.projectsTodoDeleteSection",
+                    "when": "viewItem == projectsTodoSection || viewItem == projectsTodoSectionArchivable || viewItem == projectsTodoSectionArchived",
+                    "group": "3_delete"
+                },
+                {
+                    "command": "superset.projectsTodoDelete",
+                    "when": "viewItem == projectsTodoCheckbox || viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoList || viewItem == projectsTodoListWithLink || viewItem == projectsTodoCheckboxArchived || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoListArchived || viewItem == projectsTodoListWithLinkArchived",
+                    "group": "3_delete"
                 }
             ]
         },
@@ -531,6 +791,11 @@
                 "command": "superset.todoRename",
                 "key": "F2",
                 "when": "focusedView == superset.todo && !inputFocus"
+            },
+            {
+                "command": "superset.projectsTodoRename",
+                "key": "F2",
+                "when": "focusedView == superset.projectsTodo && !inputFocus"
             },
             {
                 "command": "superset.newTerminal",

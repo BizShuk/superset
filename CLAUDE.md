@@ -108,6 +108,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | `src/mdns/`        | mDNS 服務發現 TreeView                  | MdnsRegistry, MdnsTreeProvider                            |
 | `src/topology/`    | 網路拓撲掃描 TreeView                   | TopologyStore, TopologyTreeProvider                       |
 | `src/todo/`        | TODO 清單 TreeView + 過濾器 badge       | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
+| `src/projects/`    | 專案分組 TreeView 面板                  | ProjectStore, ProjectsTreeProvider                       |
 | `src/treePreview/` | Markdown `tree` 區塊語法高亮 + 預覽渲染 | createTreePreviewExtension, renderLine                    |
 | `src/todoPreview/` | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕  | createTodoPreviewExtension, wrapSections                  |
 
@@ -332,7 +333,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## 測試 (Testing)
 
-`npm test` 跑 Vitest,目前 355 個 case 全綠 (39 個 test file):
+`npm test` 跑 Vitest,目前 391 個 case 全綠 (41 個 test file):
 
 | 測試檔                            | 對象                              | 案例數 |
 | --------------------------------- | --------------------------------- | ------ |
@@ -372,6 +373,8 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 | `todoPreviewPlugin.test.ts`       | todoPreviewPlugin 介面契約        | 3      |
 | `extensionActivate.test.ts`       | extension.ts end-to-end activate  | 5      |
 | `pluginManager.test.ts`           | PluginManager 生命週期 + 錯誤隔離 | 7      |
+| `projectsStore.test.ts`           | ProjectStore 掃描與分組           | 2      |
+| `projectsPlugin.test.ts`          | projectsPlugin 介面契約           | 3      |
 | `smoke.test.ts`                   | 整體 smoke                        | 1      |
 
 `TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/terminals/treeSpec.ts` 純函式。
