@@ -33,7 +33,10 @@ export const TERMINALS_PLUGIN_ID = "terminals";
  * `register()` in `./index.ts` expects. The disposable / reset-handler
  * arrays are bridged so cleanup stays correct.
  */
-function buildFeatureContext(pCtx: PluginContext): FeatureContext {
+function buildFeatureContext(
+    pCtx: PluginContext,
+    statusBar: vscode.StatusBarItem
+): FeatureContext {
     const subscriptions: vscode.Disposable[] = [];
     const resetHandlers: (() => void | Promise<void>)[] = [];
 
@@ -57,7 +60,7 @@ function buildFeatureContext(pCtx: PluginContext): FeatureContext {
         subscriptions,
         workspaceFolder: pCtx.workspaceFolder,
         shared: {
-            statusBar: {} as vscode.StatusBarItem,
+            statusBar,
             diag: {} as vscode.OutputChannel,
             log: pCtx.log,
         },
@@ -69,7 +72,18 @@ export const terminalsPlugin: ExtensionPlugin = {
     id: TERMINALS_PLUGIN_ID,
     name: "Terminals",
     activate(pCtx: PluginContext): void {
-        const fCtx = buildFeatureContext(pCtx);
+        // Create a real StatusBarItem so HighlightPresenter can call
+        // .show() / .hide() / .text on it without throwing. The fake
+        // `{} as vscode.StatusBarItem` stub was missing these methods
+        // and caused "FAILED to handle event" on onDidChangeActiveTerminal
+        // and onDidCloseTerminal whenever the presenter tried to update it.
+        const statusBar = vscode.window.createStatusBarItem(
+            vscode.StatusBarAlignment.Right,
+            100
+        );
+        pCtx.registerDisposable(statusBar);
+
+        const fCtx = buildFeatureContext(pCtx, statusBar);
         const handle: FeatureHandle = registerTerminalsModule(fCtx);
         (
             pCtx as unknown as { __terminalsHandle?: FeatureHandle }
