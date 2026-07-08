@@ -14,18 +14,32 @@ export interface MarkdownItLike {
 
 // Split a single tree line into its connector prefix and the entry name,
 // preserving an optional trailing "# comment".
+//
+// Comment detection accepts any "#" on the line (no leading-space
+// requirement) so that `package.json#manifest` is also recognised as
+// "file + tag". The renderer restores the visual " #" prefix in the
+// output span so the preview still looks like a space-separated
+// comment; see `test/treePreview.test.ts` for the expected strings.
 export function renderLine(md: MarkdownItLike, raw: string): string {
     const line = raw.replace(/\s+$/, "");
     if (line.length === 0) {
         return "";
     }
 
-    // Trailing comment (kept outside the entry name).
+    // Trailing comment (kept outside the entry name). We pick the first
+    // "#" on the line so that no-space forms like `file.json#tag` are
+    // also treated as a comment; we then trim trailing whitespace off
+    // the body so the file name does not pick up a stray space.
     let comment = "";
     const hashIdx = line.indexOf("#");
     let body = line;
     if (hashIdx !== -1) {
-        comment = line.slice(hashIdx);
+        // Ensure the comment span always starts with a single space so
+        // the rendered preview visually separates "# comment" from the
+        // preceding file/dir name, regardless of whether the source
+        // line had a space before the "#".
+        const tail = line.slice(hashIdx);
+        comment = tail.startsWith(" ") ? tail : " " + tail;
         body = line.slice(0, hashIdx).replace(/\s+$/, "");
     }
 
@@ -45,6 +59,6 @@ export function renderLine(md: MarkdownItLike, raw: string): string {
     return (
         `<span class="tree-connector">${esc(prefix)}</span>` +
         (name ? `<span class="${nameClass}">${icon} ${esc(name)}</span>` : "") +
-        (comment ? `<span class="tree-comment"> ${esc(comment)}</span>` : "")
+        (comment ? `<span class="tree-comment">${esc(comment)}</span>` : "")
     );
 }

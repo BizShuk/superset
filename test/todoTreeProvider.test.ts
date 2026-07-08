@@ -370,7 +370,9 @@ describe("filterCompleted", () => {
                 kind: "section",
                 checked: false,
                 level: 2,
-                children: [],
+                children: [
+                    { line: 1, text: "task", kind: "checkbox", checked: false },
+                ],
             },
             {
                 line: 1,
@@ -385,6 +387,55 @@ describe("filterCompleted", () => {
         ];
         const result = filterCompleted(input);
         expect(result.map((i) => i.text)).toEqual(["Features", "Iteration 2"]);
+    });
+
+    it("hides a section when all its children are completed", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Work",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 1, text: "done", kind: "checkbox", checked: true },
+                    { line: 2, text: "also-done", kind: "checkbox", checked: true },
+                ],
+            },
+            {
+                line: 3,
+                text: "Play",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 4, text: "pending", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const result = filterCompleted(input);
+        expect(result.map((i) => i.text)).toEqual(["Play"]);
+    });
+
+    it("hides an originally-empty section", () => {
+        const input: TodoItem[] = [
+            {
+                line: 0,
+                text: "Empty",
+                kind: "section",
+                checked: false,
+                children: [],
+            },
+            {
+                line: 1,
+                text: "Not Empty",
+                kind: "section",
+                checked: false,
+                children: [
+                    { line: 2, text: "task", kind: "checkbox", checked: false },
+                ],
+            },
+        ];
+        const result = filterCompleted(input);
+        expect(result.map((i) => i.text)).toEqual(["Not Empty"]);
     });
 });
 

@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.7.4",
+    "version": "0.7.6",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -278,12 +278,8 @@
             },
             {
                 "command": "superset.openProject",
-                "title": "Superset: Open Project"
-            },
-            {
-                "command": "superset.refreshProjects",
-                "title": "Superset: Refresh Projects",
-                "icon": "$(refresh)"
+                "title": "Superset: Open Project",
+                "icon": "$(folder-opened)"
             },
             {
                 "command": "superset.projectsTodoToggle",
@@ -437,12 +433,6 @@
             ],
             "superset-overall": [
                 {
-                    "id": "superset.projects",
-                    "name": "Projects",
-                    "contextualTitle": "Overall",
-                    "visibility": "visible"
-                },
-                {
                     "id": "superset.projectsTodo",
                     "name": "Projects TODO",
                     "contextualTitle": "Overall",
@@ -536,11 +526,6 @@
                     "command": "superset.todoOpen",
                     "when": "view == superset.todo",
                     "group": "navigation@6"
-                },
-                {
-                    "command": "superset.refreshProjects",
-                    "when": "view == superset.projects",
-                    "group": "navigation"
                 },
                 {
                     "command": "superset.projectsTodoNew",
@@ -778,6 +763,11 @@
                     "command": "superset.projectsTodoDelete",
                     "when": "viewItem == projectsTodoCheckbox || viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoList || viewItem == projectsTodoListWithLink || viewItem == projectsTodoCheckboxArchived || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoListArchived || viewItem == projectsTodoListWithLinkArchived",
                     "group": "3_delete"
+                },
+                {
+                    "command": "superset.openProject",
+                    "when": "viewItem == projectsTodoProject",
+                    "group": "inline"
                 }
             ]
         },

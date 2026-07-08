@@ -4,7 +4,6 @@
 
 ### Terminals
 
-- [ ] [feature] Add `window.onDidWriteTerminalData` (deprecated fallback) for TUI detection — see [plans/dynamic-orbiting-pearl.md](plans/dynamic-orbiting-pearl.md)
 
 ### mDNS
 
@@ -16,15 +15,16 @@
 
 ### Plans
 
-- [ ] architecture-highlight-regex: 使用者透過設定自訂的規則運算式決定哪些終端機輸出內容才觸發未讀高亮提示 — [plans/architecture-highlight-regex.md](plans/architecture-highlight-regex.md)
 - [ ] architecture-tree-comment-highlight: 在 markdown tree 區塊或 tree 檔案中，能夠清楚區分註解與檔名/資料夾的顏色 — [plans/architecture-tree-comment-highlight.md](plans/architecture-tree-comment-highlight.md)
-- [ ] architecture-open-settings-webview: 使用者在 Webview 介面中集中管理所有 Superset 設定，並能即時看見各面板的資料狀態標章與更新設定 — [plans/architecture-open-settings-webview.md](plans/architecture-open-settings-webview.md)
-- [ ] architecture-panel-layout-persistence: 記住 superset viewContainer 內最後一次 active 的子 view，並在下次啟動 VS Code 時自動恢復該焦點 — [plans/architecture-panel-layout-persistence.md](plans/architecture-panel-layout-persistence.md)
-- [ ] architecture-reveal-in-tree: 設計一個能在 TreeView 中自動 focus 並定位特定節點的共用機制，支援 terminals、mdns 等所有面板 — [plans/architecture-reveal-in-tree.md](plans/architecture-reveal-in-tree.md)
-- [ ] architecture-workspace-aware-group-suggestions: 當新 PTY 終端機開啟時，自動偵測其 cwd/git remote 並與既有群組比對自動歸類 — [plans/architecture-workspace-aware-group-suggestions.md](plans/architecture-workspace-aware-group-suggestions.md)
 
 ## Archive
 
+- [ ] architecture-highlight-regex: 使用者透過設定自訂的規則運算式決定哪些終端機輸出內容才觸發未讀高亮提示 — [plans/architecture-highlight-regex.md](plans/architecture-highlight-regex.md) @2026-07-08_12:31:34 @Archived @Plans
+- [ ] [feature] Add `window.onDidWriteTerminalData` (deprecated fallback) for TUI detection — see [plans/dynamic-orbiting-pearl.md](plans/dynamic-orbiting-pearl.md) @2026-07-08_12:31:27 @Archived @Terminals
+- [ ] architecture-open-settings-webview: 使用者在 Webview 介面中集中管理所有 Superset 設定，並能即時看見各面板的資料狀態標章與更新設定 — [plans/architecture-open-settings-webview.md](plans/architecture-open-settings-webview.md) @2026-07-08_11:50:26 @Archived @Plans
+- [ ] architecture-panel-layout-persistence: 記住 superset viewContainer 內最後一次 active 的子 view，並在下次啟動 VS Code 時自動恢復該焦點 — [plans/architecture-panel-layout-persistence.md](plans/architecture-panel-layout-persistence.md) @2026-07-08_11:49:54 @Archived @Plans
+- [ ] architecture-reveal-in-tree: 設計一個能在 TreeView 中自動 focus 並定位特定節點的共用機制，支援 terminals、mdns 等所有面板 — [plans/architecture-reveal-in-tree.md](plans/architecture-reveal-in-tree.md) @2026-07-08_11:49:43 @Archived @Plans
+- [ ] architecture-workspace-aware-group-suggestions: 當新 PTY 終端機開啟時，自動偵測其 cwd/git remote 並與既有群組比對自動歸類 — [plans/architecture-workspace-aware-group-suggestions.md](plans/architecture-workspace-aware-group-suggestions.md) @2026-07-08_11:48:20 @Archived @Plans
 - [x] [P2] [feature] Default subgroup panel sizes — on first open, set panel heights: Terminals fixed at 200px, TODO expanded to fill remaining space (largest), mDNS/Topology collapsed. @2026-07-05*11:09:47 @Completed @Platform*&\_UX
 - [x] [P2] [feature] `Superset: Reset All Caches` command — one-button wipe of `context.workspaceState` keys, mDNS in-memory cache, and `TopologyStore` state. Backs the "something's stale, start over" workflow; cheap (~30 LOC) and unblocks debugging. See scan note 2026-06-23#4U. [Reset All Caches 實作計畫 (Implementation Plan)](docs/specs/2026-06-24-feature-reset-caches.md) @2026-07-05*11:09:45 @Completed @Platform*&\_UX
 - [x] [P1] [feature] TODO Markdown 預覽:CSS 摺疊與過濾 — 為 `README.todo` 內建預覽加純 CSS 互動 (`:has()` + checkbox hack),不開 Webview、零 preview JS。新 feature module `src/todoPreview/`,沿用 `treePreview` 的 markdown-it hook 路線。See [docs/specs/2026-07-01-feature-todo-css-preview.md](docs/specs/2026-07-01-feature-todo-css-preview.md). @2026-07-05*11:09:35 @Completed @Platform*&\_UX

@@ -92,4 +92,111 @@ describe("ProjectsTodoStore", () => {
         await store.reset();
         expect(listener).toHaveBeenCalledTimes(2);
     });
+
+    it("picks up README.todo at depth 2 (group/project)", async () => {
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+
+        // ~/projects/<group>/<project>/README.todo  (depth 2, 應收)
+        const nested = join(projectsDir, "product", "reports", "weekly");
+        mkdirSync(nested, { recursive: true });
+        writeFileSync(join(nested, "README.todo"), "# TODO\n- [ ] deep task\n");
+
+        // ~/projects/<group>/README.todo  (depth 1, 也要收)
+        const groupOnly = join(projectsDir, "product", "reports");
+        writeFileSync(join(groupOnly, "README.todo"), "# TODO\n- [ ] intermediate\n");
+
+        const store = new ProjectsTodoStore();
+        await store.load();
+
+        const stores = store.getStores();
+        expect(stores.size).toBe(2);
+        expect(stores.has(nested)).toBe(true);
+        expect(stores.has(groupOnly)).toBe(true);
+    });
+
+    it("picks up README.todo at depth 3 (group/sub/project) but ignores depth 4", async () => {
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+
+        // ~/projects/<a>/<b>/<project>/README.todo  (depth 3, 應收)
+        const depth3 = join(projectsDir, "a", "b", "c");
+        mkdirSync(depth3, { recursive: true });
+        writeFileSync(join(depth3, "README.todo"), "# TODO\n- [ ] depth3\n");
+
+        // ~/projects/<a>/<b>/<c>/<d>/README.todo  (depth 4, 不應收)
+        const depth4 = join(projectsDir, "a", "b", "c", "d");
+        mkdirSync(depth4, { recursive: true });
+        writeFileSync(join(depth4, "README.todo"), "# TODO\n- [ ] depth4\n");
+
+        const store = new ProjectsTodoStore();
+        await store.load();
+
+        const stores = store.getStores();
+        expect(stores.has(depth3)).toBe(true);
+        expect(stores.has(depth4)).toBe(false);
+    });
+
+    it("still picks up ~/projects/tmp/<project>/README.todo at depth 2", async () => {
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+        mkdirSync(join(projectsDir, "tmp"));
+
+        // ~/projects/tmp/<a>/<project>/README.todo  (depth 3 from ~/projects, 應收)
+        const nested = join(projectsDir, "tmp", "a", "b");
+        mkdirSync(nested, { recursive: true });
+        writeFileSync(join(nested, "README.todo"), "# TODO\n- [ ] tmp nested\n");
+
+        const store = new ProjectsTodoStore();
+        await store.load();
+
+        const stores = store.getStores();
+        expect(stores.has(nested)).toBe(true);
+    });
+
+    it("ignores paths deeper than 3 levels under tmp", async () => {
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+        mkdirSync(join(projectsDir, "tmp"));
+
+        // ~/projects/tmp/<a>/<b>/<project>/README.todo  (depth 4 from ~/projects, 不應收)
+        const tooDeep = join(projectsDir, "tmp", "a", "b", "c");
+        mkdirSync(tooDeep, { recursive: true });
+        writeFileSync(join(tooDeep, "README.todo"), "# TODO\n- [ ] too deep\n");
+
+        const store = new ProjectsTodoStore();
+        await store.load();
+
+        const stores = store.getStores();
+        expect(stores.has(tooDeep)).toBe(false);
+    });
+
+    it("skips hidden directories at any depth", async () => {
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+
+        // ~/projects/.hidden/README.todo  (隱藏, 不應收)
+        const hidden = join(projectsDir, ".hidden");
+        mkdirSync(hidden);
+        writeFileSync(join(hidden, "README.todo"), "# TODO\n- [ ] hidden\n");
+
+        // ~/projects/<group>/.inner/README.todo  (深度 2 但隱藏, 不應收)
+        const hiddenInner = join(projectsDir, "group", ".inner");
+        mkdirSync(hiddenInner, { recursive: true });
+        writeFileSync(join(hiddenInner, "README.todo"), "# TODO\n- [ ] inner hidden\n");
+
+        // ~/projects/<group>/<project>/README.todo  (應收)
+        const visible = join(projectsDir, "group", "proj");
+        mkdirSync(visible, { recursive: true });
+        writeFileSync(join(visible, "README.todo"), "# TODO\n- [ ] visible\n");
+
+        const store = new ProjectsTodoStore();
+        await store.load();
+
+        const stores = store.getStores();
+        expect(stores.size).toBe(1);
+        expect(stores.has(visible)).toBe(true);
+        expect(stores.has(hidden)).toBe(false);
+        expect(stores.has(hiddenInner)).toBe(false);
+    });
 });

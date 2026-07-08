@@ -93,6 +93,18 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     });
 
+    const openProjectCmd = vscode.commands.registerCommand(
+        "superset.openProject",
+        async (item?: ProjectTodoItem) => {
+            const projectPath = item?.projectPath;
+            if (!projectPath) return;
+            const uri = vscode.Uri.file(projectPath);
+            await vscode.commands.executeCommand("vscode.openFolder", uri, {
+                forceNewWindow: true,
+            });
+        }
+    );
+
     const toggleCmd = vscode.commands.registerCommand(
         "superset.projectsTodoToggle",
         async (item?: ProjectTodoItem) => {
@@ -441,6 +453,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     );
 
     ctx.subscriptions.push(
+        openProjectCmd,
         toggleCmd,
         changePriorityCmd,
         todoNewCmd,
@@ -471,6 +484,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     return {
         dispose() {
             provider.stop();
+            openProjectCmd.dispose();
             toggleCmd.dispose();
             changePriorityCmd.dispose();
             todoNewCmd.dispose();

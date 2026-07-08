@@ -491,6 +491,13 @@ function filterItem(item: TodoItem, topLevelSections: TodoItem[]): TodoItem | nu
     const filteredChildren = item.children
         ? filterCompleted(item.children, topLevelSections)
         : undefined;
+    // Hide a non-archive section when all of its children have been
+    // filtered out (all completed, or the section was empty to begin
+    // with).  This matches the behaviour of applyPriorityFilter and
+    // prevents empty section headers from appearing in the tree.
+    if (item.kind === "section" && filteredChildren && filteredChildren.length === 0) {
+        return null;
+    }
     // "Fully completed" = self checked AND no *actionable* descendant left.
     // Actionable = an unchecked checkbox somewhere in the subtree. Plain
     // `list` notes always survive filtering, but they carry no work, so

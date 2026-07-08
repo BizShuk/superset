@@ -44,6 +44,12 @@ describe("renderLine", () => {
         expect(html).toContain('<span class="tree-comment"> #manifest</span>');
     });
 
+    it("splits a trailing comment with a space before the hash", () => {
+        const html = renderLine(md, "├── package.json # manifest");
+        expect(html).toContain('<span class="tree-file">📄 package.json</span>');
+        expect(html).toContain('<span class="tree-comment"> # manifest</span>');
+    });
+
     it("handles a bare name with no connector prefix", () => {
         const html = renderLine(md, "root/");
         expect(html).toBe(

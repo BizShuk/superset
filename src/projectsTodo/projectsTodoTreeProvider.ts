@@ -77,9 +77,17 @@ export class ProjectsTodoTreeProvider
         if (isProjectNode) {
             const item = new vscode.TreeItem(element.text);
             item.iconPath = new vscode.ThemeIcon("folder");
+            // Show pending (unchecked) task count as description.
+            // Children are already filtered by showCompleted / priority,
+            // so the count naturally excludes archived items when the
+            // hide-completed filter is active.
+            const pending = countPending(element.children);
+            item.description = `${pending} pending`;
+            item.tooltip = element.projectPath;
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
             item.contextValue = "projectsTodoProject";
-            item.tooltip = `專案路徑: ${element.projectPath}`;
+            // No item.command — clicking the row text folds/unfolds the section.
+            // Opening the project is an inline button (see package.json menus).
             return item;
         }
 
@@ -248,4 +256,25 @@ function sortSiblings(items: ProjectTodoItem[]): ProjectTodoItem[] {
         ...items.filter((t) => !t.checked),
         ...items.filter((t) => t.checked),
     ];
+}
+
+/**
+ * Recursively count unchecked checkbox items.
+ * Since children passed to project nodes are already filtered by
+ * {@link filterCompleted} and {@link applyPriorityFilter}, the count
+ * naturally excludes archived/completed items when the hide-completed
+ * filter is active, and respects the active priority filter.
+ */
+function countPending(items?: ProjectTodoItem[]): number {
+    if (!items || items.length === 0) return 0;
+    let count = 0;
+    for (const item of items) {
+        if (item.kind === "checkbox" && !item.checked) {
+            count++;
+        }
+        if (item.children) {
+            count += countPending(item.children);
+        }
+    }
+    return count;
 }
