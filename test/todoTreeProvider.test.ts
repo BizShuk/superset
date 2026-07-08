@@ -510,6 +510,97 @@ describe("TodoTreeProvider", () => {
         expect(top[0].text).toBe("section");
         expect(top[0].children).toEqual([]);
     });
+
+    it("shows pending count badge for section rows in getTreeItem", () => {
+        const sectionItem: TodoItem = {
+            line: 0,
+            text: "Foo",
+            kind: "section",
+            checked: false,
+            level: 2,
+            children: [
+                item("a", false),
+                item("b", false),
+                item("c", true),
+            ],
+        };
+        const store = makeStore([sectionItem]);
+        const provider = new TodoTreeProvider(store);
+        // Drive getChildren so filterCompleted/applyPriorityFilter run.
+        provider.getChildren();
+
+        const ti = provider.getTreeItem(sectionItem);
+        expect(ti.label).toBe("Foo");
+        expect(ti.contextValue).toBe("todoSectionArchivable");
+        expect(ti.description).toBe("2 ◐");
+    });
+
+    it("shows 0 pending badge for section with only completed items", () => {
+        // Use toggleShowCompleted so the all-[x] section survives the
+        // filter (otherwise `filterItem` would drop a section whose
+        // children are all completed). With the filter relaxed, both
+        // completed items stay visible but contribute 0 to the pending
+        // count, exercising the `0 ◐` path.
+        const sectionItem: TodoItem = {
+            line: 0,
+            text: "Done",
+            kind: "section",
+            checked: false,
+            level: 2,
+            children: [item("a", true), item("b", true)],
+        };
+        const store = makeStore([sectionItem]);
+        const provider = new TodoTreeProvider(store);
+        provider.toggleShowCompleted();
+        provider.getChildren();
+
+        const ti = provider.getTreeItem(sectionItem);
+        expect(ti.description).toBe("0 ◐");
+    });
+
+    it("hides pending badge for archive subsection rows", () => {
+        // An h3 subsection nested under `## Archive` resolves to
+        // `todoSectionArchived`. Hide-completed is on by default, but
+        // the archive subtree is fully dropped by filterItem in that
+        // mode. Toggle showCompleted on so the archive row IS rendered
+        // and exercises the no-badge rule.
+        const archiveSubsection: TodoItem = {
+            line: 3,
+            text: "Old",
+            kind: "section",
+            checked: false,
+            level: 3,
+            children: [item("still", false)],
+        };
+        const activeSection: TodoItem = {
+            line: 0,
+            text: "Active",
+            kind: "section",
+            checked: false,
+            level: 2,
+            children: [item("a", false)],
+        };
+        const archiveSection: TodoItem = {
+            line: 2,
+            text: "Archive",
+            kind: "section",
+            checked: false,
+            level: 2,
+            children: [archiveSubsection],
+        };
+        const store = makeStore([activeSection, archiveSection]);
+        const provider = new TodoTreeProvider(store);
+        provider.toggleShowCompleted();
+        provider.getChildren();
+
+        const activeTi = provider.getTreeItem(activeSection);
+        expect(activeTi.contextValue).toBe("todoSectionArchivable");
+        expect(activeTi.description).toBe("1 ◐");
+
+        const archiveTi = provider.getTreeItem(archiveSubsection);
+        expect(archiveTi.contextValue).toBe("todoSectionArchived");
+        expect(archiveTi.description).toBeUndefined();
+    });
 });
 
 describe("TodoTreeProvider priority icons", () => {

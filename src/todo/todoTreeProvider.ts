@@ -229,10 +229,22 @@ export class TodoTreeProvider
                 item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${element.text.toLowerCase()}.svg`);
             }
         }
-        item.description = element.description;
+        // Compute contextValue once and reuse for the badge decision
+        // below and the final contextValue assignment.
+        const sectionContext = this.computeSectionContextValue(element);
+        // Append a half-circle badge showing the count of pending
+        // (unchecked) checkboxes. Children were already filtered by
+        // showCompleted / priority in getChildren, so the count
+        // respects the active filter. Archive sub-sections are
+        // skipped — by definition they hold finished work, so a
+        // "0 ◐" badge is noise rather than signal.
+        if (sectionContext !== "todoSectionArchived") {
+            const pending = countPending(element.children);
+            item.description = `${pending} ◐`;
+        }
         item.tooltip = element.description ? `${element.description}/${element.text}` : element.text;
         item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-        item.contextValue = this.computeSectionContextValue(element);
+        item.contextValue = sectionContext;
         return item;
     }
 
@@ -585,5 +597,27 @@ export function resolveTodoLink(target: string, workspaceFolder: string): Resolv
         : path.join(workspaceFolder, cleanPath);
 
     return { type: "file", uriOrPath: resolvedPath };
+}
+
+/**
+ * Recursively count unchecked checkbox items. Since the children
+ * arriving at section rows have already been filtered by
+ * {@link filterCompleted} and {@link applyPriorityFilter} (see
+ * `getChildren`), the count naturally excludes archived / completed
+ * items when the hide-completed filter is active and respects the
+ * active priority filter.
+ */
+function countPending(items?: TodoItem[]): number {
+    if (!items || items.length === 0) return 0;
+    let count = 0;
+    for (const item of items) {
+        if (item.kind === "checkbox" && !item.checked) {
+            count++;
+        }
+        if (item.children) {
+            count += countPending(item.children);
+        }
+    }
+    return count;
 }
 

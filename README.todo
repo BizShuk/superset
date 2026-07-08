@@ -2,6 +2,9 @@
 
 ### Architecture
 
+- [ ] [chore] consistency-redundancy-scalability: 盤點並修補整體結構性重複、可擴充性瓶頸與文件規約(6 stages,Stage 1–3 為純檔案結構零風險) — [plans/2026-07-08-chore-consistency-redundancy-scalability.md](plans/2026-07-08-chore-consistency-redundancy-scalability.md)
+- [ ] [P1] [feature] business-scope-evaluation: 評估 `~/projects/` 統一介面下,superset 8 個模組的高槓桿演化方向 — 最高槓桿為 `.project_index` 註冊表消費(`ProjectStore` 分層去 hardcode、新增 repo 自動收錄,對齊根 CLAUDE.md);與 [consistency-redundancy-scalability](plans/2026-07-08-chore-consistency-redundancy-scalability.md) 範圍不重疊(該 plan 處理 todo×projectsTodo 重複與檔案結構,本 plan 處理分層資料來源) — [plans/2026-07-08-business-scope-evaluation.md](plans/2026-07-08-business-scope-evaluation.md)
+
 ### Terminals
 
 

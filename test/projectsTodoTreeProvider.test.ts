@@ -176,4 +176,85 @@ describe("ProjectsTodoTreeProvider", () => {
         expect(item.contextValue).toBe("projectsTodoProject");
         expect(item.collapsibleState).toBe(2); // Expanded
     });
+
+    it("shows pending count badge for section rows in getTreeItem", async () => {
+        const p = join(tempDir, "projects", "cc-plugin");
+        writeFileSync(
+            join(p, "README.todo"),
+            "## Foo\n- [ ] a\n- [ ] b\n- [x] c\n"
+        );
+        await store.load();
+
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+        const section = (await provider.getChildren(roots![0]))![0];
+        expect(section.text).toBe("Foo");
+
+        const item = provider.getTreeItem(section);
+        expect(item.label).toBe("Foo");
+        expect(item.contextValue).toBe("projectsTodoSectionArchivable");
+        expect(item.description).toBe("2 ◐");
+    });
+
+    it("shows 0 pending badge for section with only completed items", async () => {
+        const p = join(tempDir, "projects", "cc-plugin");
+        // Use toggleShowCompleted so the all-[x] section survives the
+        // filter (otherwise `filterItem` would drop a section whose
+        // children are all completed). With the filter relaxed, both
+        // completed items stay visible but contribute 0 to the pending
+        // count, exercising the `0 ◐` path.
+        writeFileSync(
+            join(p, "README.todo"),
+            "## Done\n- [x] a\n- [x] b\n"
+        );
+        await store.load();
+
+        const provider = new ProjectsTodoTreeProvider(store);
+        provider.toggleShowCompleted();
+        const roots = await provider.getChildren();
+        const section = (await provider.getChildren(roots![0]))![0];
+        expect(section.text).toBe("Done");
+
+        const item = provider.getTreeItem(section);
+        expect(item.description).toBe("0 ◐");
+    });
+
+    it("hides pending badge for archive subsection rows", async () => {
+        const p = join(tempDir, "projects", "cc-plugin");
+        // Hide-completed is on by default and `filterItem` drops
+        // archive subtrees (## Archive itself and ### Old) entirely.
+        // The archive row therefore never reaches `getTreeItem` in
+        // that mode. To exercise the "no badge for archive" rule we
+        // need a setup where the archive row IS rendered, which means
+        // toggling showCompleted on so the archive subtree survives.
+        // We also give `### Old` one pending child so it isn't pruned
+        // as fully-completed.
+        writeFileSync(
+            join(p, "README.todo"),
+            [
+                "## Active",
+                "- [ ] a",
+                "## Archive",
+                "### Old",
+                "- [ ] still",
+            ].join("\n")
+        );
+        await store.load();
+
+        const provider = new ProjectsTodoTreeProvider(store);
+        provider.toggleShowCompleted();
+        const roots = await provider.getChildren();
+        const sections = await provider.getChildren(roots![0]);
+
+        const active = sections.find((s) => s.text === "Active")!;
+        const archive = sections.find((s) => s.text === "Old")!;
+
+        const activeItem = provider.getTreeItem(active);
+        expect(activeItem.contextValue).toBe("projectsTodoSectionArchivable");
+        expect(activeItem.description).toBe("1 ◐");
+
+        const archiveItem = provider.getTreeItem(archive);
+        expect(archiveItem.contextValue).toBe("projectsTodoSectionArchived");
+        expect(archiveItem.description).toBeUndefined();
+    });
 });
