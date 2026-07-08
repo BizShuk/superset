@@ -80,11 +80,19 @@ export class ProjectsTodoTreeProvider
             // Show pending (unchecked) task count as description.
             // Children are already filtered by showCompleted / priority,
             // so the count naturally excludes archived items when the
-            // hide-completed filter is active.
+            // hide-completed filter is active. When the current filter
+            // excludes every task in this project, children is empty and
+            // the count is 0 — that's the "no pending tasks inside" state
+            // the overview still surfaces (see getChildren).
             const pending = countPending(element.children);
             item.description = `${pending} pending`;
             item.tooltip = element.projectPath;
-            item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            // Collapse when nothing to show under the current filter so the
+            // tree doesn't expand into empty space. Expand otherwise so the
+            // user sees sections immediately.
+            item.collapsibleState = (element.children?.length ?? 0) > 0
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed;
             item.contextValue = "projectsTodoProject";
             // No item.command — clicking the row text folds/unfolds the section.
             // Opening the project is an inline button (see package.json menus).
@@ -220,9 +228,13 @@ export class ProjectsTodoTreeProvider
             const completedFiltered = this.showCompleted ? raw : filterCompleted(raw);
             const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
 
-            if (filtered.length === 0) {
-                continue;
-            }
+            // Note: the overview intentionally surfaces EVERY project that
+            // has a `README.todo`, even when the current filter (hide-completed
+            // / priority) leaves zero visible items. The project row stays
+            // (collapsed if its filtered children happen to be empty) so users
+            // see at a glance which projects still have a todo file, regardless
+            // of whether every task is checked, the file is empty, or the
+            // active priority filter excludes all of this project's tasks.
 
             // Decorate items with project information
             const decoratedChildren = decorateItems(filtered, projectName, projectPath);

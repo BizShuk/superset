@@ -257,4 +257,84 @@ describe("ProjectsTodoTreeProvider", () => {
         expect(archiveItem.contextValue).toBe("projectsTodoSectionArchived");
         expect(archiveItem.description).toBeUndefined();
     });
+
+    it("lists project whose tasks are all completed (default hide-completed mode)", async () => {
+        const p = join(tempDir, "projects", "cc-plugin");
+        writeFileSync(
+            join(p, "README.todo"),
+            "# TODO\n- [x] finished\n- [x] also finished\n"
+        );
+        // env-setup still has its pending Task 3, so the root list
+        // should contain both projects even though cc-plugin would
+        // have been hidden by the old gate.
+        await store.load();
+
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        expect(roots).toHaveLength(2);
+        const cc = roots!.find((r) => r.text === "cc-plugin")!;
+        expect(cc).toBeDefined();
+        // All-completed project has no surviving children under
+        // hide-completed mode, so the row should report 0 pending.
+        expect(cc.children).toEqual([]);
+        const item = provider.getTreeItem(cc);
+        expect(item.description).toBe("0 pending");
+        // Empty filtered children → collapsed, not expanded into nothing.
+        expect(item.collapsibleState).toBe(1); // Collapsed
+    });
+
+    it("lists project whose README.todo is empty", async () => {
+        const p = join(tempDir, "projects", "cc-plugin");
+        writeFileSync(join(p, "README.todo"), "# TODO\n");
+        await store.load();
+
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        expect(roots).toHaveLength(2);
+        const cc = roots!.find((r) => r.text === "cc-plugin")!;
+        expect(cc.children).toEqual([]);
+        const item = provider.getTreeItem(cc);
+        expect(item.description).toBe("0 pending");
+        expect(item.collapsibleState).toBe(1); // Collapsed
+    });
+
+    it("lists project even when active priority filter excludes every task", async () => {
+        const p = join(tempDir, "projects", "cc-plugin");
+        // cc-plugin has only P1 + no-priority tasks; env-setup has a
+        // plain pending task. With P0 filter on, cc-plugin's children
+        // collapse to empty, but the project must still appear.
+        writeFileSync(
+            join(p, "README.todo"),
+            "# TODO\n- [ ] [P1] only P1\n- [ ] plain\n"
+        );
+        await store.load();
+
+        const provider = new ProjectsTodoTreeProvider(store);
+        provider.togglePriorityFilter("P0");
+
+        const roots = await provider.getChildren();
+        expect(roots).toHaveLength(2);
+        const cc = roots!.find((r) => r.text === "cc-plugin")!;
+        expect(cc.children).toEqual([]);
+        const item = provider.getTreeItem(cc);
+        expect(item.description).toBe("0 pending");
+        expect(item.collapsibleState).toBe(1); // Collapsed
+    });
+
+    it("expands project node when filtered children exist", async () => {
+        // Sanity-check the inverse of the collapsed case: when at least
+        // one child survives the filter, the project node stays Expanded.
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        // env-setup has a pending task in the default setup, so it has
+        // a filtered child and should render Expanded.
+        const env = roots!.find((r) => r.text === "env-setup")!;
+        expect(env.children!.length).toBeGreaterThan(0);
+        const item = provider.getTreeItem(env);
+        expect(item.collapsibleState).toBe(2); // Expanded
+        expect(item.description).toBe("1 pending");
+    });
 });

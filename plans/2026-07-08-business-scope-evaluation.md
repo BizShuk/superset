@@ -7,7 +7,7 @@
 
 `superset` 從最初「terminal 三處高亮」單一功能 (v0.1),已長成 8 個 feature module、~9k LOC src / ~7.2k LOC test、44 個 test file、~412 case 的多面板擴充 (v0.8.0)。最近的兩次 commit (`5af916d` projects / projectsTodo plugin、`33ab6e2` README.todo discovery) 把範圍從「單一工作區的終端機面板」推進到「跨 `~/projects/` 全工作區的專案發現 + 專案層級 TODO 管理」。這是一個範圍躍遷 (scope transition),適合回頭盤點:哪些能力是真正高價值的骨幹,哪些是邊際收益遞減的擴充。
 
-> 註:本評估與同日 [`2026-07-08-chore-consistency-redundancy-scalability.md`](2026-07-08-chore-consistency-redundancy-scalability.md) 互補而非重疊 — 那份處理「結構健康度」(todo×projectsTodo 鏡像去重、檔案命名、`.vscodeignore`),本評估處理「業務範圍與高價值方向」(`.project_index` 註冊表消費為主軸)。兩者範圍不交集:本評估的 ★2 (todo 引擎統一) 概念上呼應那份的 Stage 5,但本評估只立項、不實作。
+> 註:本評估與同日 [`2026-07-08-chore-consistency-redundancy-scalability.md`](2026-07-08-chore-consistency-redundancy-scalability.md) 互補而非重疊 — 那份處理「結構健康度」(todo×projectsTodo 鏡像去重、檔案命名、`.vscodeignore`),本評估處理「業務範圍與高價值方向」(todo 引擎統一為主軸,見 §3 與 §4)。兩者範圍不交集:本評估的 ★1 (todo 引擎統一) 概念上呼應那份的 Stage 5 — 後續應合併成單一實作 plan,避免雙軌提案。
 
 ## 2. 業務範圍現況 (Current Scope Map)
 
@@ -46,113 +46,189 @@ superset v0.8.0
 
 依「對核心使用情境的槓桿 × 實作風險」排序:
 
-| 順位 | 面向                                          | 槓桿 (Leverage)                                                                                       | 風險 | 說明                                                                                                                                                       |
-| ---- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ★1   | `.project_index` 註冊表消費 + 自動探索        | 高 — 一次消除 `projects/` 的 hardcode 分類,讓「新增 repo 自動收錄」從口號變事實,對齊根 CLAUDE.md     | 低  | `projectStore.ts` 已是 thin 掃描器,改成讀 `.project_index/projects.json`(不存在則 fallback hardcode)即可;`projects/` 已存在的四層結構不變                |
-| ★2   | todo 引擎統一 (todo ↔ projectsTodo 去重)     | 高 — `todo` (2457) 與 `projectsTodo` (1035) 共 52 vs 58 個 command、大量 menu/rule 完全對鏡重複        | 中  | 兩者 parser 已共用 (`projectsTodo` import `../todo/parser`),但 command/menu/icon/filter 全複製一份;應抽出共用的 `todoEngine` 讓兩面板只差「資料來源」一維 |
-| ★3   | 終端機活動摘要 (Terminal Activity Summary)    | 中高 — 核心情境是「背景 terminal 有動靜」,但目前只給布林高亮,沒有「上次輸出摘要 / 命令歷史」可看回    | 中  | 與已 archived 的 `terminal-lifecycle-audit-log`、`terminal-fuzzy-search` 互補;WebView 呈現 per-terminal 的最近命令 + tail                                 |
-| ★4   | 跨面板 reveal-in-tree 共用機制                | 中 — 已有 plan (`architecture-reveal-in-tree.md`,已 archived 但未實作),terminals/mdns/todo 都能用    | 低  | 純增量,`vscode.commands.executeCommand("treeView.reveal")` 已穩定;解除 archived 狀態即可排程                                                              |
-| ★5   | mDNS one-click connect                        | 中 — 偵測到服務後「一鍵連」是自然延伸 (SSH/Browser/AirPlay)                                            | 低  | 已有 plan (`2026-06-23-feature-mdns-one-click-connect.md`),依 service type 派發對應 opener                                                                |
-| ☆6   | Open Settings / Show Diagnostics WebView      | 低中 — 兩個 archived plan,屬「方便但非核心」,可等設定項變多再收斂                                    | 低  | 目前 `superset.*` 設定項少,webview 投入產出比偏低                                                                                                          |
+| 順位 | 面向                                          | 槓桿 (Leverage)                                                                                                  | 風險 | 說明                                                                                                                                                  |
+| ---- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ★1   | todo 引擎統一 (todo ↔ projectsTodo 共用引擎) | 高 — 兩模組合計 19 個獨立 command × ~5 處 menu 註冊點 = ~95 條 entry,絕大多數完全鏡像重複;抽 `todoEngine/` 後可降至 ~30 LOC 差異 | 中  | `projectsTodo` 已 import `../todo/parser`(共用 AST),但 command/menu/icon/filter 全複製一份;factory 化後兩面板只差「資料來源」一維                |
+| ★2   | 終端機活動摘要 (Terminal Activity Summary)    | 中高 — 核心情境是「背景 terminal 有動靜」,但目前只給布林高亮,沒有「上次輸出摘要 / 命令歷史」可看回                 | 中  | 與已 archived 的 `terminal-lifecycle-audit-log`、`terminal-fuzzy-search` 互補;WebView 呈現 per-terminal 的最近命令 + tail                            |
+| ★3   | 跨面板 reveal-in-tree 共用機制                | 中 — 已有 plan (`architecture-reveal-in-tree.md`,已 archived 但未實作),terminals/mdns/todo 都能用                 | 低  | 純增量,`vscode.commands.executeCommand("treeView.reveal")` 已穩定;解除 archived 狀態即可排程                                                           |
+| ★4   | mDNS one-click connect                        | 中 — 偵測到服務後「一鍵連」是自然延伸 (SSH/Browser/AirPlay)                                                       | 低  | 已有 plan (`2026-06-23-feature-mdns-one-click-connect.md`),依 service type 派發對應 opener                                                             |
+| ☆5   | Open Settings / Show Diagnostics WebView      | 低中 — 兩個 archived plan,屬「方便但非核心」,可等設定項變多再收斂                                                  | 低  | 目前 `superset.*` 設定項少,webview 投入產出比偏低                                                                                                     |
 
-### 為何 ★1 是最高價值
+### 3.1 已撤回:`.project_index` 註冊表消費
 
-`superset` 的核心價值主張 (value proposition) 正從「終端機儀表板」演化為「`~/projects/` 工作區的統一觀測 + 操作台 (unified console)」。這個演化由最近三個 commit 標定:
+原列為 ★1,實地盤點 `~/projects/.project_index/projects.json` 後發現關鍵落差:
+
+- 該檔案是 **object keyed by project name**(非 array),且**完全沒有 `subgroup` 欄位**
+- 真實 schema:`{ generated_at, stale_after_days, projects_root, projects: { <name>: { path, purpose, tags, stack, subprojects, has_readme, has_claude } } }`
+- 19 個 entries 全部需要外部對應才能得到 subgroup;若 superset 想直接消費,需先在 `.project_index` 端擴充 schema(跨 repo,需與 indexer 維護者協調)
+
+**撤回原因**:實作前置成本(跨 repo schema 變更)超過本 plan 可承擔的 scope,且收益(消 hardcode)未能在無 schema 擴充前提下達成。`.project_index` 消費改列入 §5 deferred,待跨 repo 協調完成後另開獨立 plan。
+
+### 3.2 為何 ★1 (todo 引擎統一) 是最高槓桿
+
+`superset` 的核心價值主張正從「終端機儀表板」演化為「`~/projects/` 工作區的統一觀測 + 操作台」,這條軸線上 **`todo` 與 `projectsTodo` 是第一個出現鏡像重複的 feature pair**:
 
 ```mermaid
 flowchart LR
-    A["v0.7 terminal 三處高亮<br/>(單工作區)"] -->|"5af916d"| B["projects + projectsTodo<br/>(跨 ~/projects/ 彙整)"]
-    B -->|"33ab6e2"| C["README.todo 多層發現<br/>(深度掃描)"]
-    C -->|"★1 本計畫"| D[".project_index 註冊表<br/>分類去 hardcode"]
-    D --> E["superset = ~/projects/ 操作台<br/>(新增 repo 零改碼收錄)"]
+    A["v0.7 terminal 三處高亮"] -->|"5af916d"| B["projects + projectsTodo<br/>(出現鏡像)"]
+    B -->|"33ab6e2"| C["README.todo 多層發現"]
+    C -->|"★1 本計畫"| D["todoEngine 共用層<br/>(鏡像去重)"]
+    D --> E["superset = ~/projects/ 操作台<br/>(新增面板零拷貝)"]
 ```
 
-★1 直接服務這條演化主軸:它把「分類」從 superset 內部知識**外移**到 `.project_index/`(全工作區單一真相源),讓 superset 與根 CLAUDE.md 定義的統一介面形成**雙向閉環** — 各 repo 自我宣告分層,superset 消費宣告。這比再長一個獨立面板 (★3) 更能鞏固「superset 是工作區操作台」這個定位,且實作面只動一個檔案。
+不處理這個鏡像,後續每加一個「跨多檔 × 單檔」的 feature pair(mdns × projectsMdns? topology × projectsTopology?)都會複製一次;先建立共用層,後續新 pair 只需寫 store + treeProvider 兩份,command/menu 全繼承。這是**結構性槓桿**,而非一次性省碼。
 
-## 4. 推薦計畫 (Recommended Plan):`.project_index` 註冊表消費
+## 4. 推薦計畫 (Recommended Plan):todo 引擎統一
 
 ### 4.1 目標 (Goal)
 
-讓 `ProjectStore` 的分層分類**不再靠 hardcode**,改讀 `~/projects/.project_index/projects.json`(機器可讀註冊表);不存在時 fallback 到既有 hardcode Set,保持向後相容。新增 repo 只要符合統一介面(被 `.project_index` 收錄)即自動正確分層,無需改 superset 原始碼。
+把 `src/todo/`(單一工作區)與 `src/projectsTodo/`(跨多檔彙整)鏡像重複的 **command / menu / filter / icon** 抽出到 `src/todoEngine/`,兩個面板只剩**資料來源**與 **TreeView 渲染**兩處差異。介面語意 100% 保留,既有 19 個獨立 command × 5 處 menu 註冊點(共 ~95 條 entry)的鏡像副本砍成一份工廠輸出。
 
 ### 4.2 設計決策 (Design Decisions)
 
-| 議題                            | 決策                                                                                                                                                  | 理由                                                                                                                            |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 註冊表讀取時機                  | `scan()` 開頭 `readProjectIndex()` 一次,失敗/不存在 → fallback hardcode Set                                                                          | 與既有 `scanDirectory` 同生命週期;不另設 watcher(`.project_index` 變動低頻,靠 `Superset: Reset Caches` 重讀即可)                |
-| 註冊表格式 (schema 契約)        | `projects.json: { version: 1, projects: [{ name, path, subgroup }] }`,subgroup 為 `aggregation\|application\|framework\|tool\|temporary` 五值之一    | 對齊 `ProjectSubgroupType`;`version` 欄位預留未來 schema 演進                                                                  |
-| fallback 策略                   | 註冊表缺某 repo → 用既有 hardcode Set 補;註冊表完全沒有 → 全用 hardcode                                                                               | 不破壞現有行為;過渡期兩套並存                                                                                                  |
-| `tmp/` 暫存區                   | 維持掃描 `~/projects/tmp/` 並標 `temporary`,**不**讀註冊表(tmp 是孵化區,未晉升不該進註冊表)                                                          | 根 CLAUDE.md「`tmp/` 只放真正暫存物;成熟 repo 晉升 `~/projects/<name>`」;tmp 與註冊表語意不同                                  |
-| 未知 subgroup 值                | 註冊表給了不認得的 subgroup → 視為 `application`(預設),並 log warning                                                                                | 寬容壞資料,不讓單一壞 entry 炸掉整個面板                                                                                        |
-| 註冊表路徑                      | `path.join(os.homedir(), "projects", ".project_index", "projects.json")`                                                                              | 對齊根 CLAUDE.md「`.project_index/`(`projects.json` + `INDEX.md`)」                                                              |
-| 是否寫回註冊表                  | **不寫** — superset 是消費端,不是註冊表產生端 (那是 `.project_index` 工具的職責)                                                                      | 單向依賴,避免 superset 與註冊表工具互相覆寫;若日後要「掃到新 repo 自動建議加入註冊表」是另一個 feature                        |
+| 議題                              | 決策                                                                                                                                                | 理由                                                                                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 共用層位置                        | 新建 `src/todoEngine/`(對齊 `todo/`、`mdns/`、`topology/` 的命名風格)                                                                            | 不污染 `todo/`(它是面板本體,非共用基礎);`todoEngine` 名字直白                                                                       |
+| 共用範圍                          | command factory、menu/rule factory、filter 邏輯(priority/hideCompleted)、icon 對應、viewType 切換                                              | 這些是純函式 + 資料驅動,易抽                                                                                                                        |
+| **不**共用範圍                    | Store 介面(單檔 vs 多檔聚合)、TreeView 渲染(兩面板結構不同:`todo` 是 sections/items,`projectsTodo` 是 projects/(sections/items))                  | 強抽會把 store 與 treeProvider 耦合在一起,違反兩模組既有 SRP                                                                       |
+| Command factory 簽名              | `createTodoCommands(deps: TodoEngineDeps): CommandDef[]`,`deps` 注入 `store`、`treeProvider`、`commandPrefix`(e.g. `todo` vs `projectsTodo`)         | 純函式 + DI,可單測;`commandPrefix` 區隔兩個 namespace                                                                              |
+| Menu factory                      | `createTodoMenus(deps, config)` 動態產出 `view/title` + `view/item/context` 條目,綁定 `viewItem` 與 `viewId`                                      | 與 command 同源,避免「command 改了 menu 沒跟」                                                                                                       |
+| `package.json` 處理               | `contributes.commands` 與 `menus.view/title`、`menus.view/item/context` 改由 build script 動態生成(對齊同日 `consistency-redundancy-scalability` Stage 5 的 `gen-package-commands.mjs`) | 手寫 95 條 entry 易漏;script 化是 single source of truth                                                                            |
+| 介面契約保留                      | 使用者看到的 command ID 名稱(`superset.todo*` / `superset.projectsTodo*`)、keybinding、`when` clause **完全不變**                                  | 既有使用者設定 (keybindings.json / settings) 不破                                                                                                    |
+| 風險隔離                          | 抽工廠為獨立 commit,既有 `src/todo/`、`src/projectsTodo/` 在同一 commit 內 refactor;既有 todo + projectsTodo 共 57 個 test case 必須 0 修改通過                      | 把「對鏡像去重」與「行為變更」解耦                                                                                                                   |
+| 與同日 plan 邊界                  | 本 plan 為**評估與決策**;`plans/2026-07-08-chore-consistency-redundancy-scalability.md` Stage 5 為**實作規格** — 兩者應於後續合併成單一實作 plan     | 避免雙軌提案入口造成版本衝突                                                                                                                        |
 
 ### 4.3 修改檔案 (Files to Change)
 
 ```tree
-src/projects/
-├── projectStore.ts        # 主要改動:新增 readProjectIndex() + scan() 整合
-├── projectIndex.ts        # 新建:註冊表讀取 + schema 驗證 + fallback 合併 (純函式,可單測)
-└── types.ts               # ProjectIndexEntry / ProjectIndexDoc 型別 (如未有)
+src/todoEngine/                    # 新建 module
+├── commandFactory.ts              # createTodoCommands(deps) → CommandDef[]
+├── menuFactory.ts                 # createTodoMenus(deps) → view/title + view/item/context entries
+├── filterFactory.ts               # createTodoFilters(deps) → priority filter 邏輯
+├── iconMap.ts                     # viewType / priority → icon resource 路徑對應
+├── types.ts                       # TodoEngineDeps / CommandDef / MenuEntry
+└── index.ts                       # barrel
+
+src/todo/
+├── plugin.ts                      # 改用 todoEngine factory 取代 inline command/menu 註冊
+└── index.ts                       # 既有 FeatureContext register 入口;行為不變
+
+src/projectsTodo/
+├── plugin.ts                      # 同上,改用 todoEngine factory(commandPrefix="projectsTodo")
+└── index.ts                       # 既有 FeatureContext register 入口;行為不變
+
+package.json                       # contributes.commands + menus.view/* 改由 build script 生成
+scripts/
+└── gen-package-commands.mjs       # 新建:讀 src/todoEngine/factory 輸出,產出 package.json 片段
 ```
 
-**`projectIndex.ts` 新建**(純函式,無 `vscode` import,可直接單測,模式對齊 `todo/parser.ts` / `mdns/parser.ts`):
+**`todoEngine/commandFactory.ts` 範例形狀**(純函式,無 `vscode` import,可單測):
 
 ```ts
-// 讀 ~/projects/.project_index/projects.json,回傳 per-name 的 subgroup 對應表。
-// 不存在 / 壞 JSON → 回 undefined,呼叫端 fallback hardcode。
-export async function readProjectIndex(
-    homeDir: string,
-    readFn: (p: string) => Promise<string> = defaultRead
-): Promise<Map<string, ProjectSubgroupType> | undefined> { ... }
-
-// 合併註冊表分類與 hardcode fallback:註冊表優先,缺的用 fallback 補。
-// 未知 subgroup 值 → application + warn。
-export function mergeClassification(
-    name: string,
-    indexEntry: ProjectSubgroupType | undefined,
-    fallback: ProjectSubgroupType
-): ProjectSubgroupType { ... }
+// 給定 deps,產出所有 todoEngine 衍生的 command definitions
+// deps.commandPrefix = "todo" | "projectsTodo" 決定 command ID prefix
+export function createTodoCommands(deps: TodoEngineDeps): CommandDef[] {
+    return [
+        { id: `${deps.commandPrefix}.toggle`, handler: () => deps.store.toggle(deps.activeItem) },
+        { id: `${deps.commandPrefix}.archive`, handler: () => deps.store.archive(deps.activeItem) },
+        // ... 共 19 個獨立 command × 兩 prefix = 38 個 def,但原始碼只有 19 份
+    ];
+}
 ```
 
-**`projectStore.ts` 改動**:`scan()` 先 `await readProjectIndex(os.homedir())` 取得 `indexMap`,分類階段改呼叫 `mergeClassification(dirName, indexMap?.get(dirName), hardcodeSubgroup(dirName))`。`hardcodeSubgroup()` 封裝既有三個 Set 的 if-else 鏈(保留為 fallback,不刪)。
+**`todo/plugin.ts` 改動後**(示意):
+
+```ts
+export const todoPlugin: ExtensionPlugin = {
+    id: "todo",
+    activate(pCtx) {
+        const deps: TodoEngineDeps = {
+            commandPrefix: "todo",
+            store: registry,          // 既有 TodoStore
+            treeProvider,             // 既有 TodoTreeProvider
+            viewId: "superset.todo"
+        };
+        const cmds = createTodoCommands(deps);
+        const menus = createTodoMenus(deps);
+        registerFromFactory(pCtx, cmds, menus);  // 既有 register 邏輯,只是吃 factory 產物
+        return;  // 沒 markdown 貢獻
+    }
+};
+```
 
 ### 4.4 測試 (Testing)
 
-新增 `test/projectIndex.test.ts`(純函式,模式對齊 `todoParser.test.ts`):
+新增(對齊既有 `todoParser.test.ts` / `mdnsParser.test.ts` 純函式模式):
 
-| Case | 描述 |
-| --- | --- |
-| 1 | 註冊表存在且含某 repo → 回傳正確 subgroup Map |
-| 2 | 註冊表檔案不存在 → `readProjectIndex` 回 `undefined`,scan fallback hardcode |
-| 3 | 註冊表 JSON 壞掉 → 回 `undefined`,不丟例外 |
-| 4 | `mergeClassification`:註冊表有 entry → 用註冊表值 |
-| 5 | `mergeClassification`:註冊表無 entry → 用 fallback |
-| 6 | `mergeClassification`:註冊表給未知 subgroup → 回 `application`(預設) |
-| 7 | 整合:scan() 時註冊表部分覆蓋,未覆蓋 repo 走 fallback,tmp/ 永遠 temporary |
+| 測試檔                              | 對象                                                                              | 案例數級距 |
+| ----------------------------------- | --------------------------------------------------------------------------------- | ---------- |
+| `todoEngine/commandFactory.test.ts` | 19 個 command 對兩 prefix 的 ID 拼裝 + handler 綁定                                | ~38        |
+| `todoEngine/menuFactory.test.ts`    | `view/title` × `view/item/context` × `viewItem` 條件對齊                          | ~20        |
+| `todoEngine/filterFactory.test.ts`  | priority × hideCompleted 組合 + commandPrefix 對 view 狀態的查詢                  | ~8         |
 
-`projectsStore.test.ts` 既有 2 個 case 補一個 mock readFn 注入,確認 fallback 路徑仍綠(對齊 CLAUDE.md 測試段落「注入時鐘/依賴」慣例)。
+既有測試不動:
+- `todoStore.test.ts`(6)+ `todoTreeProvider.test.ts`(17)+ `todoParser.test.ts`(8)+ `todoPlugin.test.ts`(3)
+- `projectsTodoStore.test.ts`(8)+ `projectsTodoTreeProvider.test.ts`(12)+ `projectsTodoPlugin.test.ts`(3)
+
+驗收條件:**既有 todo 系列 + projectsTodo 系列合計 57 個 test case 全部 0 修改通過**,只新增 todoEngine 系列。
 
 ### 4.5 不修改 (Out of Scope)
 
-- `projectsTodo/` 模組 — 它讀的是各 repo 的 `README.todo`,與分層分類無關,本計畫不碰。
-- `.project_index` 的**產生**工具 — 那是獨立的 framework-layer 職責(根 CLAUDE.md 未指定由哪個 repo 產生),superset 只消費。
-- `INDEX.md`(人類可讀索引)— 本計畫只消費 `projects.json`,`INDEX.md` 是衍生物,暂不解析。
+- Store 介面(`TodoStore` 與 `ProjectsTodoStore` 簽章不變)
+- TreeView 渲染邏輯(`todoTreeProvider` 與 `projectsTodoTreeProvider` 渲染路徑不變)
+- README.todo 檔案格式(沒有變更 AST)
+- 同日 `consistency-redundancy-scalability` 的 Stage 0–4(命名、結構、`.vscodeignore`)— 那些是 Stage 5 的前置,本 plan 不重複
+- `.project_index` 消費(已撤回,見 §3.1)
 
 ### 4.6 版本 (Version)
 
-依 `package.json` 規則 `<major,minor,patch>`:新增「讀外部註冊表」是行為增強(向後相容 fallback)→ minor bump。`0.8.0` → `0.9.0`。
+依 `package.json` 規則 `<major,minor,patch>`:
+
+- 介面語意 100% 保留 → **不需 major bump**
+- 內部結構大改 + 新增 `todoEngine` module + 新增 build script → **minor bump** 合理
+- `0.8.1` → `0.9.0`
+
+> 衝突預警:同日 `consistency-redundancy-scalability` Stage 0 寫「base 到 0.8.2」。本 plan 若同期 merge,版本需協調 — 建議本 plan 與該 plan Stage 5 **合併實作**,一次 bump 至 `0.9.0`(涵蓋兩邊的範圍)。
 
 ### 4.7 驗證 (Verification)
 
-1. `npm test` — 新增 7 case + 既有 `projectsStore.test.ts` 2 case 全綠。
-2. `npm run build` — `tsc` + `vsce package` 無 type error。
-3. 手動:在 `~/projects/.project_index/projects.json` 放一個測試 entry(例如把 `stock` 標成 `application`),重啟 dev extension,確認「Overall → Projects」面板分層正確;刪掉 `.project_index` 後重啟,確認 fallback 回 hardcode 分類不壞。
-4. 邊界:`projects.json` 寫一個不存在的 subgroup 值,確認該 repo 仍顯示(落到 application)+ diagnostic log 有 warning。
+1. `npm test` — 既有 todo + projectsTodo 共 57 case 全綠;新增 todoEngine ~66 case 全綠。
+2. `npm run build` — `tsc` + `vsce package` 無 type error;`gen-package-commands.mjs` 生成的 `package.json` 與手寫版本逐項 diff 無差異(雙軌期間 safety net)。
+3. 手動:兩個面板的右鍵選單、view/title 按鈕、filter toggle、viewType 切換、keybinding (F2 / Ctrl+Shift+`) 行為完全一致。
+4. 邊界:`package.json` 內 command 順序若被腳本重排,需 `npm run build` 後 `git diff package.json` 確認無未預期變動。
 
 ## 5. 後續方向 (Follow-ups, 不在本計畫範圍)
 
-- **★2 todo 引擎統一**:抽 `src/todoEngine/` 共用 parser + command/menu factory,`todo` 與 `projectsTodo` 只差「單檔 vs 多檔彙整」資料來源。風險中(動 52+58 個 command 的 menu 註冊),建議★1 完成後獨立開 plan。
-- **★3 終端機活動摘要 WebView**:per-terminal 的最近命令 + tail 摘要,補目前「只有布林高亮」的盲區。
-- **★4 reveal-in-tree**:解除 `architecture-reveal-in-tree.md` 的 archived 狀態並實作。
-- `docs/backlog/` 目前為空 — 本評估的☆6 兩項可移入 backlog 待設定項累積後再排。
+### 5.1 Deferred:`.project_index` 註冊表消費 (原 ★1)
+
+撤回原因見 §3.1。後續重啟條件:
+
+- 與 `.project_index` indexer 維護者協調,在 `router.py` 加入 `subgroup` 推導邏輯(seed 來源可用 superset 既有 hardcode Set)
+- `projects.json` schema 擴充後(加入 `subgroup` 為 optional 欄位),`ProjectStore` 才能真正去 hardcode
+- 屆時另開 `plans/YYYY-MM-DD-feature-project-index-consume.md`,本 plan §4.2–§4.7 的 schema/fallback/版本號論述可整段搬過去
+
+### 5.2 Stage 1.5:`.project_index` 的 `purpose` / `tags` / `stack` 消費
+
+`projects.json` 19 個 entries 帶有高價值 metadata(`purpose` 一句話用途、`tags` 8–15 個標籤、`stack` 技術棧、`subprojects` 子專案)。`ProjectStore` 目前只消費檔名 → 顯示在面板毫無資訊密度。**這是比 `.project_index` subgroup 消費更容易做、收益更直接的延伸**:
+
+- 在 `ProjectItemNode` 加 `description?: string`(`purpose` 第一行)
+- 在面板顯示 `name + description` 兩行
+- 後續可加 `tagFilter`(面板頂部多一個 tag quick-pick)
+
+零跨 repo 依賴(`projects.json` 已有這些欄位),純 superset 內消費,建議★1 (todo 引擎統一) 完成後接力做。
+
+### 5.3 其他評估面向(本評估標為 ★2–☆5)
+
+- **終端機活動摘要 WebView**:per-terminal 的最近命令 + tail 摘要,補目前「只有布林高亮」的盲區。
+- **reveal-in-tree**:解除 `architecture-reveal-in-tree.md` 的 archived 狀態並實作。
+- **mDNS one-click connect**:已有 plan (`2026-06-23-feature-mdns-one-click-connect.md`),依 service type 派發對應 opener。
+- **Open Settings / Show Diagnostics WebView**:可等 `superset.*` 設定項累積後再收斂,移入 `docs/backlog/`。
+
+### 5.4 Plan 生命週期 (Lifecycle Convention)
+
+依 `~/CLAUDE.md`「plans/ 進行中、docs/specs/ 已實作後的歷史規格」:
+
+- 本 plan 完成時(★1 todo 引擎統一 push 進 git history 後)整份移到 `docs/specs/YYYY-MM-DD-business-scope-evaluation.md`
+- `plans/` 內不保留 archive 區(對齊根 CLAUDE.md 規範)
+- 移動前請先確認 §3 評估面向與現況仍一致 — 若已有顯著變動,應新開 plan 重新評估,而不是更新本份
+- 對應的 todo 條目(見文頭)由 `## Architecture` 段移除或歸檔

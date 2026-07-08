@@ -109,6 +109,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | `src/topology/`    | 網路拓撲掃描 TreeView                   | TopologyStore, TopologyTreeProvider                       |
 | `src/todo/`        | TODO 清單 TreeView + 過濾器 badge       | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
 | `src/projects/`    | 專案分組 TreeView 面板                  | ProjectStore, ProjectsTreeProvider                       |
+| `src/projectsTodo/`| 跨專案 TODO 總覽 (Overview,`superset-overall`) | ProjectsTodoStore, ProjectsTodoTreeProvider         |
 | `src/treePreview/` | Markdown `tree` 區塊語法高亮 + 預覽渲染 | createTreePreviewExtension, renderLine                    |
 | `src/todoPreview/` | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕  | createTodoPreviewExtension, wrapSections                  |
 
@@ -281,6 +282,29 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 - **與 `decideAutoReplace` 的關係**:`shouldTrackTerminal` 先跑,agent terminal 在 PTY-replace 決策前就被丟掉;`decideAutoReplace` 內仍保留同樣的 `/antigravity/i` 檢查作 defense-in-depth。
 - 名稱匹配兩邊一致,新增同類 agent 時兩處一起改。
 
+### Projects TODO Overview 行為 (Overview Surfaces Every Project With A `README.todo`)
+
+`src/projectsTodo/` 是另一個獨立 module (不要跟 `src/projects/` 搞混 — 後者只是列出 `~/projects/` 下的資料夾,**沒有** TODO 內容)。`Projects TODO` 顯示在 `superset-overall` 這個 viewContainer (Activity Bar 第二顆 icon),定位是跨專案待辦總覽。
+
+掃描範圍 (`ProjectsTodoStore.load`):從 `~/projects/` 出發往下遞迴,最深 3 層 (`MAX_SCAN_DEPTH`),任何含有 `README.todo` 檔案的資料夾都會被收。每個被收的資料夾會掛一個內部 `TodoStore` 來 reuse 既有的 parse / write 邏輯,外面再 observe `loaded` 事件觸發 tree refresh。
+
+`★ 設計 ─────────────────────────────────────`
+
+- **Overview 一定列出有 `README.todo` 的專案**,即使該檔案:
+    1. 全部都是 `- [x]` (在 hide-completed 模式下被 `filterCompleted` 清空)
+    2. 檔案本身是空的 (只有 `# TODO` heading)
+    3. 啟用了 priority filter (例如只看 `P0`) 但該專案只有其他 priority 的 task
+- 舊版 `getChildren()` 在上述情境下會跳過整個 project row (使用者看到的 bug — 「all-done 專案從 overview 消失」)。修正後改為:
+    - project row 永遠保留
+    - 過濾後若 children 為空 → 收合 (`CollapsibleState.Collapsed`),展開才會看到空內容
+    - 過濾後 children 非空 → 展開 (`Expanded`),即時看到 sections
+- 這個語意呼應「Overview 是一覽表」的使用情境 — 使用者想知道「哪些專案還有 todo 檔」,而不是「哪些專案還有**可見的** task」;`- [x]` 的歸檔、priority filter 的主動篩選都不該讓 project 從 overview 消失。
+`─────────────────────────────────────────────`
+
+`Pending` 計數 (`countPending(element.children)`) 仍是「目前過濾條件下可見的未勾選 task 數」 — 過濾條件會影響 children list,所以該數字會跟著 filter 走。當 children 為空時顯示 `0 pending`,這是「目前 filter 下沒有可見未完成 task」的真實狀態,而非「檔案內沒有未完成 task」(差異在 hide-completed + 全部 `[x]` 的情境)。
+
+測試覆蓋:`projectsTodoTreeProvider.test.ts` 加了 4 個 case — all-completed、empty file、priority filter 全排除、collapsed/expanded 兩態。
+
 ---
 
 ## `node-pty` 整合
@@ -375,6 +399,8 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 | `pluginManager.test.ts`           | PluginManager 生命週期 + 錯誤隔離 | 7      |
 | `projectsStore.test.ts`           | ProjectStore 掃描與分組           | 2      |
 | `projectsPlugin.test.ts`          | projectsPlugin 介面契約           | 3      |
+| `projectsTodoStore.test.ts`       | ProjectsTodoStore 跨專案掃描      | 8      |
+| `projectsTodoTreeProvider.test.ts` | ProjectsTodoTreeProvider 渲染 + 過濾 | 12     |
 | `smoke.test.ts`                   | 整體 smoke                        | 1      |
 
 `TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/terminals/treeSpec.ts` 純函式。
