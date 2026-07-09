@@ -102,16 +102,16 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 每個 feature 是 `src/<feature>/` 一個資料夾 (沒有 `features/` 中間層),自帶 `index.ts` (組裝入口)、`types.ts` (該 feature 的 domain types) 與實作檔。四個 TreeView feature 走統一的 `register(ctx: FeatureContext): FeatureHandle` 介面;`treePreview` 是例外 (見表後說明):
 
-| 模組               | 職責                                    | 主要元件                                                  |
-| ------------------ | --------------------------------------- | --------------------------------------------------------- |
-| `src/terminals/`   | 終端機面板 + 高亮 + PTY 自動替換        | TerminalRegistry, OutputWatcher, PtyTerminalHost, ...     |
-| `src/mdns/`        | mDNS 服務發現 TreeView                  | MdnsRegistry, MdnsTreeProvider                            |
-| `src/topology/`    | 網路拓撲掃描 TreeView                   | TopologyStore, TopologyTreeProvider                       |
-| `src/todo/`        | TODO 清單 TreeView + 過濾器 badge       | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
-| `src/projects/`    | 專案分組 TreeView 面板                  | ProjectStore, ProjectsTreeProvider                       |
-| `src/projectsTodo/`| 跨專案 TODO 總覽 (Overview,`superset-overall`) | ProjectsTodoStore, ProjectsTodoTreeProvider         |
-| `src/treePreview/` | Markdown `tree` 區塊語法高亮 + 預覽渲染 | createTreePreviewExtension, renderLine                    |
-| `src/todoPreview/` | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕  | createTodoPreviewExtension, wrapSections                  |
+| 模組                | 職責                                           | 主要元件                                                  |
+| ------------------- | ---------------------------------------------- | --------------------------------------------------------- |
+| `src/terminals/`    | 終端機面板 + 高亮 + PTY 自動替換               | TerminalRegistry, OutputWatcher, PtyTerminalHost, ...     |
+| `src/mdns/`         | mDNS 服務發現 TreeView                         | MdnsRegistry, MdnsTreeProvider                            |
+| `src/topology/`     | 網路拓撲掃描 TreeView                          | TopologyStore, TopologyTreeProvider                       |
+| `src/todo/`         | TODO 清單 TreeView + 過濾器 badge              | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
+| `src/projects/`     | 專案分組 TreeView 面板                         | ProjectStore, ProjectsTreeProvider                        |
+| `src/projectsTodo/` | 跨專案 TODO 總覽 (Overview,`superset-overall`) | ProjectsTodoStore, ProjectsTodoTreeProvider               |
+| `src/treePreview/`  | Markdown `tree` 區塊語法高亮 + 預覽渲染        | createTreePreviewExtension, renderLine                    |
+| `src/todoPreview/`  | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕         | createTodoPreviewExtension, wrapSections                  |
 
 > `treePreview` 與 `todoPreview` 同屬「Markdown 預覽貢獻」型 feature (不走 `register()`,只交出 `extendMarkdownIt`);`extension.ts` 用 `composeMarkdownExtensions()` 把兩者串到同一個 `md` 再回傳給 VSCode。`todoPreview` 純 CSS 互動 (`:has()` + checkbox hack,見 `styles/todo-preview.css`),無 preview JS;核心 `core` ruler 只在文件首個 heading 為 `# TODO` 時才重組 (`isTodoDoc` gate),其餘 markdown 預覽不受影響。「fold all + 單節獨立展開」共存為 CSS 天花板 (需 JS),刻意不做。
 
@@ -299,7 +299,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
     - 過濾後若 children 為空 → 收合 (`CollapsibleState.Collapsed`),展開才會看到空內容
     - 過濾後 children 非空 → 展開 (`Expanded`),即時看到 sections
 - 這個語意呼應「Overview 是一覽表」的使用情境 — 使用者想知道「哪些專案還有 todo 檔」,而不是「哪些專案還有**可見的** task」;`- [x]` 的歸檔、priority filter 的主動篩選都不該讓 project 從 overview 消失。
-`─────────────────────────────────────────────`
+  `─────────────────────────────────────────────`
 
 `Pending` 計數 (`countPending(element.children)`) 仍是「目前過濾條件下可見的未勾選 task 數」 — 過濾條件會影響 children list,所以該數字會跟著 filter 走。當 children 為空時顯示 `0 pending`,這是「目前 filter 下沒有可見未完成 task」的真實狀態,而非「檔案內沒有未完成 task」(差異在 hide-completed + 全部 `[x]` 的情境)。
 
@@ -359,50 +359,50 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 `npm test` 跑 Vitest,目前 444 個 case 全綠 (46 個 test file):
 
-| 測試檔                            | 對象                              | 案例數 |
-| --------------------------------- | --------------------------------- | ------ |
-| `terminalRegistry.test.ts`        | 純狀態機                          | 17     |
-| `watchedTerminalTracker.test.ts`  | watched-terminal 狀態機 + recency | 8      |
-| `outputWatcher.test.ts`           | Shell Integration watcher         | 6      |
-| `ptyTerminalHost.test.ts`         | PTY host (TUI 偵測核心)           | 15     |
-| `treeProvider.test.ts`            | 面板渲染 (`buildTreeItemSpec`)    | 11     |
-| `highlightPresenter.test.ts`      | tab 前綴 + 狀態列 + 降級          | 11     |
-| `badge.test.ts`                   | TODO badge 純函式                 | 6      |
-| `autoReplace.test.ts`             | PTY 替換決策 + agent 排除         | 11     |
-| `groupStore.test.ts`              | 群組 metadata                     | 25     |
-| `jumpToTerminal.test.ts`          | 終端機 fuzzy 跳轉                 | (新增) |
-| `localIp.test.ts`                 | 本機 IP 推導                      | (新增) |
-| `mdnsDedup.test.ts`               | mDNS 去重純函式                   | 8      |
-| `mdnsDetailCache.test.ts`         | mDNS detail 快取                  | (新增) |
-| `mdnsRegistry.test.ts`            | mDNS registry + 去重              | 15     |
-| `mdnsRegistry.expiration.test.ts` | mDNS 服務過期                     | 8      |
-| `mdnsTreeSpec.test.ts`            | mDNS 面板渲染 + 細節欄位          | 12     |
-| `resetCaches.test.ts`             | 快取重置鍵掃描                    | (新增) |
-| `todoStore.test.ts`               | TODO store                        | 6      |
-| `todoTreeProvider.test.ts`        | TODO 面板渲染                     | 17     |
-| `topologyScanner.test.ts`         | 拓撲掃描                          | (新增) |
-| `topologyStore.test.ts`           | 拓撲 store                        | 4      |
-| `treePreview.test.ts`             | tree 區塊 renderLine 純函式       | 7      |
-| `todoPreview.test.ts`             | section 包裹 + TODO gate 純函式   | 8      |
-| `treePreviewPlugin.test.ts`       | treePreview ExtensionPlugin 介面  | 3      |
-| `todoParser.test.ts`              | TodoParser 純函式                 | 8      |
-| `todoPlugin.test.ts`              | todoPlugin 介面契約               | 3      |
-| `mdnsParser.test.ts`              | MdnsParser 純函式                 | 15     |
-| `mdnsStore.test.ts`               | MdnsStore state + dedup           | 8      |
-| `mdnsPlugin.test.ts`              | mdnsPlugin 介面契約               | 3      |
-| `ptyProcessContract.test.ts`      | PtyProcess 介面契約               | 12     |
-| `terminalsPlugin.test.ts`         | terminalsPlugin 介面契約          | 3      |
-| `topologyTransformer.test.ts`     | TopologyTransformer 純函式        | 8      |
-| `topologyPlugin.test.ts`          | topologyPlugin 介面契約           | 3      |
-| `todoPreviewPlugin.test.ts`       | todoPreviewPlugin 介面契約        | 3      |
-| `extensionActivate.test.ts`       | extension.ts end-to-end activate  | 5      |
-| `pluginManager.test.ts`           | PluginManager 生命週期 + 錯誤隔離 | 7      |
-| `projectsStore.test.ts`           | ProjectStore 掃描與分組           | 2      |
-| `projectsPlugin.test.ts`          | projectsPlugin 介面契約           | 3      |
-| `projectsTodoStore.test.ts`       | ProjectsTodoStore 跨專案掃描      | 8      |
-| `projectsTodoTreeProvider.test.ts` | ProjectsTodoTreeProvider 渲染 + 過濾 | 12     |
-| `installCommands.test.ts`         | installDefaultTools / skillInstall 走 PTY spawner + `&& exit` 自動關閉 | 5      |
-| `smoke.test.ts`                   | 整體 smoke                        | 1      |
+| 測試檔                             | 對象                                                                   | 案例數 |
+| ---------------------------------- | ---------------------------------------------------------------------- | ------ |
+| `terminalRegistry.test.ts`         | 純狀態機                                                               | 17     |
+| `watchedTerminalTracker.test.ts`   | watched-terminal 狀態機 + recency                                      | 8      |
+| `outputWatcher.test.ts`            | Shell Integration watcher                                              | 6      |
+| `ptyTerminalHost.test.ts`          | PTY host (TUI 偵測核心)                                                | 15     |
+| `treeProvider.test.ts`             | 面板渲染 (`buildTreeItemSpec`)                                         | 11     |
+| `highlightPresenter.test.ts`       | tab 前綴 + 狀態列 + 降級                                               | 11     |
+| `badge.test.ts`                    | TODO badge 純函式                                                      | 6      |
+| `autoReplace.test.ts`              | PTY 替換決策 + agent 排除                                              | 11     |
+| `groupStore.test.ts`               | 群組 metadata                                                          | 25     |
+| `jumpToTerminal.test.ts`           | 終端機 fuzzy 跳轉                                                      | (新增) |
+| `localIp.test.ts`                  | 本機 IP 推導                                                           | (新增) |
+| `mdnsDedup.test.ts`                | mDNS 去重純函式                                                        | 8      |
+| `mdnsDetailCache.test.ts`          | mDNS detail 快取                                                       | (新增) |
+| `mdnsRegistry.test.ts`             | mDNS registry + 去重                                                   | 15     |
+| `mdnsRegistry.expiration.test.ts`  | mDNS 服務過期                                                          | 8      |
+| `mdnsTreeSpec.test.ts`             | mDNS 面板渲染 + 細節欄位                                               | 12     |
+| `resetCaches.test.ts`              | 快取重置鍵掃描                                                         | (新增) |
+| `todoStore.test.ts`                | TODO store                                                             | 6      |
+| `todoTreeProvider.test.ts`         | TODO 面板渲染                                                          | 17     |
+| `topologyScanner.test.ts`          | 拓撲掃描                                                               | (新增) |
+| `topologyStore.test.ts`            | 拓撲 store                                                             | 4      |
+| `treePreview.test.ts`              | tree 區塊 renderLine 純函式                                            | 7      |
+| `todoPreview.test.ts`              | section 包裹 + TODO gate 純函式                                        | 8      |
+| `treePreviewPlugin.test.ts`        | treePreview ExtensionPlugin 介面                                       | 3      |
+| `todoParser.test.ts`               | TodoParser 純函式                                                      | 8      |
+| `todoPlugin.test.ts`               | todoPlugin 介面契約                                                    | 3      |
+| `mdnsParser.test.ts`               | MdnsParser 純函式                                                      | 15     |
+| `mdnsStore.test.ts`                | MdnsStore state + dedup                                                | 8      |
+| `mdnsPlugin.test.ts`               | mdnsPlugin 介面契約                                                    | 3      |
+| `ptyProcessContract.test.ts`       | PtyProcess 介面契約                                                    | 12     |
+| `terminalsPlugin.test.ts`          | terminalsPlugin 介面契約                                               | 3      |
+| `topologyTransformer.test.ts`      | TopologyTransformer 純函式                                             | 8      |
+| `topologyPlugin.test.ts`           | topologyPlugin 介面契約                                                | 3      |
+| `todoPreviewPlugin.test.ts`        | todoPreviewPlugin 介面契約                                             | 3      |
+| `extensionActivate.test.ts`        | extension.ts end-to-end activate                                       | 5      |
+| `pluginManager.test.ts`            | PluginManager 生命週期 + 錯誤隔離                                      | 7      |
+| `projectsStore.test.ts`            | ProjectStore 掃描與分組                                                | 2      |
+| `projectsPlugin.test.ts`           | projectsPlugin 介面契約                                                | 3      |
+| `projectsTodoStore.test.ts`        | ProjectsTodoStore 跨專案掃描                                           | 8      |
+| `projectsTodoTreeProvider.test.ts` | ProjectsTodoTreeProvider 渲染 + 過濾                                   | 12     |
+| `installCommands.test.ts`          | installDefaultTools / skillInstall 走 PTY spawner + `&& exit` 自動關閉 | 5      |
+| `smoke.test.ts`                    | 整體 smoke                                                             | 1      |
 
 `TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/terminals/treeSpec.ts` 純函式。
 
