@@ -2,6 +2,23 @@
 
 本檔案記錄 Superset 擴充功能各版本變更,格式參考 [Keep a Changelog](https://keepachangelog.com/),版本號依 [Semantic Versioning](https://semver.org/)。
 
+## [0.8.4] - 2026-07-09
+
+### Added
+
+- TODO 面板整合 `plans/` 資料夾掃描:local `TodoStore` 與跨專案 `ProjectsTodoStore` 都會平行掃 `<root>/plans/*.md`,把每份 `.md` 當作一個 read-only item 出現在「`## Plans`」合成 section 末端,點 row 右側的「Open」icon 開啟 markdown preview (與既有 `todoOpenLink` 同模式,不寫回檔案)。
+- 新 `TodoItem.kind: "plan"` discriminated union + `filePath` 欄位 (在 `src/todo/types.ts`) — `applyPriorityFilter` 對 plan item 做 passthrough,所以 P0/P1/P2 filter 不會把 design doc 濾掉;File view 中 plan item 群組在 synthetic `plans/` 群組。
+- `ProjectsTodoStore` 放寬專案識別為「有 `README.todo` 或 `plans/` 任一即算」,使 plans-only 專案 (沒 `README.todo` 但有 `plans/`) 也會出現在 Projects TODO 總覽,`New TODO` / `Open README.todo` 的 QuickPick 也涵蓋這些專案 (plans-only 會顯示「`僅有 plans/`」副標題)。
+- 兩個新 command:`superset.todoOpenPlan` (local) 與 `superset.projectsTodoOpenPlan` (global),透過 `markdown.showPreview` 開啟 plan 檔案。
+- 新 FileSystemWatcher:`plans/*.md` 在 local 與 `**/plans/*.md` 在 global,plans/ 變動時即時 reload 對應 store。
+
+### Internal
+
+- 新純函式模組 `src/todo/plansSource.ts`:`scanPlans(workspaceRoot)`、`PlanInfo` 型別、`planInfoToTodoItem()`、`makePlansSection()` helper (沿用 `parser.ts` 風格,無 `vscode` import,易測)。
+- `TodoStore.load()` 改用 `Promise.all` 並行讀 `README.todo` 與 `plans/`,效能維持原狀。
+- 既有 command handler 加 `kind === "plan"` / `text === "Plans"` guard,plan row 不會被誤套用 toggle/archive/priority/section/destroy 操作。
+- 15 個新 test case (`plansSource.test.ts`:`scanPlans` / `extractTitle` / `basenameFallback` / `planInfoToTodoItem` / `makePlansSection` 完整覆蓋);既有 417 case 全綠,總計 432 case / 46 test file。
+
 ## [0.6.0] - 2026-07-02
 
 ### Changed

@@ -7,25 +7,44 @@
 import type { TodoChange, TodoItem, TodoListener } from "./types";
 import { TodoRepository } from "./repository";
 import { isArchivedTask, parseTagsFromLine, constructTags, TAGS_RE } from "./parser";
+import { scanPlans, type PlanInfo } from "./plansSource";
 
 /**
  * Pure data layer for the TODO list.
  * Reads/Writes a markdown file with checkbox items via the injected
  * `TodoRepository`. Uses the observer pattern (same as TerminalRegistry).
+ *
+ * As of 0.8.4 the store also keeps a parallel snapshot of the
+ * workspace's `plans/*.md` folder (see `plansSource.ts`). Plans are
+ * surfaced as read-only entries under a synthetic `## Plans`
+ * section by the tree provider; this store only caches the raw
+ * `PlanInfo[]` and exposes it via `getPlanItems()`.
  */
 export class TodoStore {
     private items: TodoItem[] = [];
+    private planItems: PlanInfo[] = [];
     private listeners = new Set<TodoListener>();
     private repository: TodoRepository;
+    private readonly workspaceRoot: string;
 
     constructor(workspaceRoot: string, repository?: TodoRepository) {
         // Allow tests to inject a mock repository in the future; the
         // default builds a real one bound to the workspace root.
         this.repository = repository ?? new TodoRepository(workspaceRoot);
+        this.workspaceRoot = workspaceRoot;
     }
 
     getItems(): TodoItem[] {
         return this.items;
+    }
+
+    /**
+     * Cached scan result for the workspace's `plans/` folder.
+     * Returns an empty array when `plans/` does not exist or is
+     * unreadable — see `scanPlans()` in `plansSource.ts`.
+     */
+    getPlanItems(): PlanInfo[] {
+        return this.planItems;
     }
 
     getCompletedCount(): number {
@@ -45,15 +64,25 @@ export class TodoStore {
     }
 
     async load(): Promise<void> {
-        const result = await this.repository.read();
+        // Read both the README.todo and the plans/ folder in parallel;
+        // they live in different parts of the filesystem so there's no
+        // ordering benefit to sequencing them. Either failing returns
+        // an empty result (see `TodoRepository.read` / `scanPlans`),
+        // so a missing file in one never blocks the other.
+        const [result, plans] = await Promise.all([
+            this.repository.read(),
+            scanPlans(this.workspaceRoot),
+        ]);
         if (result.items === null) {
             // File missing — emit an empty snapshot so listeners can
             // re-render into a blank state.
             this.items = [];
+            this.planItems = plans;
             this.emit({ type: "loaded", items: [] });
             return;
         }
         this.items = result.items;
+        this.planItems = plans;
         this.emit({ type: "loaded", items: result.items });
     }
 

@@ -9,6 +9,7 @@ import {
     extractLink,
     cleanLabelText
 } from "../todo/todoTreeProvider";
+import { makePlansSection, planInfoToTodoItem } from "../todo/plansSource";
 
 /**
  * vscode-bound TreeDataProvider for the Projects TODO list.
@@ -72,6 +73,20 @@ export class ProjectsTodoTreeProvider
     }
 
     getTreeItem(element: ProjectTodoItem): vscode.TreeItem {
+        // 0. Plan item — read-only entry from plans/<file>.md.
+        // Symmetric with the local `todoPlan` rendering: file icon,
+        // description = title, no `command` (open happens via the
+        // inline menu icon wired in package.json).
+        if (element.kind === "plan") {
+            const item = new vscode.TreeItem(element.text);
+            item.iconPath = new vscode.ThemeIcon("file-text");
+            item.description = element.description;
+            item.tooltip = `${element.description ?? element.text}\n${element.filePath ?? ""}`;
+            item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+            item.contextValue = "projectsTodoPlan";
+            return item;
+        }
+
         // 1. If it's a project section node
         const isProjectNode = element.line === -1 && element.projectPath && element.text === path.basename(element.projectPath);
         if (isProjectNode) {
@@ -101,6 +116,19 @@ export class ProjectsTodoTreeProvider
 
         // 2. If it's a normal section inside a project
         if (element.kind === "section") {
+            // Synthetic "Plans" section: file-code icon and a plain
+            // plan-count description (no `N ◐` badge since plans are
+            // not actionable). Same handling as the local TODO panel.
+            if (element.text === "Plans") {
+                const item = new vscode.TreeItem(element.text);
+                item.iconPath = new vscode.ThemeIcon("file-code");
+                const planCount = element.children?.length ?? 0;
+                item.description = `${planCount} plan${planCount === 1 ? "" : "s"}`;
+                item.tooltip = "Design documents under ./plans/";
+                item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                item.contextValue = "projectsTodoPlansSection";
+                return item;
+            }
             const item = new vscode.TreeItem(element.text);
             item.iconPath = new vscode.ThemeIcon("tag");
             if (element.text === "README.todo") {
@@ -220,10 +248,12 @@ export class ProjectsTodoTreeProvider
         }
 
         const projectItems: ProjectTodoItem[] = [];
+
+        // (a) Projects that have a README.todo — the established flow.
         for (const [projectPath, store] of this.store.getStores()) {
             const projectName = path.basename(projectPath);
             const raw = store.getItems();
-            
+
             // Apply filtering logic using standard filters
             const completedFiltered = this.showCompleted ? raw : filterCompleted(raw);
             const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
@@ -239,6 +269,43 @@ export class ProjectsTodoTreeProvider
             // Decorate items with project information
             const decoratedChildren = decorateItems(filtered, projectName, projectPath);
 
+            // Append a synthetic "## Plans" section after the README.todo
+            // sections so users see design-doc items alongside actionable
+            // tasks. Plans are never checked and have no priority tag,
+            // so they survive every filter — appending after the filter
+            // pass keeps them unconditionally visible.
+            const plans = this.store.getPlanItems(projectPath);
+            if (plans.length > 0) {
+                const planChildren: ProjectTodoItem[] = plans.map((p) => {
+                    const base = planInfoToTodoItem(p);
+                    return {
+                        line: base.line,
+                        text: base.text,
+                        description: base.description,
+                        kind: base.kind,
+                        checked: base.checked,
+                        filePath: base.filePath,
+                        parentSection: base.parentSection,
+                        level: base.level,
+                        projectName,
+                        projectPath,
+                    };
+                });
+                const sectionBase = makePlansSection(planChildren);
+                const plansSection: ProjectTodoItem = {
+                    line: sectionBase.line,
+                    text: sectionBase.text,
+                    description: sectionBase.description,
+                    kind: sectionBase.kind,
+                    level: sectionBase.level,
+                    checked: sectionBase.checked,
+                    children: planChildren,
+                    projectName,
+                    projectPath,
+                };
+                decoratedChildren.push(plansSection);
+            }
+
             const projectItem: ProjectTodoItem = {
                 line: -1,
                 text: projectName,
@@ -249,6 +316,53 @@ export class ProjectsTodoTreeProvider
                 projectPath,
             };
             projectItems.push(projectItem);
+        }
+
+        // (b) Plans-only projects — discovered via `plans/` folder but
+        // lacking a `README.todo`. They live in `planItems` only, not
+        // `stores`. Surface them as project rows whose only child is
+        // the synthetic "## Plans" section so users can still see and
+        // open their design docs from the overview.
+        for (const [projectPath, plans] of this.store.getPlanItemsEntries()) {
+            if (this.store.getStores().has(projectPath)) continue; // already handled in (a)
+            if (plans.length === 0) continue;
+            const projectName = path.basename(projectPath);
+            const planChildren: ProjectTodoItem[] = plans.map((p) => {
+                const base = planInfoToTodoItem(p);
+                return {
+                    line: base.line,
+                    text: base.text,
+                    description: base.description,
+                    kind: base.kind,
+                    checked: base.checked,
+                    filePath: base.filePath,
+                    parentSection: base.parentSection,
+                    level: base.level,
+                    projectName,
+                    projectPath,
+                };
+            });
+            const sectionBase = makePlansSection(planChildren);
+            const plansSection: ProjectTodoItem = {
+                line: sectionBase.line,
+                text: sectionBase.text,
+                description: sectionBase.description,
+                kind: sectionBase.kind,
+                level: sectionBase.level,
+                checked: sectionBase.checked,
+                children: planChildren,
+                projectName,
+                projectPath,
+            };
+            projectItems.push({
+                line: -1,
+                text: projectName,
+                kind: "section",
+                checked: false,
+                children: [plansSection],
+                projectName,
+                projectPath,
+            });
         }
 
         // Sort project folders by name alphabetically

@@ -43,11 +43,15 @@ export function register(ctx: FeatureContext): FeatureHandle {
             updateTodoFilterBadge(false, 0);
             return;
         }
+        // Type widened from `"checkbox" | "list"` to `string` because
+        // the synthetic "Plans" section (added in getChildren when the
+        // workspace has plan files) has kind: "section". We only read
+        // `.length` downstream so the looser type is safe.
         const all = provider.getChildren() as
-            | { line: number; text: string; kind: "checkbox" | "list"; checked: boolean; children?: unknown[] }[]
+            | { line: number; text: string; kind: string; checked: boolean; children?: unknown[] }[]
             | undefined;
         const shown = all?.length ?? 0;
-        const totalTop = store.getItems().length;
+        const totalTop = store.getItems().length + (store.getPlanItems().length > 0 ? 1 : 0);
         const hidden = Math.max(0, totalTop - shown);
         updateTodoFilterBadge(true, hidden);
     };
@@ -72,11 +76,29 @@ export function register(ctx: FeatureContext): FeatureHandle {
     todoFileWatcher.onDidChange(onTodoFileChanged);
     todoFileWatcher.onDidCreate(onTodoFileChanged);
 
+    // Watch the workspace's plans/ folder so newly authored plan files
+    // appear in the panel without needing to reload the window.
+    // TodoStore.load() runs both the README.todo read and the
+    // plans/ scan in parallel, so a single reload here is enough.
+    const plansWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(ctx.workspaceFolder, "plans/*.md")
+    );
+    const onPlansFileChanged = () => {
+        store.load().then(() => refreshTodoFilterBadge());
+    };
+    plansWatcher.onDidChange(onPlansFileChanged);
+    plansWatcher.onDidCreate(onPlansFileChanged);
+    plansWatcher.onDidDelete(onPlansFileChanged);
+
     const toggleCmd = vscode.commands.registerCommand(
         "superset.todoToggle",
-        async (item: { line: number; checked: boolean; text: string; kind: "checkbox" | "list" } | undefined) => {
+        async (item: { line: number; checked: boolean; text: string; kind: "checkbox" | "list" | "plan" } | undefined) => {
             if (!item) return;
             if (item.kind === "list") return;
+            // Plan items are read-only — never toggleable. The menu
+            // doesn't show this command for plan rows anyway (the
+            // contextValue is `todoPlan`, not `todoCheckbox`).
+            if (item.kind === "plan") return;
             await store.toggle(item);
         }
     );
@@ -95,7 +117,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     const changePriorityCmd = vscode.commands.registerCommand(
         "superset.todoChangePriority",
-        async (item: { line: number; checked: boolean; text: string; kind: "checkbox" | "list" | "section" } | undefined) => {
+        async (item: { line: number; checked: boolean; text: string; kind: "checkbox" | "list" | "plan" | "section" } | undefined) => {
             if (!item || item.kind !== "checkbox") return;
 
             // Extract current priority from text
@@ -213,6 +235,29 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    /**
+     * Open a `plans/*.md` file in the markdown preview. Wired to the
+     * inline "Open" icon button on every `kind: "plan"` row via the
+     * `viewItem == todoPlan` `group: "inline"` menu entry in
+     * `package.json` — symmetric with `superset.todoOpenLink`.
+     */
+    const openPlanCmd = vscode.commands.registerCommand(
+        "superset.todoOpenPlan",
+        async (arg?: { filePath?: string; title?: string }) => {
+            if (!arg?.filePath) return;
+            const uri = vscode.Uri.file(arg.filePath);
+            try {
+                const doc = await vscode.workspace.openTextDocument(uri);
+                if (doc.languageId !== "markdown") {
+                    await vscode.languages.setTextDocumentLanguage(doc, "markdown");
+                }
+                await vscode.commands.executeCommand("markdown.showPreview", uri);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
+            }
+        }
+    );
+
     const openTodoLinkCmd = vscode.commands.registerCommand(
         "superset.todoOpenLink",
         async (item?: TodoItem) => {
@@ -258,6 +303,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.todoArchive",
         async (item?: TodoItem) => {
             if (!item) return;
+            if (item.kind === "plan") return;
             await store.archiveTodo(item);
         }
     );
@@ -266,6 +312,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.todoRollback",
         async (item?: TodoItem) => {
             if (!item) return;
+            if (item.kind === "plan") return;
             await store.rollbackTodo(item);
         }
     );
@@ -290,6 +337,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.todoChangeSection",
         async (item?: TodoItem) => {
             if (!item) return;
+            if (item.kind === "plan") return;
 
             // 1. Get existing sections from memory
             const rawSections = store.getItems()
@@ -336,6 +384,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.todoDeleteSection",
         async (item?: TodoItem) => {
             if (!item) return;
+            // Synthetic "Plans" section is computed at render time —
+            // it has no real heading line in `README.todo` so deleting
+            // it would have nothing to act on. Guard here as a
+            // belt-and-braces complement to the menu `when` clause.
+            if (item.text === "Plans") return;
             if (provider.getViewType() !== "section") {
                 vscode.window.showErrorMessage("Delete Section is only supported in Section View.");
                 return;
@@ -413,6 +466,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         changePriorityCmd,
         todoNewCmd,
         openTodoFileCmd,
+        openPlanCmd,
         openTodoLinkCmd,
         copyTodoCmd,
         archiveTodoCmd,
@@ -436,6 +490,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         filterP2OnCmd,
         view,
         todoFileWatcher,
+        plansWatcher,
         { dispose: () => provider.stop() }
     );
 
@@ -446,6 +501,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             changePriorityCmd.dispose();
             todoNewCmd.dispose();
             openTodoFileCmd.dispose();
+            openPlanCmd.dispose();
             openTodoLinkCmd.dispose();
             copyTodoCmd.dispose();
             archiveTodoCmd.dispose();
@@ -469,6 +525,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             filterP2OnCmd.dispose();
             view.dispose();
             todoFileWatcher.dispose();
+            plansWatcher.dispose();
         },
     };
 }

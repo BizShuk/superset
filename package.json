@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.8.3",
+    "version": "0.8.4",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -183,6 +183,11 @@
                 "icon": "$(go-to-file)"
             },
             {
+                "command": "superset.todoOpenPlan",
+                "title": "Superset: Open Plan",
+                "icon": "$(go-to-file)"
+            },
+            {
                 "command": "superset.todoFilterHideCompleted",
                 "title": "Hide Completed/Archive",
                 "icon": "$(filter)"
@@ -297,6 +302,11 @@
             {
                 "command": "superset.projectsTodoOpen",
                 "title": "Superset: Open README.todo",
+                "icon": "$(go-to-file)"
+            },
+            {
+                "command": "superset.projectsTodoOpenPlan",
+                "title": "Superset: Open Plan",
                 "icon": "$(go-to-file)"
             },
             {
@@ -690,6 +700,11 @@
                     "group": "inline"
                 },
                 {
+                    "command": "superset.todoOpenPlan",
+                    "when": "viewItem == todoPlan",
+                    "group": "inline"
+                },
+                {
                     "command": "superset.todoDeleteSection",
                     "when": "(viewItem == todoSection || viewItem == todoSectionArchivable || viewItem == todoSectionArchived) && superset.todo.viewType == 'section'",
                     "group": "3_delete"
@@ -752,6 +767,11 @@
                 {
                     "command": "superset.projectsTodoOpenLink",
                     "when": "viewItem == projectsTodoCheckboxWithLink || viewItem == projectsTodoListWithLink || viewItem == projectsTodoCheckboxWithLinkArchived || viewItem == projectsTodoListWithLinkArchived",
+                    "group": "inline"
+                },
+                {
+                    "command": "superset.projectsTodoOpenPlan",
+                    "when": "viewItem == projectsTodoPlan",
                     "group": "inline"
                 },
                 {

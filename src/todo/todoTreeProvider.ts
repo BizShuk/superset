@@ -3,6 +3,7 @@ import * as path from "path";
 import type { TodoChange, TodoItem, TodoViewType } from "./types";
 import type { TodoStore } from "./todoStore";
 import { isArchivedSubsection, cleanTags, isArchivedTask } from "./parser";
+import { makePlansSection, planInfoToTodoItem } from "./plansSource";
 
 /**
  * vscode-bound TreeDataProvider for the TODO list.
@@ -111,6 +112,9 @@ export class TodoTreeProvider
         if (element.kind === "section") {
             return this.buildSectionItem(element);
         }
+        if (element.kind === "plan") {
+            return this.buildPlanItem(element);
+        }
         if (element.kind === "list") {
             return this.buildListItem(element);
         }
@@ -218,6 +222,22 @@ export class TodoTreeProvider
     }
 
     private buildSectionItem(element: TodoItem): vscode.TreeItem {
+        // Synthetic "Plans" section appended by getChildren in section
+        // view (see planInfoToTodoItem / makePlansSection in
+        // plansSource.ts). Plans carry no priority / completed state
+        // — render them with a file-code icon and a plain count
+        // instead of the "N ◐" badge used by actionable sections.
+        if (element.text === "Plans") {
+            const item = new vscode.TreeItem(element.text);
+            item.iconPath = new vscode.ThemeIcon("file-code");
+            const planCount = element.children?.length ?? 0;
+            item.description = `${planCount} plan${planCount === 1 ? "" : "s"}`;
+            item.tooltip = "Design documents under ./plans/";
+            item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+            item.contextValue = "todoPlansSection";
+            return item;
+        }
+
         const item = new vscode.TreeItem(element.text);
         item.iconPath = new vscode.ThemeIcon("tag");
         if (element.text === "README.todo") {
@@ -245,6 +265,26 @@ export class TodoTreeProvider
         item.tooltip = element.description ? `${element.description}/${element.text}` : element.text;
         item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
         item.contextValue = sectionContext;
+        return item;
+    }
+
+    /**
+     * Render a `kind: "plan"` item — a read-only entry synthesised
+     * from a file under the workspace's `plans/` folder. Plans are
+     * never toggleable (no `checkboxState`), and we deliberately do
+     * NOT set `item.command` here: opening happens via the inline
+     * "Open" icon button that `package.json` wires to
+     * `superset.todoOpenPlan` via the `viewItem == todoPlan`
+     * `group: "inline"` menu entry — the same pattern as
+     * `todoOpenLink`.
+     */
+    private buildPlanItem(element: TodoItem): vscode.TreeItem {
+        const item = new vscode.TreeItem(element.text);
+        item.iconPath = new vscode.ThemeIcon("file-text");
+        item.description = element.description;
+        item.tooltip = `${element.description ?? element.text}\n${element.filePath ?? ""}`;
+        item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        item.contextValue = "todoPlan";
         return item;
     }
 
@@ -321,7 +361,7 @@ export class TodoTreeProvider
         const groupsMap = new Map<string, { label: string; description?: string; children: TodoItem[] }>();
 
         for (const item of flatItems) {
-            const grp = this.getFileGroup(item.text);
+            const grp = this.getFileGroup(item.text, item.kind);
             const key = grp.label;
             const copy = { ...item, children: undefined };
 
@@ -347,12 +387,20 @@ export class TodoTreeProvider
         groups.sort((a, b) => {
             if (a.text === "README.todo") return -1;
             if (b.text === "README.todo") return 1;
+            if (a.text === "plans") return -1;
+            if (b.text === "plans") return 1;
             return a.text.localeCompare(b.text);
         });
         return groups;
     }
 
-    private getFileGroup(text: string): { label: string; description?: string } {
+    private getFileGroup(text: string, kind: TodoItem["kind"] = "checkbox"): { label: string; description?: string } {
+        // Plan items never appear inline in any file's body — they
+        // belong to the workspace's `plans/` folder, so route them
+        // to a synthetic "plans" file group immediately.
+        if (kind === "plan") {
+            return { label: "plans", description: "plans/" };
+        }
         const link = extractLink(text);
         if (!link) {
             return { label: "README.todo" };
@@ -394,12 +442,28 @@ export class TodoTreeProvider
         const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
 
         if (this.viewType === "priority") {
+            // Plan items have no priority tag → fall through to the
+            // existing "None" group inside buildPriorityGroups (their
+            // `applyPriorityFilter` passthrough keeps them visible).
             return this.buildPriorityGroups(filtered);
         }
         if (this.viewType === "file") {
+            // Plan items get routed to a synthetic "plans" group via
+            // getFileGroup's kind-aware branch.
             return this.buildFileGroups(filtered);
         }
 
+        // Section view: append the synthetic "Plans" section after the
+        // real README.todo sections so users can see design-doc items
+        // alongside actionable tasks. The Plans section's children
+        // survive every filter (no checked state, no priority tag) so
+        // the tree stays balanced — the appended section is a sibling
+        // to the README.todo sections, not nested inside any of them.
+        const plans = this.store.getPlanItems();
+        if (plans.length > 0) {
+            const planChildren = plans.map(planInfoToTodoItem);
+            filtered.push(makePlansSection(planChildren));
+        }
         return sortSiblings(filtered);
     }
 }
@@ -447,6 +511,12 @@ export function applyPriorityFilter(
                     return { ...item, children: filteredChildren };
                 }
                 return null;
+            }
+            // Plan items carry no priority tag by design — they pass
+            // through every priority filter so users don't lose access
+            // to design docs while filtering the actionable queue.
+            if (item.kind === "plan") {
+                return item;
             }
             const filteredChildren = item.children
                 ? applyPriorityFilter(item.children, enabledPriorities)

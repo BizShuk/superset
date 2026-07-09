@@ -2,6 +2,7 @@ import { readdir, stat } from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 import { TodoStore } from "../todo/todoStore";
+import { scanPlans, type PlanInfo } from "../todo/plansSource";
 import type { ProjectsTodoChange, ProjectsTodoListener } from "./types";
 
 /**
@@ -17,11 +18,14 @@ const MAX_SCAN_DEPTH = 3;
 
 /**
  * 跨專案待辦的資料管理層 (ProjectsTodoStore)。
- * 負責從 `~/projects` 往下掃描 (最深 3 層),找出含 `README.todo` 的資料夾
- * 並為其建立或維護一個 `TodoStore` 執行個體,以重用既有的待辦解析與寫入邏輯。
+ * 負責從 `~/projects` 往下掃描 (最深 3 層),找出含 `README.todo` 或 `plans/`
+ * 的資料夾:前者建立/維護 `TodoStore` 實例 (重用既有 todo 解析/寫入邏輯),
+ * 後者為每個專案 (含 plans-only) 維護一份 plan 快取,供 TreeProvider 在每個
+ * project node 末端合成 `## Plans` section 使用。
  */
 export class ProjectsTodoStore {
     private readonly stores = new Map<string, TodoStore>();
+    private readonly planItems = new Map<string, PlanInfo[]>();
     private readonly listeners = new Set<ProjectsTodoListener>();
     private readonly storeListeners = new Map<string, () => void>();
 
@@ -30,6 +34,10 @@ export class ProjectsTodoStore {
     /**
      * 取得目前所有已載入的專案 `TodoStore`。
      * 鍵值為專案的絕對路徑 (projectPath)。
+     *
+     * 注意:只有含 `README.todo` 的專案會出現在此 map;plans-only 專案
+     * 仍會被識別與渲染,但需要透過 `getPlanItems(p)` 取得其內容,
+     * 或透過 `getPlanItemsEntries()` 迭代所有有 plans 的專案。
      */
     getStores(): Map<string, TodoStore> {
         return this.stores;
@@ -43,15 +51,31 @@ export class ProjectsTodoStore {
     }
 
     /**
-     * 掃描全域專案目錄，尋找包含 `README.todo` 的資料夾並為其建立或更新 `TodoStore`。
+     * 取得指定專案的 plans 掃描結果,沒有時回 `[]`。
+     */
+    getPlanItems(projectPath: string): PlanInfo[] {
+        return this.planItems.get(projectPath) ?? [];
+    }
+
+    /**
+     * 迭代所有 (projectPath, plans) 對,給 TreeProvider 在處理 plans-only
+     * 專案時使用 — 這些專案不會出現在 `getStores()` 中。
+     */
+    getPlanItemsEntries(): IterableIterator<[string, PlanInfo[]]> {
+        return this.planItems.entries();
+    }
+
+    /**
+     * 掃描全域專案目錄,尋找包含 `README.todo` 或 `plans/` 的資料夾。
      *
-     * 從 `~/projects` 出發向下遞迴,最深 3 層 (即 `~/projects/<a>/<b>/<c>/README.todo`)。
+     * 從 `~/projects` 出發向下遞迴,最深 3 層 (即 `~/projects/<a>/<b>/<c>/...`)。
      * 命中隱藏目錄 (`.` 開頭) 一律跳過。
      */
     async load(): Promise<void> {
         const home = os.homedir();
         const projectsDir = path.join(home, "projects");
-        const detectedPaths: string[] = [];
+        const detectedTodoPaths = new Set<string>();
+        const detectedPlansPaths = new Set<string>();
 
         // 從 ~/projects 出發往下,最深 3 層。root 本身 (depth 0) 不視為 project
         // (即使 ~/projects/README.todo 存在也不列入),掃的是它的直接子資料夾到第 3 層子孫。
@@ -76,15 +100,26 @@ export class ProjectsTodoStore {
                 }
                 if (!isDir) continue;
 
-                // 檢查這個資料夾自己有沒有 README.todo
+                // 偵測 README.todo (作為 TodoStore 建立的條件)
                 const todoFile = path.join(fullPath, "README.todo");
                 try {
                     const todoStat = await stat(todoFile);
                     if (todoStat.isFile()) {
-                        detectedPaths.push(fullPath);
+                        detectedTodoPaths.add(fullPath);
                     }
                 } catch {
                     // README.todo 不存在,正常
+                }
+
+                // 偵測 plans/ (作為專案識別的條件之一,plans-only 專案由此納入)
+                const plansDir = path.join(fullPath, "plans");
+                try {
+                    const plansStat = await stat(plansDir);
+                    if (plansStat.isDirectory()) {
+                        detectedPlansPaths.add(fullPath);
+                    }
+                } catch {
+                    // plans/ 不存在,正常
                 }
 
                 // 還能往下走就遞迴 (currentDepth=1 表示已走 ~/projects/<x>,還能再下兩層)
@@ -96,21 +131,29 @@ export class ProjectsTodoStore {
 
         await collect(projectsDir, 1);
 
-        // 3. 更新 stores Map (新增新掃描到的，並移除已被刪除的)
-        const currentPaths = new Set(detectedPaths);
-        for (const existingPath of this.stores.keys()) {
-            if (!currentPaths.has(existingPath)) {
+        // 3. 完整專案集合 (有 README.todo 或 plans/)
+        const detectedAll = new Set([...detectedTodoPaths, ...detectedPlansPaths]);
+
+        // 清理被刪除的專案 (兩張 map + listener)
+        for (const existingPath of [...this.stores.keys()]) {
+            if (!detectedAll.has(existingPath)) {
                 // 移除已失效的專案監聽器並從 Map 刪除
                 const unsubscribe = this.storeListeners.get(existingPath);
                 unsubscribe?.();
                 this.storeListeners.delete(existingPath);
                 this.stores.delete(existingPath);
+                this.planItems.delete(existingPath);
+            }
+        }
+        for (const existingPath of [...this.planItems.keys()]) {
+            if (!detectedAll.has(existingPath)) {
+                this.planItems.delete(existingPath);
             }
         }
 
-        // 4. 載入每個專案的 TodoStore
+        // 4. 為有 README.todo 的專案載入 TodoStore
         const loadPromises: Promise<void>[] = [];
-        for (const projectPath of detectedPaths) {
+        for (const projectPath of detectedTodoPaths) {
             let store = this.stores.get(projectPath);
             if (!store) {
                 store = new TodoStore(projectPath);
@@ -127,7 +170,17 @@ export class ProjectsTodoStore {
             loadPromises.push(store.load());
         }
 
-        await Promise.all(loadPromises);
+        // 5. 為所有專案 (含 plans-only) 掃描 plans/
+        const planPromises: Promise<void>[] = [];
+        for (const projectPath of detectedAll) {
+            planPromises.push(
+                scanPlans(projectPath).then((infos) => {
+                    this.planItems.set(projectPath, infos);
+                })
+            );
+        }
+
+        await Promise.all([...loadPromises, ...planPromises]);
         this.emit({ type: "loaded" });
     }
 

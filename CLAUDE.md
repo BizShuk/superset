@@ -357,7 +357,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## 測試 (Testing)
 
-`npm test` 跑 Vitest,目前 391 個 case 全綠 (41 個 test file):
+`npm test` 跑 Vitest,目前 432 個 case 全綠 (46 個 test file):
 
 | 測試檔                            | 對象                              | 案例數 |
 | --------------------------------- | --------------------------------- | ------ |
@@ -411,6 +411,28 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 - 設計規格(已實作): [`docs/specs/2026-06-20-terminal-dashboard-panel.md`](docs/specs/2026-06-20-terminal-dashboard-panel.md)
 - 進行中計劃: [`plans/`](plans/)
+
+---
+
+## Plan Files Integration (0.8.4+)
+
+`plans/` 是設計中、未實作的 plan 文件 (`YYYY-MM-DD-<topic>.md`),傳統上需要手動翻資料夾才看得到。0.8.4 起,local TODO panel (`src/todo/`) 與跨專案 TODO panel (`src/projectsTodo/`) 都會平行掃對應 root 下的 `plans/*.md`,把每份 `.md` 當作 read-only item 出現在合成的 `## Plans` section。
+
+### 設計重點
+
+- **Pure scan**:`src/todo/plansSource.ts` 是純函式模組 (對齊 `parser.ts` 風格),`scanPlans(root)` 用 `readdir` + `stat` + 8-line head read 取 H1,無 `vscode` import。
+- **合成 section**:`makePlansSection()` 在 `plansSource.ts` 共用;`level: undefined` 讓 `computeSectionContextValue` 走非 archivable 路徑,不會冒出 archive context menu。
+- **Discriminated union**:`TodoItem.kind` 加 `"plan"` + 必填 `filePath` 欄位;`applyPriorityFilter` passthrough (任何 P0/P1/P2 filter 都保留 plan),`filterCompleted` 因 plan 無 checked 自動透過。
+- **跨專案識別放寬**:projects todo store 改為「`README.todo` 或 `plans/` 任一即算」,plans-only 專案 (有 `plans/` 但沒 `README.todo`) 也會出現在 overview,透過 `getPlanItemsEntries()` 取得。
+- **不開啟不寫入**:點 row 文字不做任何事 (與一般 non-link todo 一致);右側的「Open」icon 由 `package.json` 的 `viewItem == todoPlan` `group: "inline"` menu entry 提供 (對稱 `todoOpenLink`),觸發 `superset.todoOpenPlan` / `superset.projectsTodoOpenPlan` 走 `markdown.showPreview`。
+- **三視圖行為差異**:
+    - **Section view**:Plans section 末端附加,有 `N plans` description (無 `N ◐` badge)
+    - **Priority view**:plan item 自然落入「None」group (沒 priority tag)
+    - **File view**:plan item 群組在 synthetic `plans/` group,排 `README.todo` 之後
+
+### 為何 kind 新增而非復用 list
+
+`kind: "list"` 是「`- foo` 沒 checkbox 標記的 free-form note」,可能有 priority tag 也可能進 archive。Plan 是「整份 design doc 的 read-only entry」,這兩個語意混用會逼 `applyPriorityFilter` / `filterCompleted` / `countPending` 處處加 `if (item.filePath)` 分流。明確定義新 kind 比到處加 hack 乾淨,也避免 plan 被誤勾/誤 archive 的 UI 風險。
 - VSCode Terminal API 官方文件:<https://code.visualstudio.com/docs/terminal/shell-integration>
 - VSCode Pseudoterminal:<https://code.visualstudio.com/api/references/vscode-api#Pseudoterminal>
 - node-pty:<https://github.com/homebridge/node-pty-prebuilt-multiarch>

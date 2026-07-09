@@ -54,7 +54,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // Watcher for all README.todo files under /Users/shuk/projects
     const home = require("os").homedir();
     const projectsBaseDir = path.join(home, "projects");
-    
+
     // Relative pattern to watch any README.todo under projectsBaseDir recursively
     const projectsWatcher = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(projectsBaseDir, "**/README.todo")
@@ -79,6 +79,20 @@ export function register(ctx: FeatureContext): FeatureHandle {
         // If a README.todo is deleted, reload projects to remove it
         store.load().then(() => refreshProjectsTodoFilterBadge());
     });
+
+    // Watcher for plans/*.md under any project — plan files can be
+    // authored or removed in projects that have *no* README.todo, so
+    // we always run a full store.load() rather than trying to locate
+    // the affected sub-store. PlansTodoStore.load() walks both maps.
+    const plansWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(projectsBaseDir, "**/plans/*.md")
+    );
+    const onPlansFileChanged = () => {
+        store.load().then(() => refreshProjectsTodoFilterBadge());
+    };
+    plansWatcher.onDidChange(onPlansFileChanged);
+    plansWatcher.onDidCreate(onPlansFileChanged);
+    plansWatcher.onDidDelete(onPlansFileChanged);
 
     // Drive the native checkbox click
     view.onDidChangeCheckboxState?.(async (e) => {
@@ -109,6 +123,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.projectsTodoToggle",
         async (item?: ProjectTodoItem) => {
             if (!item || item.kind === "list") return;
+            if (item.kind === "plan") return;
             const subStore = store.getStore(item.projectPath);
             if (subStore) {
                 await subStore.toggle(item);
@@ -148,19 +163,37 @@ export function register(ctx: FeatureContext): FeatureHandle {
         async (item?: ProjectTodoItem) => {
             let projectPath = item?.projectPath;
             if (!projectPath) {
-                const activeProjects = Array.from(store.getStores().keys()).map(p => ({
-                    label: path.basename(p),
-                    description: p
-                }));
-                if (activeProjects.length === 0) {
+                // Include plans-only projects (no README.todo) in the
+                // picker so they aren't silently unreachable. Mark them
+                // so the user knows "New TODO" will no-op for them.
+                const todoSet = new Set(store.getStores().keys());
+                const plansOnlyPaths = Array.from(store.getPlanItemsEntries())
+                    .filter(([p, infos]) => !todoSet.has(p) && infos.length > 0)
+                    .map(([p]) => p);
+                const allPaths = [...todoSet, ...plansOnlyPaths];
+                if (allPaths.length === 0) {
                     vscode.window.showErrorMessage("無可用的專案項目 (No projects available)");
                     return;
                 }
+                const activeProjects = allPaths.map((p) => ({
+                    label: path.basename(p),
+                    description: plansOnlyPaths.includes(p)
+                        ? `${p} (僅有 plans/)`
+                        : p,
+                }));
                 const pick = await vscode.window.showQuickPick(activeProjects, {
                     placeHolder: "選擇專案以新增待辦事項 (Select project to add TODO)"
                 });
                 if (!pick) return;
-                projectPath = pick.description;
+                projectPath = pick.description.replace(/ \(僅有 plans\/\)$/, "");
+            }
+
+            const subStore = store.getStore(projectPath);
+            if (!subStore) {
+                vscode.window.showInformationMessage(
+                    "此專案僅有 plans/,無 README.todo — 無法新增 todo"
+                );
+                return;
             }
 
             const text = await vscode.window.showInputBox({
@@ -169,10 +202,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             });
             if (!text || text.trim() === "") return;
 
-            const subStore = store.getStore(projectPath);
-            if (subStore) {
-                await subStore.addTodo(text.trim(), "Default");
-            }
+            await subStore.addTodo(text.trim(), "Default");
         }
     );
 
@@ -181,22 +211,54 @@ export function register(ctx: FeatureContext): FeatureHandle {
         async (item?: ProjectTodoItem) => {
             let projectPath = item?.projectPath;
             if (!projectPath) {
-                const activeProjects = Array.from(store.getStores().keys()).map(p => ({
-                    label: path.basename(p),
-                    description: p
-                }));
-                if (activeProjects.length === 0) {
+                // Same picker shape as `projectsTodoNew` so plans-only
+                // projects are reachable from both commands.
+                const todoSet = new Set(store.getStores().keys());
+                const plansOnlyPaths = Array.from(store.getPlanItemsEntries())
+                    .filter(([p, infos]) => !todoSet.has(p) && infos.length > 0)
+                    .map(([p]) => p);
+                const allPaths = [...todoSet, ...plansOnlyPaths];
+                if (allPaths.length === 0) {
                     // Fallback to workspace root
                     projectPath = ctx.workspaceFolder;
-                } else if (activeProjects.length === 1) {
-                    projectPath = activeProjects[0]!.description;
+                } else if (allPaths.length === 1) {
+                    projectPath = allPaths[0]!;
                 } else {
+                    const activeProjects = allPaths.map((p) => ({
+                        label: path.basename(p),
+                        description: plansOnlyPaths.includes(p)
+                            ? `${p} (僅有 plans/)`
+                            : p,
+                    }));
                     const pick = await vscode.window.showQuickPick(activeProjects, {
                         placeHolder: "選擇要開啟的 README.todo (Select README.todo to open)"
                     });
                     if (!pick) return;
-                    projectPath = pick.description;
+                    projectPath = pick.description.replace(/ \(僅有 plans\/\)$/, "");
                 }
+            }
+
+            const subStore = store.getStore(projectPath);
+            // Plans-only project — open the first plan file in markdown
+            // preview instead of erroring out.
+            if (!subStore) {
+                const plans = store.getPlanItems(projectPath);
+                if (plans.length === 0) {
+                    vscode.window.showErrorMessage(`Failed to open README.todo: project has no README.todo or plans/`);
+                    return;
+                }
+                const firstPlan = plans[0]!;
+                try {
+                    const uri = vscode.Uri.file(firstPlan.filePath);
+                    const doc = await vscode.workspace.openTextDocument(uri);
+                    if (doc.languageId !== "markdown") {
+                        await vscode.languages.setTextDocumentLanguage(doc, "markdown");
+                    }
+                    await vscode.commands.executeCommand("markdown.showPreview", uri);
+                } catch (err) {
+                    vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
+                }
+                return;
             }
 
             const uri = vscode.Uri.file(path.join(projectPath, "README.todo"));
@@ -208,6 +270,30 @@ export function register(ctx: FeatureContext): FeatureHandle {
                 await vscode.commands.executeCommand("markdown.showPreview", uri);
             } catch (err) {
                 vscode.window.showErrorMessage(`Failed to open README.todo: ${err}`);
+            }
+        }
+    );
+
+    /**
+     * Open a `plans/*.md` file in the markdown preview. Wired to the
+     * inline "Open" icon button on every `kind: "plan"` row in the
+     * projects TODO tree via the `viewItem == projectsTodoPlan`
+     * `group: "inline"` menu entry in `package.json` — symmetric with
+     * `superset.projectsTodoOpenLink`.
+     */
+    const openPlanCmd = vscode.commands.registerCommand(
+        "superset.projectsTodoOpenPlan",
+        async (arg?: { filePath?: string; title?: string }) => {
+            if (!arg?.filePath) return;
+            const uri = vscode.Uri.file(arg.filePath);
+            try {
+                const doc = await vscode.workspace.openTextDocument(uri);
+                if (doc.languageId !== "markdown") {
+                    await vscode.languages.setTextDocumentLanguage(doc, "markdown");
+                }
+                await vscode.commands.executeCommand("markdown.showPreview", uri);
+            } catch (err) {
+                vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
             }
         }
     );
@@ -257,6 +343,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.projectsTodoArchive",
         async (item?: ProjectTodoItem) => {
             if (!item) return;
+            if (item.kind === "plan") return;
             const subStore = store.getStore(item.projectPath);
             if (subStore) {
                 await subStore.archiveTodo(item);
@@ -268,6 +355,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.projectsTodoRollback",
         async (item?: ProjectTodoItem) => {
             if (!item) return;
+            if (item.kind === "plan") return;
             const subStore = store.getStore(item.projectPath);
             if (subStore) {
                 await subStore.rollbackTodo(item);
@@ -279,6 +367,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.projectsTodoArchiveSection",
         async (item?: ProjectTodoItem) => {
             if (!item) return;
+            if (item.text === "Plans") return;
             const subStore = store.getStore(item.projectPath);
             if (subStore) {
                 await subStore.archiveSection(item);
@@ -290,6 +379,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.projectsTodoUnarchiveSection",
         async (item?: ProjectTodoItem) => {
             if (!item) return;
+            if (item.text === "Plans") return;
             const subStore = store.getStore(item.projectPath);
             if (subStore) {
                 await subStore.unarchiveSection(item);
@@ -301,6 +391,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.projectsTodoChangeSection",
         async (item?: ProjectTodoItem) => {
             if (!item) return;
+            if (item.kind === "plan") return;
             const subStore = store.getStore(item.projectPath);
             if (!subStore) return;
 
@@ -347,6 +438,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.projectsTodoDeleteSection",
         async (item?: ProjectTodoItem) => {
             if (!item) return;
+            // Synthetic "Plans" section has no real heading line in
+            // README.todo; deleting it would no-op anyway.
+            if (item.text === "Plans") return;
             const subStore = store.getStore(item.projectPath);
             if (!subStore) return;
 
@@ -458,6 +552,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         changePriorityCmd,
         todoNewCmd,
         openTodoFileCmd,
+        openPlanCmd,
         openTodoLinkCmd,
         copyTodoCmd,
         archiveTodoCmd,
@@ -478,6 +573,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         filterP2OnCmd,
         view,
         projectsWatcher,
+        plansWatcher,
         { dispose: () => provider.stop() }
     );
 
@@ -489,6 +585,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             changePriorityCmd.dispose();
             todoNewCmd.dispose();
             openTodoFileCmd.dispose();
+            openPlanCmd.dispose();
             openTodoLinkCmd.dispose();
             copyTodoCmd.dispose();
             archiveTodoCmd.dispose();
@@ -509,6 +606,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             filterP2OnCmd.dispose();
             view.dispose();
             projectsWatcher.dispose();
+            plansWatcher.dispose();
         },
     };
 }
