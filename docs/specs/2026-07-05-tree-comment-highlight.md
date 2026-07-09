@@ -1,6 +1,6 @@
 # 規格 (Spec) — tree-comment-highlight
 
-> 對應計劃: [`plans/architecture-tree-comment-highlight.md`](../plans/architecture-tree-comment-highlight.md)
+> 對應計劃: [`docs/specs/2026-07-05-tree-comment-highlight.md (原 plan 已歸檔並刪除,實作見此 spec)`](../docs/specs/2026-07-05-tree-comment-highlight.md (原 plan 已歸檔並刪除,實作見此 spec))
 > 實作 commit: `7963b59 fix: improve trailing comment parsing and syntax highlighting to support hashtags without leading spaces`
 > 實作日期: 2026-07-05
 

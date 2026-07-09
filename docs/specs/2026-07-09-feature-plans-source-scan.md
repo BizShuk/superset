@@ -206,7 +206,7 @@ export function planInfoToTodoItem(info: PlanInfo): TodoItem {
 ```
 
 ### 設計備註
-- **無 prefix filter**:`plans/` 內既有 `2026-07-08-...` 也有 `architecture-...` 與 `dynamic-orbiting-pearl.md`,全部納入。`localeCompare` 讓數字前綴排前面,字母開頭排後面,時序直覺對。
+- **無 prefix filter**:`plans/` 內既有 `2026-07-08-...` 也有 `2026-07-05-architecture-...` 與 `2026-07-05-dynamic-orbiting-pearl.md`,全部納入。`localeCompare` 讓數字前綴排前面,字母開頭排後面,時序直覺對。
 - **`planInfoToTodoItem` 為何放這裡**:projectsTodo 也要做同樣轉換,放 `plansSource` 模組比每個 store 各寫一份乾淨。
 - **`line: -10 - 1 = -11`**:合成 item 的 line 用負數;`-1` 是既有 "Default" section 用的,`-10` 給 Plans section,`-11` 給 plan item。
 

@@ -50,7 +50,7 @@ superset v0.8.0
 | ---- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ★1   | todo 引擎統一 (todo ↔ projectsTodo 共用引擎) | 高 — 兩模組合計 19 個獨立 command × ~5 處 menu 註冊點 = ~95 條 entry,絕大多數完全鏡像重複;抽 `todoEngine/` 後可降至 ~30 LOC 差異 | 中  | `projectsTodo` 已 import `../todo/parser`(共用 AST),但 command/menu/icon/filter 全複製一份;factory 化後兩面板只差「資料來源」一維                |
 | ★2   | 終端機活動摘要 (Terminal Activity Summary)    | 中高 — 核心情境是「背景 terminal 有動靜」,但目前只給布林高亮,沒有「上次輸出摘要 / 命令歷史」可看回                 | 中  | 與已 archived 的 `terminal-lifecycle-audit-log`、`terminal-fuzzy-search` 互補;WebView 呈現 per-terminal 的最近命令 + tail                            |
-| ★3   | 跨面板 reveal-in-tree 共用機制                | 中 — 已有 plan (`architecture-reveal-in-tree.md`,已 archived 但未實作),terminals/mdns/todo 都能用                 | 低  | 純增量,`vscode.commands.executeCommand("treeView.reveal")` 已穩定;解除 archived 狀態即可排程                                                           |
+| ★3   | 跨面板 reveal-in-tree 共用機制                | 中 — 已有 plan (`2026-07-05-architecture-reveal-in-tree.md`,已 archived 但未實作),terminals/mdns/todo 都能用                 | 低  | 純增量,`vscode.commands.executeCommand("treeView.reveal")` 已穩定;解除 archived 狀態即可排程                                                           |
 | ★4   | mDNS one-click connect                        | 中 — 偵測到服務後「一鍵連」是自然延伸 (SSH/Browser/AirPlay)                                                       | 低  | 已有 plan (`2026-06-23-feature-mdns-one-click-connect.md`),依 service type 派發對應 opener                                                             |
 | ☆5   | Open Settings / Show Diagnostics WebView      | 低中 — 兩個 archived plan,屬「方便但非核心」,可等設定項變多再收斂                                                  | 低  | 目前 `superset.*` 設定項少,webview 投入產出比偏低                                                                                                     |
 
@@ -220,7 +220,7 @@ export const todoPlugin: ExtensionPlugin = {
 ### 5.3 其他評估面向(本評估標為 ★2–☆5)
 
 - **終端機活動摘要 WebView**:per-terminal 的最近命令 + tail 摘要,補目前「只有布林高亮」的盲區。
-- **reveal-in-tree**:解除 `architecture-reveal-in-tree.md` 的 archived 狀態並實作。
+- **reveal-in-tree**:解除 `2026-07-05-architecture-reveal-in-tree.md` 的 archived 狀態並實作。
 - **mDNS one-click connect**:已有 plan (`2026-06-23-feature-mdns-one-click-connect.md`),依 service type 派發對應 opener。
 - **Open Settings / Show Diagnostics WebView**:可等 `superset.*` 設定項累積後再收斂,移入 `docs/backlog/`。
 
