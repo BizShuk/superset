@@ -5,6 +5,22 @@
 // `todoStore.ts` and call into these via plain function imports.
 
 import { TAGS_RE, constructTags } from "./parser";
+import type { TodoChange } from "./types";
+import type { TodoRepository } from "./repository";
+
+/**
+ * The minimal surface area of `TodoStore` that the extracted ops
+ * functions (`todoMutations`, `todoSectionOps`, `todoMoveOps`) need
+ * to do their work. Defining it here lets the ops modules take
+ * `TodoStoreContext` instead of importing the full `TodoStore` class
+ * — keeps dependencies one-directional and lets tests mock the
+ * context without subclassing the store.
+ */
+export interface TodoStoreContext {
+    readonly repository: TodoRepository;
+    writeAndLoad(lines: string[]): Promise<void>;
+    emit(change: TodoChange): void;
+}
 
 /**
  * Return the line index that ends the heading block rooted at `startLine`,
