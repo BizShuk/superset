@@ -7,6 +7,7 @@ import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
 import { buildMdnsDetailFields } from "./mdnsTreeSpec";
 import { resolveConnectCommand } from "../mdnsConnect";
 import { getTerminalSpawner } from "../crossModuleState";
+import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const registry = new MdnsRegistry(new MulticastDnsTransport());
@@ -24,6 +25,16 @@ export function register(ctx: FeatureContext): FeatureHandle {
         treeDataProvider: provider,
         showCollapseAll: true,
     });
+
+    // Cross-panel reveal-in-tree wiring: mDNS tree is reachable
+    // from `superset.revealInTree({ viewId: "superset.mdns", ... })`.
+    // Dispose alongside the view in the chain below.
+    const treeViewEntry = getTreeViewRegistry()?.register(
+        "superset.mdns",
+        view as unknown as vscode.TreeView<unknown>,
+        provider as unknown as vscode.TreeDataProvider<unknown>,
+        ctx.shared.log
+    );
 
     const refreshCmd = vscode.commands.registerCommand(
         "superset.mdnsRefresh",
@@ -134,6 +145,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
         showDetailCmd,
         connectCmd,
         view,
+        // TreeViewRegistry entry — disposed alongside the view so
+        // `superset.revealInTree` can't walk a stale panel.
+        treeViewEntry ?? { dispose: () => undefined },
         { dispose: () => provider.stop() },
         { dispose: () => registry.stop() }
     );

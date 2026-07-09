@@ -13,6 +13,7 @@ import {
     PlanActionError,
 } from "../todo/planActions";
 import { formatPlanCopyText } from "../todo/plansSource";
+import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import type { ProjectTodoItem } from "./types";
 
 const PROJECTS_TODO_VIEW_TITLE = "Projects TODO";
@@ -51,6 +52,16 @@ export function register(ctx: FeatureContext): FeatureHandle {
         showCollapseAll: true,
         manageCheckboxStateManually: true,
     });
+
+    // Cross-panel reveal-in-tree wiring: a future TreeView click
+    // e.g. from mDNS can focus a projectsTodo row via
+    // `superset.revealInTree({ viewId: "superset.projectsTodo" })`.
+    const treeViewEntry = getTreeViewRegistry()?.register(
+        "superset.projectsTodo",
+        view as unknown as vscode.TreeView<unknown>,
+        provider as unknown as vscode.TreeDataProvider<unknown>,
+        ctx.shared.log
+    );
 
     const updateProjectsTodoFilterBadge = (filtering: boolean, hidden: number) => {
         void vscode.commands.executeCommand(
@@ -678,6 +689,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
         view,
         projectsWatcher,
         plansWatcher,
+        // TreeViewRegistry entry — see TODO/mDNS wiring notes.
+        treeViewEntry ?? { dispose: () => undefined },
         { dispose: () => provider.stop() }
     );
 
