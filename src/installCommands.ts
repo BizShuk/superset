@@ -1,0 +1,199 @@
+// Install commands — three install/setup commands that all need to
+// spawn a fresh terminal and run a shell command in it. Extracted
+// from `globalCommandsPlugin.ts` as Plan 2 Stage B.
+//
+// Exposes a single `registerInstallCommands(ctx)` that wires all
+// three commands and returns when done; `globalCommandsPlugin`'s
+// `activate()` calls it alongside its own chrome-command registration.
+
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as vscode from "vscode";
+import type { PluginContext } from "./plugin";
+import { getTerminalSpawner } from "./crossModuleState";
+import { quoteShellArg, spawnRunTerminal } from "./spawnRunTerminal";
+
+interface InstallToolsSpec {
+    label: string;
+    cmd: string;
+}
+
+const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
+    {
+        label: "pm2",
+        cmd: "go install github.com/bizshuk/pm2@master",
+    },
+    {
+        label: "skills",
+        cmd: "go install github.com/bizshuk/skills@master",
+    },
+] as const;
+
+const IGNORE_TARGETS: Record<string, string> = {
+    git: ".gitignore",
+    gemini: ".geminiignore",
+    claude: ".claudeignore",
+};
+
+/**
+ * Install pm2 + skills CLI binaries at HEAD. Each runs in its own
+ * terminal so the user can see both install logs side-by-side and
+ * `&& exit` closes the shell on success.
+ */
+async function installDefaultTools(ctx: PluginContext): Promise<void> {
+    if (!getTerminalSpawner()) {
+        vscode.window.showErrorMessage(
+            "Superset: Terminals 模組尚未啟用,請稍候再試"
+        );
+        return;
+    }
+    for (const tool of DEFAULT_TOOLS) {
+        // `spawnRunTerminal` adds its own `(<HH:MM:SS>)` timestamp
+        // suffix; we keep the base name clean so the final terminal
+        // name doesn't carry a duplicate. The helper appends
+        // `&& exit` so the shell self-closes on success.
+        await spawnRunTerminal(
+            `Superset: Install ${tool.label}`,
+            tool.cmd,
+            { closeOnSuccess: true }
+        );
+    }
+    ctx.log(
+        "globalCommands: installDefaultTools dispatched (pm2 + skills @master, two terminals)"
+    );
+}
+
+/**
+ * Install a Claude Code skill from a GitHub repo via the `skills`
+ * CLI. Default repo is the user's cc-plugin fork; an explicit repo
+ * can be passed via the command's `args.repo` parameter (e.g. wired
+ * up by a future TreeView menu). An InputBox is shown with the
+ * resolved repo pre-filled, so the user can press Enter to accept
+ * the default, edit and press Enter to override, or press Esc to
+ * cancel.
+ */
+async function skillInstall(
+    ctx: PluginContext,
+    args?: { repo?: string }
+): Promise<void> {
+    const defaultRepo = args?.repo ?? "bizshuk/cc-plugin";
+    const input = await vscode.window.showInputBox({
+        title: "Superset: Skill Install",
+        prompt:
+            "要安裝的 skill repo (GitHub owner/repo)。直接 Enter 接受預設。",
+        placeHolder: "owner/repo",
+        value: defaultRepo,
+        // Selecting the whole string lets the user immediately type
+        // a new value to replace the default without first deleting it.
+        valueSelection: [0, defaultRepo.length],
+    });
+    if (input === undefined) {
+        ctx.log(
+            `globalCommands: skillInstall cancelled by user (input dismissed)`
+        );
+        return;
+    }
+    // Empty input (user cleared the field then pressed Enter) falls
+    // back to the default. Matches the documented "直接 Enter 接受預設"
+    // affordance — an empty string is not a meaningful repo override.
+    const repo = input.trim() || defaultRepo;
+    await spawnRunTerminal(
+        `Superset: Skill Install (${repo})`,
+        `skills add ${repo}`,
+        { closeOnSuccess: true }
+    );
+    ctx.log(`globalCommands: skillInstall dispatched (${repo})`);
+}
+
+/**
+ * Install the ignore template (`resources/config/install-ignore.sh`)
+ * into the workspace as `.gitignore` / `.geminiignore` /
+ * `.claudeignore`. Resolves the script relative to the extension's
+ * install root (not the workspace) so it works regardless of cwd.
+ */
+async function installIgnoreTemplate(
+    ctx: PluginContext,
+    args?: { targets?: string[]; force?: boolean }
+): Promise<void> {
+    const scriptPath = path.join(
+        ctx.extensionUri.fsPath,
+        "resources",
+        "config",
+        "install-ignore.sh"
+    );
+
+    // Decide which targets to act on. When the user invokes from the
+    // command palette (no args), default to all three.
+    const requested = args?.targets ?? ["git", "gemini", "claude"];
+
+    // Safety: if any requested target file already exists, ask the
+    // user before overwriting. Hand-rolled .gitignore in this repo
+    // is exactly the case the user might want to *keep* if they
+    // customised it — don't silently clobber.
+    let force = args?.force ?? false;
+    if (!force) {
+        const existing = requested
+            .map((t) => IGNORE_TARGETS[t])
+            .filter((n) =>
+                fs.existsSync(path.join(ctx.workspaceFolder, n))
+            );
+        if (existing.length > 0) {
+            const choice = await vscode.window.showWarningMessage(
+                `Superset: 以下檔案已存在,將被模板覆蓋:\n  ${existing.join(
+                    ", "
+                )}\n\n繼續?`,
+                { modal: true },
+                "Overwrite",
+                "Cancel"
+            );
+            if (choice !== "Overwrite") {
+                ctx.log(
+                    "globalCommands: installIgnoreTemplate cancelled by user"
+                );
+                return;
+            }
+            force = true;
+        }
+    }
+
+    const argv = ["bash", scriptPath];
+    for (const t of requested) argv.push(t);
+    if (force) argv.push("--force");
+
+    await spawnRunTerminal(
+        "Superset: Install Ignore Template",
+        argv.map(quoteShellArg).join(" "),
+        { closeOnSuccess: true }
+    );
+    ctx.log(
+        `globalCommands: installIgnoreTemplate ${argv.join(" ")}`
+    );
+}
+
+/**
+ * Register all three install commands against the given
+ * `PluginContext`. Each is registered via `ctx.registerDisposable`
+ * so the manager owns disposal. Idempotent — call once from
+ * `globalCommandsPlugin.activate()`.
+ */
+export function registerInstallCommands(ctx: PluginContext): void {
+    ctx.registerDisposable(
+        vscode.commands.registerCommand(
+            "superset.installDefaultTools",
+            () => installDefaultTools(ctx)
+        )
+    );
+    ctx.registerDisposable(
+        vscode.commands.registerCommand(
+            "superset.skillInstall",
+            (args?: { repo?: string }) => skillInstall(ctx, args)
+        )
+    );
+    ctx.registerDisposable(
+        vscode.commands.registerCommand(
+            "superset.installIgnoreTemplate",
+            (args?: { targets?: string[]; force?: boolean }) =>
+                installIgnoreTemplate(ctx, args)
+        )
+    );
+}
