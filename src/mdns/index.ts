@@ -26,6 +26,16 @@ export function register(ctx: FeatureContext): FeatureHandle {
         showCollapseAll: true,
     });
 
+    // Report active view for panel-layout persistence (plan §3).
+    const visibilitySub = view.onDidChangeVisibility((visible) => {
+        if (visible) {
+            void vscode.commands.executeCommand(
+                "superset.reportViewVisible",
+                "superset.mdns"
+            );
+        }
+    });
+
     // Cross-panel reveal-in-tree wiring: mDNS tree is reachable
     // from `superset.revealInTree({ viewId: "superset.mdns", ... })`.
     // Dispose alongside the view in the chain below.
@@ -145,6 +155,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         showDetailCmd,
         connectCmd,
         view,
+        visibilitySub,
         // TreeViewRegistry entry — disposed alongside the view so
         // `superset.revealInTree` can't walk a stale panel.
         treeViewEntry ?? { dispose: () => undefined },

@@ -61,6 +61,16 @@ export function register(ctx: FeatureContext): FeatureHandle {
         manageCheckboxStateManually: true,
     });
 
+    // Report active view for panel-layout persistence (plan §3).
+    const visibilitySub = view.onDidChangeVisibility((visible) => {
+        if (visible) {
+            void vscode.commands.executeCommand(
+                "superset.reportViewVisible",
+                "superset.projectsTodo"
+            );
+        }
+    });
+
     // Cross-panel reveal-in-tree wiring: a future TreeView click
     // e.g. from mDNS can focus a projectsTodo row via
     // `superset.revealInTree({ viewId: "superset.projectsTodo" })`.
@@ -606,6 +616,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         deleteSectionCmd,
         deleteTodoCmd,
         view,
+        visibilitySub,
         projectsWatcher,
         plansWatcher,
         // todoEngine factory-issued superset.projectsTodo* commands.

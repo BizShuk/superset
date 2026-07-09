@@ -12,6 +12,7 @@ import { topologyPlugin } from "./topology/plugin";
 import { todoPlugin } from "./todo/plugin";
 import { projectsTodoPlugin } from "./projectsTodo/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
+import { panelLayoutPlugin } from "./panelLayout/plugin";
 import {
     setDiagnosticChannel,
     setPluginManager,
@@ -73,8 +74,13 @@ export function activate(
     // `todoPreview` contribute markdown-it hooks; the manager
     // composes them in this order. Feature plugins follow so their
     // disposable registrations land in a predictable slot. The
-    // `globalCommands` plugin is last so its commands can reach
-    // already-registered feature state.
+    // `globalCommands` plugin comes next so its commands can reach
+    // already-registered feature state. The `panelLayout` plugin is
+    // LAST because it restores the last-active TreeView — every
+    // other view plugin must have finished `createTreeView` so the
+    // restore focus call (`${viewId}.focus`) lands on a live view.
+    // A 50ms setTimeout inside `panelLayoutPlugin.activate` is a
+    // belt-and-suspenders fallback if this ordering is ever changed.
     const plugins: ExtensionPlugin[] = [
         treePreviewPlugin,
         todoPreviewPlugin,
@@ -84,6 +90,7 @@ export function activate(
         todoPlugin,
         projectsTodoPlugin,
         globalCommandsPlugin,
+        panelLayoutPlugin,
     ];
 
     // Await the full activation batch so every plugin has finished

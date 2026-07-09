@@ -66,6 +66,16 @@ export function register(ctx: FeatureContext): FeatureHandle {
         manageCheckboxStateManually: true,
     });
 
+    // Report active view for panel-layout persistence (plan §3).
+    const visibilitySub = view.onDidChangeVisibility((visible) => {
+        if (visible) {
+            void vscode.commands.executeCommand(
+                "superset.reportViewVisible",
+                "superset.todo"
+            );
+        }
+    });
+
     // Wire into the cross-panel TreeViewRegistry so the
     // `superset.revealInTree` command can walk this panel's tree.
     // The panel keeps its own dispose chain — the registry entry is
@@ -528,6 +538,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         //  filterP0OnCmd / filterP1Cmd / filterP1OnCmd /
         //  filterP2Cmd / filterP2OnCmd removed — emitted by factory)
         view,
+        visibilitySub,
         todoFileWatcher,
         plansWatcher,
         // todoEngine factory-issued commands. Each handler delegates

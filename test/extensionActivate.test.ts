@@ -44,6 +44,13 @@ vi.mock("vscode", () => {
             }),
             createTreeView: () => ({
                 onDidChangeCheckboxState: undefined,
+                // panelLayout feature (0.9.0) wires each panel's
+                // `onDidChangeVisibility` to `superset.reportViewVisible`;
+                // the mock returns a real disposable so subscribing
+                // never throws.
+                onDidChangeVisibility: () => ({
+                    dispose: () => undefined,
+                }),
                 title: "",
                 dispose: noop,
             }),
