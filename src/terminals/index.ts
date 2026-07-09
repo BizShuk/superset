@@ -17,6 +17,7 @@ import {
     registerTerminalCommands,
     registerGroupCommands,
 } from "./commands";
+import { setTerminalSpawner } from "./terminalSpawner";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const log = ctx.shared.log;
@@ -111,6 +112,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
     });
     const getCwd = () =>
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+
+    // Publish the spawner so other features (install commands in
+    // globalCommandsPlugin) can create a PTY-backed terminal without
+    // re-implementing the factory. Plain `vscode.window.createTerminal`
+    // calls would hit the auto-PTY layer below and get disposed 150ms
+    // later — which is exactly what made `go install` and `skills add`
+    // silently no-op in 0.8.10/0.8.11.
+    setTerminalSpawner((name, cwd) => ptyFactory.spawn(name, cwd));
 
     // ── Lifecycle subscriptions ──────────────────────────
 
@@ -252,6 +261,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     return {
         dispose() {
+            // Drop the cross-module spawner handle so a stale
+            // reference can't survive into a future activation cycle
+            // (e.g. window reload / extension restart).
+            setTerminalSpawner(undefined);
             for (const d of disposables) {
                 d.dispose();
             }

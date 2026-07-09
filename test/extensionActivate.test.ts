@@ -155,6 +155,8 @@ describe("extension activation via PluginManager", () => {
             "superset.focusOverallView",
             "superset.showLogs",
             "superset.focusPanel",
+            "superset.installDefaultTools",
+            "superset.skillInstall",
         ]) {
             expect(cmds.has(id), `missing global command: ${id}`).toBe(true);
         }

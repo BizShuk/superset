@@ -17,15 +17,33 @@ import type { ProjectsTodoChange, ProjectsTodoListener } from "./types";
 const MAX_SCAN_DEPTH = 3;
 
 /**
+ * Plan scan 的 workspace 路徑 (絕對路徑)。Overview 只對這兩處做
+ * 「one-layer」掃描,每個路徑底下**第一層**子目錄的 `plans/*.md` 才會
+ * 被列入 — 反映「overview 是 live workspace 一覽」,深層 plans (例如
+ * `~/projects/foo/sub/plans/`) 屬於 `foo` 自身,不由 overview 額外展開。
+ *
+ * 注意第二條是 `~/projects/tmp`,不是 `~/tmp` — 對應根 `CLAUDE.md` 的
+ * workspace 分層:`~/projects` 是所有專案的家目錄,`tmp/` 是其中一個
+ * 進行中子分類。playground/archive 不在掃描範圍,因為它們的「第一層
+ * 子目錄」(實驗/歸檔樣本)不會再進一步晉升為 live 專案。
+ */
+function getPlanRoots(home: string): string[] {
+    return [path.join(home, "projects"), path.join(home, "projects", "tmp")];
+}
+
+/**
  * 跨專案待辦的資料管理層 (ProjectsTodoStore)。
- * 負責從 `~/projects` 往下掃描 (最深 3 層),找出含 `README.todo` 或 `plans/`
- * 的資料夾:前者建立/維護 `TodoStore` 實例 (重用既有 todo 解析/寫入邏輯),
- * 後者為每個專案 (含 plans-only) 維護一份 plan 快取,供 TreeProvider 在每個
- * project node 末端合成 `## Plans` section 使用。
+ *
+ * 負責兩件事:
+ * - 從 `~/projects` 往下掃描 (最深 3 層),找出含 `README.todo` 的資料夾,
+ *   為每個建立/維護 `TodoStore` 實例 (重用既有 todo 解析/寫入邏輯)。
+ * - 從 `~/projects` 與 `~/projects/tmp` 各自的**第一層**子目錄收集
+ *   `<project>/plans/*.md`,合併成一份 workspace 層級的 plan 清單,
+ *   給 TreeProvider 在 overview 末端開一個 top-level「Plans」row。
  */
 export class ProjectsTodoStore {
     private readonly stores = new Map<string, TodoStore>();
-    private readonly planItems = new Map<string, PlanInfo[]>();
+    private workspacePlans: WorkspacePlan[] = [];
     private readonly listeners = new Set<ProjectsTodoListener>();
     private readonly storeListeners = new Map<string, () => void>();
 
@@ -34,10 +52,6 @@ export class ProjectsTodoStore {
     /**
      * 取得目前所有已載入的專案 `TodoStore`。
      * 鍵值為專案的絕對路徑 (projectPath)。
-     *
-     * 注意:只有含 `README.todo` 的專案會出現在此 map;plans-only 專案
-     * 仍會被識別與渲染,但需要透過 `getPlanItems(p)` 取得其內容,
-     * 或透過 `getPlanItemsEntries()` 迭代所有有 plans 的專案。
      */
     getStores(): Map<string, TodoStore> {
         return this.stores;
@@ -51,31 +65,28 @@ export class ProjectsTodoStore {
     }
 
     /**
-     * 取得指定專案的 plans 掃描結果,沒有時回 `[]`。
+     * 取得 workspace 層級的 plan 清單 (來自 `~/projects/<p>/plans/` 與
+     * `~/projects/tmp/<p>/plans/` 的第一層掃描)。每筆帶有 `projectPath`
+     * 與 `projectName` 供 TreeProvider 顯示 / 開檔。
      */
-    getPlanItems(projectPath: string): PlanInfo[] {
-        return this.planItems.get(projectPath) ?? [];
+    getWorkspacePlans(): readonly WorkspacePlan[] {
+        return this.workspacePlans;
     }
 
     /**
-     * 迭代所有 (projectPath, plans) 對,給 TreeProvider 在處理 plans-only
-     * 專案時使用 — 這些專案不會出現在 `getStores()` 中。
-     */
-    getPlanItemsEntries(): IterableIterator<[string, PlanInfo[]]> {
-        return this.planItems.entries();
-    }
-
-    /**
-     * 掃描全域專案目錄,尋找包含 `README.todo` 或 `plans/` 的資料夾。
+     * 掃描全域專案目錄,尋找包含 `README.todo` 的資料夾,並平行收集
+     * workspace 層級的 plans。
      *
-     * 從 `~/projects` 出發向下遞迴,最深 3 層 (即 `~/projects/<a>/<b>/<c>/...`)。
-     * 命中隱藏目錄 (`.` 開頭) 一律跳過。
+     * README 掃描:從 `~/projects` 出發向下遞迴,最深 3 層
+     * (即 `~/projects/<a>/<b>/<c>/...`)。命中隱藏目錄 (`.` 開頭) 一律跳過。
+     *
+     * Plans 掃描:只走 `~/projects` 與 `~/projects/tmp` 各自的第一層子目錄
+     * (即所有「直接子資料夾」),讀取 `<child>/plans/*.md`。
      */
     async load(): Promise<void> {
         const home = os.homedir();
         const projectsDir = path.join(home, "projects");
         const detectedTodoPaths = new Set<string>();
-        const detectedPlansPaths = new Set<string>();
 
         // 從 ~/projects 出發往下,最深 3 層。root 本身 (depth 0) 不視為 project
         // (即使 ~/projects/README.todo 存在也不列入),掃的是它的直接子資料夾到第 3 層子孫。
@@ -111,17 +122,6 @@ export class ProjectsTodoStore {
                     // README.todo 不存在,正常
                 }
 
-                // 偵測 plans/ (作為專案識別的條件之一,plans-only 專案由此納入)
-                const plansDir = path.join(fullPath, "plans");
-                try {
-                    const plansStat = await stat(plansDir);
-                    if (plansStat.isDirectory()) {
-                        detectedPlansPaths.add(fullPath);
-                    }
-                } catch {
-                    // plans/ 不存在,正常
-                }
-
                 // 還能往下走就遞迴 (currentDepth=1 表示已走 ~/projects/<x>,還能再下兩層)
                 if (currentDepth < MAX_SCAN_DEPTH) {
                     await collect(fullPath, currentDepth + 1);
@@ -131,27 +131,17 @@ export class ProjectsTodoStore {
 
         await collect(projectsDir, 1);
 
-        // 3. 完整專案集合 (有 README.todo 或 plans/)
-        const detectedAll = new Set([...detectedTodoPaths, ...detectedPlansPaths]);
-
-        // 清理被刪除的專案 (兩張 map + listener)
+        // 清理被刪除的專案 (移除 store + listener)
         for (const existingPath of [...this.stores.keys()]) {
-            if (!detectedAll.has(existingPath)) {
-                // 移除已失效的專案監聽器並從 Map 刪除
+            if (!detectedTodoPaths.has(existingPath)) {
                 const unsubscribe = this.storeListeners.get(existingPath);
                 unsubscribe?.();
                 this.storeListeners.delete(existingPath);
                 this.stores.delete(existingPath);
-                this.planItems.delete(existingPath);
-            }
-        }
-        for (const existingPath of [...this.planItems.keys()]) {
-            if (!detectedAll.has(existingPath)) {
-                this.planItems.delete(existingPath);
             }
         }
 
-        // 4. 為有 README.todo 的專案載入 TodoStore
+        // 為有 README.todo 的專案載入 TodoStore
         const loadPromises: Promise<void>[] = [];
         for (const projectPath of detectedTodoPaths) {
             let store = this.stores.get(projectPath);
@@ -170,18 +160,51 @@ export class ProjectsTodoStore {
             loadPromises.push(store.load());
         }
 
-        // 5. 為所有專案 (含 plans-only) 掃描 plans/
-        const planPromises: Promise<void>[] = [];
-        for (const projectPath of detectedAll) {
-            planPromises.push(
-                scanPlans(projectPath).then((infos) => {
-                    this.planItems.set(projectPath, infos);
-                })
-            );
+        // 收集 workspace plans:只看 ~/projects 與 ~/projects/tmp 兩個 root
+        // 的第一層子目錄(已存在才能算 live project),遞迴不再深入。
+        const planScanPromises: Promise<WorkspacePlan[]>[] = [];
+        for (const root of getPlanRoots(home)) {
+            planScanPromises.push(this.scanRootPlans(root));
         }
+        const planBatches = await Promise.all([...loadPromises, ...planScanPromises]);
+        // planScanPromises 的回傳值接在 loadPromises 之後
+        const planResults = planBatches.slice(loadPromises.length) as WorkspacePlan[][];
+        this.workspacePlans = planResults
+            .flat()
+            .sort((a, b) => a.projectName.localeCompare(b.projectName)
+                || a.info.basename.localeCompare(b.info.basename));
 
-        await Promise.all([...loadPromises, ...planPromises]);
         this.emit({ type: "loaded" });
+    }
+
+    /**
+     * 掃描 `<root>` 下每個第一層子目錄的 `plans/*.md`。
+     * 不存在的 root 安靜跳過 (回傳 `[]`);子目錄缺 `plans/` 也跳過。
+     * 結果附帶 `projectName` / `projectPath` 供 TreeProvider 顯示。
+     */
+    private async scanRootPlans(root: string): Promise<WorkspacePlan[]> {
+        let entries: string[];
+        try {
+            entries = await readdir(root);
+        } catch {
+            return [];
+        }
+        const childDirs = entries.filter((e) => !e.startsWith("."));
+        const results = await Promise.all(
+            childDirs.map(async (child): Promise<WorkspacePlan[]> => {
+                const projectPath = path.join(root, child);
+                let isDir = false;
+                try {
+                    isDir = (await stat(projectPath)).isDirectory();
+                } catch {
+                    return [];
+                }
+                if (!isDir) return [];
+                const infos = await scanPlans(projectPath);
+                return infos.map((info) => ({ info, projectName: child, projectPath }));
+            })
+        );
+        return results.flat();
     }
 
     /**
@@ -208,4 +231,15 @@ export class ProjectsTodoStore {
             l(change);
         }
     }
+}
+
+/**
+ * 一筆 workspace plan 條目:除了 `PlanInfo` 自身,還標記所屬的 project
+ * (來自 `~/projects/<projectName>/plans/` 或 `~/projects/tmp/<projectName>/plans/`)
+ * 給 TreeProvider 在 top-level「Plans」row 之下顯示時使用。
+ */
+export interface WorkspacePlan {
+    readonly info: PlanInfo;
+    readonly projectName: string;
+    readonly projectPath: string;
 }

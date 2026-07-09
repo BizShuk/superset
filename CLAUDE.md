@@ -357,7 +357,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## 測試 (Testing)
 
-`npm test` 跑 Vitest,目前 432 個 case 全綠 (46 個 test file):
+`npm test` 跑 Vitest,目前 444 個 case 全綠 (46 個 test file):
 
 | 測試檔                            | 對象                              | 案例數 |
 | --------------------------------- | --------------------------------- | ------ |
@@ -401,6 +401,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 | `projectsPlugin.test.ts`          | projectsPlugin 介面契約           | 3      |
 | `projectsTodoStore.test.ts`       | ProjectsTodoStore 跨專案掃描      | 8      |
 | `projectsTodoTreeProvider.test.ts` | ProjectsTodoTreeProvider 渲染 + 過濾 | 12     |
+| `installCommands.test.ts`         | installDefaultTools / skillInstall 走 PTY spawner + `&& exit` 自動關閉 | 5      |
 | `smoke.test.ts`                   | 整體 smoke                        | 1      |
 
 `TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/terminals/treeSpec.ts` 純函式。
@@ -414,17 +415,20 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ---
 
-## Plan Files Integration (0.8.4+)
+## Plan Files Integration
 
-`plans/` 是設計中、未實作的 plan 文件 (`YYYY-MM-DD-<topic>.md`),傳統上需要手動翻資料夾才看得到。0.8.4 起,local TODO panel (`src/todo/`) 與跨專案 TODO panel (`src/projectsTodo/`) 都會平行掃對應 root 下的 `plans/*.md`,把每份 `.md` 當作 read-only item 出現在合成的 `## Plans` section。
+`plans/` 是設計中、未實作的 plan 文件 (`YYYY-MM-DD-<topic>.md`),傳統上需要手動翻資料夾才看得到。Local TODO panel (`src/todo/`) 把當前 workspace 的 `plans/*.md` 收成「工作區內計畫」;跨專案 TODO panel (`src/projectsTodo/`) 把整個 `~/projects` workspace 的 plan 收成「所有進行中計畫」。兩者語意不同,行為分述。
 
-### 設計重點
+### Local TODO (0.8.4+)
+
+Local panel 把當前工作區 root 下的 `plans/*.md` 收成 `<workspace>/<file>.md` 的 read-only item,附在 README.todo 的 section list 後。
+
+### 設計重點 (local)
 
 - **Pure scan**:`src/todo/plansSource.ts` 是純函式模組 (對齊 `parser.ts` 風格),`scanPlans(root)` 用 `readdir` + `stat` + 8-line head read 取 H1,無 `vscode` import。
 - **合成 section**:`makePlansSection()` 在 `plansSource.ts` 共用;`level: undefined` 讓 `computeSectionContextValue` 走非 archivable 路徑,不會冒出 archive context menu。
 - **Discriminated union**:`TodoItem.kind` 加 `"plan"` + 必填 `filePath` 欄位;`applyPriorityFilter` passthrough (任何 P0/P1/P2 filter 都保留 plan),`filterCompleted` 因 plan 無 checked 自動透過。
-- **跨專案識別放寬**:projects todo store 改為「`README.todo` 或 `plans/` 任一即算」,plans-only 專案 (有 `plans/` 但沒 `README.todo`) 也會出現在 overview,透過 `getPlanItemsEntries()` 取得。
-- **不開啟不寫入**:點 row 文字不做任何事 (與一般 non-link todo 一致);右側的「Open」icon 由 `package.json` 的 `viewItem == todoPlan` `group: "inline"` menu entry 提供 (對稱 `todoOpenLink`),觸發 `superset.todoOpenPlan` / `superset.projectsTodoOpenPlan` 走 `markdown.showPreview`。
+- **不開啟不寫入**:點 row 文字不做任何事 (與一般 non-link todo 一致);右側的「Open」icon 由 `package.json` 的 `viewItem == todoPlan` `group: "inline"` menu entry 提供 (對稱 `todoOpenLink`),觸發 `superset.todoOpenPlan` 走 `markdown.showPreview`。
 - **三視圖行為差異**:
     - **Section view**:Plans section 末端附加,有 `N plans` description (無 `N ◐` badge)
     - **Priority view**:plan item 自然落入「None」group (沒 priority tag)
@@ -433,6 +437,19 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 ### 為何 kind 新增而非復用 list
 
 `kind: "list"` 是「`- foo` 沒 checkbox 標記的 free-form note」,可能有 priority tag 也可能進 archive。Plan 是「整份 design doc 的 read-only entry」,這兩個語意混用會逼 `applyPriorityFilter` / `filterCompleted` / `countPending` 處處加 `if (item.filePath)` 分流。明確定義新 kind 比到處加 hack 乾淨,也避免 plan 被誤勾/誤 archive 的 UI 風險。
+
+### Overview — Workspace Plans Row (0.8.5+)
+
+Overview (`superset-overall` viewContainer) 不再為每個 project 各自附加 `## Plans` section,改成在 panel 末端開一個 top-level **「Plans」row**,把整個 `~/projects` workspace 的 plan 文件扁平列出。
+
+### 設計重點 (overview)
+
+- **Two-root, one-layer scan**:`getPlanRoots(home)` 回傳 `["~/projects", "~/projects/tmp"]` 兩條絕對路徑;`scanRootPlans(root)` 對每個 root 走 `readdir` 找第一層子目錄,呼叫 `scanPlans(child)` 讀其 `plans/*.md`。**不**遞迴到孫層,所以 `~/projects/foo/sub/plans/` 屬於 `foo` 自身,不由 overview 額外展開。
+- **為何用這兩個 root**:`~/projects` 是所有專案的家目錄,`~/projects/tmp/` 是「進行中子分類」,兩者對應根 `CLAUDE.md` §分層。`~/tmp` 不存在;`playground/` 與 `archive/` 是同層分類,其中的「實驗/歸檔樣本」本身不是 live 專案,故不列入。
+- **Flat list**:Top-level「Plans」row 的 children 是所有 plan 攤平後的清單(每筆帶 `projectName` / `projectPath` 標記來源,給 inline `openProject` 用),按 `(projectName, basename)` 字典序排序。不再有「plans-only 專案」這個概念 — 只有 `README.todo` 才定義一個 project,plans 永遠是附加的 read-only 條目。
+- **filter passthrough**:Overview 的 `hide-completed` 與 priority filter 對 plan 完全不影響 (plan 沒有 checked / priority 概念),所以 plan 永遠出現在該 row 之下。
+- **API 重命名**:`getPlanItems(p)` / `getPlanItemsEntries()` 已移除,改用 `getWorkspacePlans(): readonly WorkspacePlan[]` 一次拿整份。`WorkspacePlan = { info, projectName, projectPath }`,`info` 仍是原 `PlanInfo`。
+- **Inline `openProject`**:Plan 子項右側的 `openProject` icon (由 `package.json` `viewItem == projectsTodoPlan` 提供) 跳到 plan 所屬的 project 目錄。Top-level「Plans」row 本身沒有這個 menu (它的 `projectPath` 是空字串 sentinel,`openProject` handler 會 null-check 後 no-op)。
 - VSCode Terminal API 官方文件:<https://code.visualstudio.com/docs/terminal/shell-integration>
 - VSCode Pseudoterminal:<https://code.visualstudio.com/api/references/vscode-api#Pseudoterminal>
 - node-pty:<https://github.com/homebridge/node-pty-prebuilt-multiarch>

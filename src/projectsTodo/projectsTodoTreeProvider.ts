@@ -249,7 +249,9 @@ export class ProjectsTodoTreeProvider
 
         const projectItems: ProjectTodoItem[] = [];
 
-        // (a) Projects that have a README.todo — the established flow.
+        // Project rows — only projects that actually have a README.todo.
+        // Plans are NOT attached under each project anymore; they live in
+        // a top-level "Plans" row at the end of the overview.
         for (const [projectPath, store] of this.store.getStores()) {
             const projectName = path.basename(projectPath);
             const raw = store.getItems();
@@ -269,43 +271,6 @@ export class ProjectsTodoTreeProvider
             // Decorate items with project information
             const decoratedChildren = decorateItems(filtered, projectName, projectPath);
 
-            // Append a synthetic "## Plans" section after the README.todo
-            // sections so users see design-doc items alongside actionable
-            // tasks. Plans are never checked and have no priority tag,
-            // so they survive every filter — appending after the filter
-            // pass keeps them unconditionally visible.
-            const plans = this.store.getPlanItems(projectPath);
-            if (plans.length > 0) {
-                const planChildren: ProjectTodoItem[] = plans.map((p) => {
-                    const base = planInfoToTodoItem(p);
-                    return {
-                        line: base.line,
-                        text: base.text,
-                        description: base.description,
-                        kind: base.kind,
-                        checked: base.checked,
-                        filePath: base.filePath,
-                        parentSection: base.parentSection,
-                        level: base.level,
-                        projectName,
-                        projectPath,
-                    };
-                });
-                const sectionBase = makePlansSection(planChildren);
-                const plansSection: ProjectTodoItem = {
-                    line: sectionBase.line,
-                    text: sectionBase.text,
-                    description: sectionBase.description,
-                    kind: sectionBase.kind,
-                    level: sectionBase.level,
-                    checked: sectionBase.checked,
-                    children: planChildren,
-                    projectName,
-                    projectPath,
-                };
-                decoratedChildren.push(plansSection);
-            }
-
             const projectItem: ProjectTodoItem = {
                 line: -1,
                 text: projectName,
@@ -318,17 +283,21 @@ export class ProjectsTodoTreeProvider
             projectItems.push(projectItem);
         }
 
-        // (b) Plans-only projects — discovered via `plans/` folder but
-        // lacking a `README.todo`. They live in `planItems` only, not
-        // `stores`. Surface them as project rows whose only child is
-        // the synthetic "## Plans" section so users can still see and
-        // open their design docs from the overview.
-        for (const [projectPath, plans] of this.store.getPlanItemsEntries()) {
-            if (this.store.getStores().has(projectPath)) continue; // already handled in (a)
-            if (plans.length === 0) continue;
-            const projectName = path.basename(projectPath);
-            const planChildren: ProjectTodoItem[] = plans.map((p) => {
-                const base = planInfoToTodoItem(p);
+        // Top-level "Plans" row — flat list of plans from
+        // `~/projects/<p>/plans/*.md` and `~/projects/tmp/<p>/plans/*.md`
+        // (one-layer only). Each plan is read-only and survives every
+        // filter (no priority, no completed state).
+        //
+        // The `projectName` / `projectPath` fields are required on
+        // `ProjectTodoItem`, so we fill them with placeholders. The
+        // "is project node" check in `getTreeItem` is guarded by
+        // `path.basename(projectPath) === text`, which won't match
+        // here, and the per-item rendering reads only `filePath` (set
+        // on each plan child, not on this row).
+        const workspacePlans = this.store.getWorkspacePlans();
+        if (workspacePlans.length > 0) {
+            const planChildren: ProjectTodoItem[] = workspacePlans.map((p) => {
+                const base = planInfoToTodoItem(p.info);
                 return {
                     line: base.line,
                     text: base.text,
@@ -338,12 +307,12 @@ export class ProjectsTodoTreeProvider
                     filePath: base.filePath,
                     parentSection: base.parentSection,
                     level: base.level,
-                    projectName,
-                    projectPath,
+                    projectName: p.projectName,
+                    projectPath: p.projectPath,
                 };
             });
             const sectionBase = makePlansSection(planChildren);
-            const plansSection: ProjectTodoItem = {
+            projectItems.push({
                 line: sectionBase.line,
                 text: sectionBase.text,
                 description: sectionBase.description,
@@ -351,17 +320,8 @@ export class ProjectsTodoTreeProvider
                 level: sectionBase.level,
                 checked: sectionBase.checked,
                 children: planChildren,
-                projectName,
-                projectPath,
-            };
-            projectItems.push({
-                line: -1,
-                text: projectName,
-                kind: "section",
-                checked: false,
-                children: [plansSection],
-                projectName,
-                projectPath,
+                projectName: "<workspace>",
+                projectPath: "",
             });
         }
 

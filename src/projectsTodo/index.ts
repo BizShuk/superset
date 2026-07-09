@@ -111,6 +111,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
         "superset.openProject",
         async (item?: ProjectTodoItem) => {
             const projectPath = item?.projectPath;
+            // Top-level "Plans" row uses "" as a placeholder — never open
+            // an empty path (would resolve to the current process cwd).
             if (!projectPath) return;
             const uri = vscode.Uri.file(projectPath);
             await vscode.commands.executeCommand("vscode.openFolder", uri, {
@@ -163,36 +165,25 @@ export function register(ctx: FeatureContext): FeatureHandle {
         async (item?: ProjectTodoItem) => {
             let projectPath = item?.projectPath;
             if (!projectPath) {
-                // Include plans-only projects (no README.todo) in the
-                // picker so they aren't silently unreachable. Mark them
-                // so the user knows "New TODO" will no-op for them.
                 const todoSet = new Set(store.getStores().keys());
-                const plansOnlyPaths = Array.from(store.getPlanItemsEntries())
-                    .filter(([p, infos]) => !todoSet.has(p) && infos.length > 0)
-                    .map(([p]) => p);
-                const allPaths = [...todoSet, ...plansOnlyPaths];
-                if (allPaths.length === 0) {
+                if (todoSet.size === 0) {
                     vscode.window.showErrorMessage("無可用的專案項目 (No projects available)");
                     return;
                 }
-                const activeProjects = allPaths.map((p) => ({
+                const activeProjects = [...todoSet].map((p) => ({
                     label: path.basename(p),
-                    description: plansOnlyPaths.includes(p)
-                        ? `${p} (僅有 plans/)`
-                        : p,
+                    description: p,
                 }));
                 const pick = await vscode.window.showQuickPick(activeProjects, {
                     placeHolder: "選擇專案以新增待辦事項 (Select project to add TODO)"
                 });
                 if (!pick) return;
-                projectPath = pick.description.replace(/ \(僅有 plans\/\)$/, "");
+                projectPath = pick.description;
             }
 
             const subStore = store.getStore(projectPath);
             if (!subStore) {
-                vscode.window.showInformationMessage(
-                    "此專案僅有 plans/,無 README.todo — 無法新增 todo"
-                );
+                vscode.window.showInformationMessage("此專案沒有 README.todo — 無法新增 todo");
                 return;
             }
 
@@ -211,54 +202,23 @@ export function register(ctx: FeatureContext): FeatureHandle {
         async (item?: ProjectTodoItem) => {
             let projectPath = item?.projectPath;
             if (!projectPath) {
-                // Same picker shape as `projectsTodoNew` so plans-only
-                // projects are reachable from both commands.
                 const todoSet = new Set(store.getStores().keys());
-                const plansOnlyPaths = Array.from(store.getPlanItemsEntries())
-                    .filter(([p, infos]) => !todoSet.has(p) && infos.length > 0)
-                    .map(([p]) => p);
-                const allPaths = [...todoSet, ...plansOnlyPaths];
-                if (allPaths.length === 0) {
+                if (todoSet.size === 0) {
                     // Fallback to workspace root
                     projectPath = ctx.workspaceFolder;
-                } else if (allPaths.length === 1) {
-                    projectPath = allPaths[0]!;
+                } else if (todoSet.size === 1) {
+                    projectPath = [...todoSet][0]!;
                 } else {
-                    const activeProjects = allPaths.map((p) => ({
+                    const activeProjects = [...todoSet].map((p) => ({
                         label: path.basename(p),
-                        description: plansOnlyPaths.includes(p)
-                            ? `${p} (僅有 plans/)`
-                            : p,
+                        description: p,
                     }));
                     const pick = await vscode.window.showQuickPick(activeProjects, {
                         placeHolder: "選擇要開啟的 README.todo (Select README.todo to open)"
                     });
                     if (!pick) return;
-                    projectPath = pick.description.replace(/ \(僅有 plans\/\)$/, "");
+                    projectPath = pick.description;
                 }
-            }
-
-            const subStore = store.getStore(projectPath);
-            // Plans-only project — open the first plan file in markdown
-            // preview instead of erroring out.
-            if (!subStore) {
-                const plans = store.getPlanItems(projectPath);
-                if (plans.length === 0) {
-                    vscode.window.showErrorMessage(`Failed to open README.todo: project has no README.todo or plans/`);
-                    return;
-                }
-                const firstPlan = plans[0]!;
-                try {
-                    const uri = vscode.Uri.file(firstPlan.filePath);
-                    const doc = await vscode.workspace.openTextDocument(uri);
-                    if (doc.languageId !== "markdown") {
-                        await vscode.languages.setTextDocumentLanguage(doc, "markdown");
-                    }
-                    await vscode.commands.executeCommand("markdown.showPreview", uri);
-                } catch (err) {
-                    vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
-                }
-                return;
             }
 
             const uri = vscode.Uri.file(path.join(projectPath, "README.todo"));

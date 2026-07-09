@@ -338,3 +338,94 @@ describe("ProjectsTodoTreeProvider", () => {
         expect(item.description).toBe("1 pending");
     });
 });
+
+describe("ProjectsTodoTreeProvider — workspace plans row", () => {
+    let tempDir: string;
+    let store: ProjectsTodoStore;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        tempDir = mkdtempSync(join(tmpdir(), "superset-prov-plans-"));
+        vi.mocked(os.homedir).mockReturnValue(tempDir);
+
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+
+        // Project A: README.todo + plans  ── 應貢獻 plan
+        const a = join(projectsDir, "alpha");
+        mkdirSync(a);
+        writeFileSync(join(a, "README.todo"), "# TODO\n- [ ] A\n");
+        mkdirSync(join(a, "plans"));
+        writeFileSync(join(a, "plans", "2026-07-01-a.md"), "# Plan A\n");
+
+        // Project B (under tmp): README.todo + plans  ── 應貢獻 plan
+        mkdirSync(join(projectsDir, "tmp"));
+        const b = join(projectsDir, "tmp", "beta");
+        mkdirSync(b);
+        writeFileSync(join(b, "README.todo"), "# TODO\n- [ ] B\n");
+        mkdirSync(join(b, "plans"));
+        writeFileSync(join(b, "plans", "2026-07-02-b.md"), "# Plan B\n");
+
+        // playground/exp: README.todo + plans  ── 不應貢獻 plan (one-layer 邊界)
+        const p = join(projectsDir, "playground", "exp");
+        mkdirSync(p, { recursive: true });
+        writeFileSync(join(p, "README.todo"), "# TODO\n- [ ] P\n");
+        mkdirSync(join(p, "plans"));
+        writeFileSync(join(p, "plans", "2026-07-03-p.md"), "# Plan P\n");
+
+        store = new ProjectsTodoStore();
+        await store.load();
+    });
+
+    afterEach(() => {
+        rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it("renders a top-level 'Plans' row when workspace plans exist", async () => {
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        // 3 projects (alpha, beta, exp) + 1 top-level Plans row
+        const plansRow = roots!.find((r) => r.text === "Plans" && r.kind === "section");
+        expect(plansRow).toBeDefined();
+        // The row is not a project node: projectPath placeholder, no projectName match
+        expect(plansRow!.projectPath).toBe("");
+        expect(plansRow!.level).toBeUndefined(); // virtual section, same as parser "Default"
+    });
+
+    it("Plans row children are flat list of plans from projects/ and projects/tmp/ (not deeper)", async () => {
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+        const plansRow = roots!.find((r) => r.text === "Plans" && r.kind === "section")!;
+        const plans = plansRow.children!;
+
+        // Only alpha and beta contribute; playground/exp is two layers deep.
+        expect(plans).toHaveLength(2);
+        const basenames = plans.map((p) => p.text).sort();
+        expect(basenames).toEqual(["2026-07-01-a", "2026-07-02-b"]);
+
+        // Each plan carries its own projectName / projectPath for inline open
+        const byName = new Map(plans.map((p) => [p.text, p]));
+        expect(byName.get("2026-07-01-a")!.projectName).toBe("alpha");
+        expect(byName.get("2026-07-02-b")!.projectName).toBe("beta");
+    });
+
+    it("Plans row is omitted when no workspace plans exist", async () => {
+        // Fresh store with no plans fixtures
+        const emptyDir = mkdtempSync(join(tmpdir(), "superset-prov-empty-"));
+        try {
+            vi.mocked(os.homedir).mockReturnValue(emptyDir);
+            mkdirSync(join(emptyDir, "projects"));
+            const only = join(emptyDir, "projects", "only");
+            mkdirSync(only);
+            writeFileSync(join(only, "README.todo"), "# TODO\n- [ ] x\n");
+            const emptyStore = new ProjectsTodoStore();
+            await emptyStore.load();
+            const provider = new ProjectsTodoTreeProvider(emptyStore);
+            const roots = await provider.getChildren();
+            expect(roots!.find((r) => r.text === "Plans" && r.kind === "section")).toBeUndefined();
+        } finally {
+            rmSync(emptyDir, { recursive: true, force: true });
+        }
+    });
+});
