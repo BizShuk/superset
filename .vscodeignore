@@ -1,5 +1,30 @@
-
 out/**/*.map
+**/*.tsbuildinfo
+coverage/**
+**/*.log
+**/.DS_Store
+
+# Source code, tests, and dev scripts are not needed in the VSIX —
+# only the compiled `out/` directory and runtime `node_modules` deps
+# are shipped to the user.
 src/**
+test/**
+scripts/**
+
+# Docs & plans are for humans, not the VSIX.
+docs/**
+plans/**
+
+# Source control noise.
+.git/**
+.github/**
+
+# Top-level meta files vsce should not package.
 tsconfig.json
 .gitignore
+AGENTS.md
+README.todo
+README.md
+CHANGELOG.md
+CLAUDE.md
+LICENSE

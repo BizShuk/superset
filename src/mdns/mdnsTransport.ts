@@ -77,9 +77,11 @@ export class MulticastDnsTransport implements MdnsTransport {
             }
         });
 
-        this.mdns.on("error", (err: Error) => {
-            // Silently swallow — mDNS is best-effort.
-            console.error(`[mdns transport] error: ${err.message}`);
+        this.mdns.on("error", (_err: Error) => {
+            // Silently swallow — mDNS is best-effort. RFC 6762 §10.1
+            // recommends treating transport errors as soft failures;
+            // the registry keeps its last-known state and the next
+            // successful packet refreshes it.
         });
     }
 

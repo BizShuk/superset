@@ -30,13 +30,10 @@ import {
 export function activate(
     context: vscode.ExtensionContext
 ): Promise<{ extendMarkdownIt(md: MarkdownIt): MarkdownIt } | undefined> {
-    console.log("[superset] activated");
-
     // Diagnostic channel — owned by the root so it survives across plugins.
     const diag = vscode.window.createOutputChannel("Superset");
     const log = (msg: string) => {
         const stamped = `[${new Date().toISOString().slice(11, 23)}] ${msg}`;
-        console.log(`[superset] ${msg}`);
         diag.appendLine(stamped);
     };
     log(`activate session=${vscode.env.sessionId.slice(0, 8)}`);

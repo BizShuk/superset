@@ -397,9 +397,10 @@ async function spawnRunTerminal(
         await new Promise((resolve) => setTimeout(resolve, 200));
         terminal.sendText(finalCmdline + "\r");
     } catch (err) {
-        console.error(
-            `[superset] spawnRunTerminal failed for "${cmdline}":`,
-            err
+        diagnosticChannel?.appendLine(
+            `[superset] spawnRunTerminal failed for "${cmdline}": ${
+                err instanceof Error ? err.message : String(err)
+            }`
         );
     }
 }
