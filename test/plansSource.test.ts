@@ -183,7 +183,7 @@ describe("plansSource", () => {
     });
 
     describe("formatPlanCopyText", () => {
-        it("formats a plan row as [title](file://...) markdown link", () => {
+        it("formats a plan row as two lines: title + raw absolute path", () => {
             const item = planInfoToTodoItem({
                 basename: "2026-07-08-foo.md",
                 title: "Foo Title",
@@ -191,10 +191,10 @@ describe("plansSource", () => {
                 mtimeMs: 0,
             });
             const out = formatPlanCopyText(item);
-            expect(out).toBe("[Foo Title](file:///tmp/plans/2026-07-08-foo.md)");
+            expect(out).toBe("Foo Title\n/tmp/plans/2026-07-08-foo.md");
         });
 
-        it("percent-encodes spaces and special chars in the path", () => {
+        it("preserves spaces and special chars verbatim (no URL-encoding)", () => {
             const item = planInfoToTodoItem({
                 basename: "x.md",
                 title: "X",
@@ -202,7 +202,18 @@ describe("plansSource", () => {
                 mtimeMs: 0,
             });
             const out = formatPlanCopyText(item);
-            expect(out).toBe("[X](file:///tmp/with%20space/and%23hash.md)");
+            expect(out).toBe("X\n/tmp/with space/and#hash.md");
+        });
+
+        it("does not prefix the path with file://", () => {
+            const item = planInfoToTodoItem({
+                basename: "x.md",
+                title: "X",
+                filePath: "/tmp/x.md",
+                mtimeMs: 0,
+            });
+            const out = formatPlanCopyText(item);
+            expect(out).not.toContain("file://");
         });
 
         it("returns null for non-plan items", () => {

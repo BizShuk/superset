@@ -327,10 +327,10 @@ export function createTodoCommands(
         const item = raw as TodoEngineItem | undefined;
         if (!item || !item.text) return;
         try {
-            // Plan rows: render `[title](file://...)` for paste-friendly
-            // Markdown links. Falls back to plain text if the link
-            // can't be built (item.kind === "plan" but filePath
-            // missing is unusual but defensive).
+            // Plan rows: render the title on line 1 and the raw
+            // absolute path on line 2 so the path can be pasted
+            // straight into a terminal without URL-decoding. Falls
+            // back to plain text if no path is attached.
             let copyText: string;
             if (item.kind === "plan" && item.filePath) {
                 const { formatPlanCopyText } = await import(

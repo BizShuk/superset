@@ -7,7 +7,6 @@
 // `TodoStore` / `ProjectsTodoStore`.
 
 import { readdir, readFile, stat } from "fs/promises";
-import { pathToFileURL } from "node:url";
 import * as path from "path";
 import type { TodoItem } from "./types";
 
@@ -156,17 +155,20 @@ export function makePlansSection(items: TodoItem[]): TodoItem {
 }
 
 /**
- * Format a plan row's text as a Markdown link `[<title>](file://<path>)`
- * for the Copy command. Returns `null` when the input isn't a plan
- * or has no `filePath` — callers should fall back to copying the
- * plain label in that case (no link to attach).
+ * Format a plan row for the Copy command as two lines:
+ *   <title>
+ *   <absolute path>
  *
- * Uses `node:url.pathToFileURL` so the path is properly percent-encoded
- * (spaces become `%20`, etc.) without pulling in a `vscode` import —
- * keeps this module pure and unit-testable in vitest.
+ * The path is returned verbatim — no `file://` prefix, no
+ * percent-encoding — so users can paste the second line straight
+ * into a terminal (`cat <path>`, `code <path>`, etc.) without
+ * decoding URL escapes. Title is preserved on its own line so the
+ * copy still reads as a meaningful label when viewed as a whole.
+ *
+ * Returns `null` when the input isn't a plan or has no `filePath`
+ * — callers fall back to copying the plain label in that case.
  */
 export function formatPlanCopyText(item: TodoItem): string | null {
     if (item.kind !== "plan" || !item.filePath) return null;
-    const url = pathToFileURL(item.filePath).toString();
-    return `[${item.text}](${url})`;
+    return `${item.text}\n${item.filePath}`;
 }
