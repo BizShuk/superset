@@ -1,11 +1,11 @@
-// TreePreview plugin adapter — wraps the existing `createTreePreviewExtension()`
-// in the `ExtensionPlugin` contract so it can flow through `PluginManager`
+// TreePreview plugin adapter — exposes a fence-rule hook that highlights
+// `tree` code blocks in the Markdown preview. Registered through the
+// `ExtensionPlugin` contract so it can flow through `PluginManager`
 // alongside future feature plugins. Behaviour is unchanged: the manager
 // collects this plugin's `contributeMarkdownIt` and the composition
 // root forwards the merged chain to VSCode's Markdown preview.
 
 import { renderLine, type MarkdownItLike } from "./renderLine";
-import { createTreePreviewExtension } from "./index";
 import type { ExtensionPlugin, MarkdownIt, PluginContext } from "../plugin";
 
 export const TREE_PREVIEW_PLUGIN_ID = "treePreview";
@@ -64,13 +64,3 @@ export const treePreviewPlugin: ExtensionPlugin = {
     },
     contributeMarkdownIt: buildFenceHook(),
 };
-
-/**
- * Re-export of the legacy factory so the composition root can still
- * call it directly if it ever needs the raw hook outside the plugin
- * system (e.g. standalone unit tests of `renderLine`).
- *
- * @deprecated Prefer the `treePreviewPlugin` adapter — the manager
- * composes its `contributeMarkdownIt` automatically.
- */
-export { createTreePreviewExtension };
