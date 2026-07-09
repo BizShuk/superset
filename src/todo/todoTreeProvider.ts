@@ -66,6 +66,25 @@ export class TodoTreeProvider
         return this.viewType;
     }
 
+    /**
+     * Section names the user can move an item into. Always includes
+     * `"Default"` (the synthetic pre-heading section) plus every
+     * `##` or `###` heading in the current parsed snapshot.
+     *
+     * Used by the `todoEngine` ChangeSection command to populate
+     * its QuickPick.
+     */
+    getSectionList(): string[] {
+        const sections = new Set<string>(["Default"]);
+        for (const item of this.store.getItems()) {
+            const level = (item as { level?: number }).level;
+            if (level !== undefined && item.text) {
+                sections.add(item.text);
+            }
+        }
+        return [...sections];
+    }
+
     stop(): void {
         this.unsubscribeStore?.();
         this.unsubscribeStore = undefined;
