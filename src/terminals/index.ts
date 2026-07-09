@@ -4,7 +4,7 @@ import { TerminalRegistry } from "./terminalRegistry";
 import { OutputWatcher } from "./outputWatcher";
 import { TerminalTreeProvider } from "./treeProvider";
 import { HighlightPresenter } from "./highlightPresenter";
-import { decideAutoReplace, shouldTrackTerminal } from "./autoReplace";
+import { shouldTrackTerminal } from "./autoReplace";
 import { GroupStore } from "./groupStore";
 import { WatchedTerminalTracker } from "./watchedTerminalTracker";
 import { createTerminalDragAndDropController } from "./dragAndDrop";
@@ -17,6 +17,10 @@ import {
     registerTerminalCommands,
     registerGroupCommands,
 } from "./commands";
+import {
+    installAutoPtyReplacer,
+    installEditorFocusBridge,
+} from "./lifecycle";
 import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
 
 export function register(ctx: FeatureContext): FeatureHandle {
@@ -123,57 +127,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // ── Lifecycle subscriptions ──────────────────────────
 
-    const openSub = vscode.window.onDidOpenTerminal((terminal) => {
-        if (ptyFactory.isPtyBacked(terminal)) {
-            registry.add(terminal);
-            return;
-        }
-        // Agent-owned terminals (e.g. Antigravity Agent) are excluded from the
-        // panel entirely — they are silent background workers, not work surfaces.
-        if (!shouldTrackTerminal(terminal.name)) {
-            log(`[skip-track] onOpen "${terminal.name}": agent-owned (excluded from panel)`);
-            return;
-        }
-        const opts = (terminal.creationOptions ?? {}) as Record<
-            string,
-            unknown
-        >;
-        log(
-            `[auto-pty] onOpen "${terminal.name}" ` +
-                `creationOptions=${JSON.stringify({
-                    location: opts.location,
-                    shellPath: opts.shellPath,
-                    shellArgs: opts.shellArgs,
-                    hideFromUser: opts.hideFromUser,
-                    hasPty: Boolean(opts.pty),
-                })}`
-        );
-        const decision = decideAutoReplace(
-            {
-                location: opts.location,
-                shellPath: opts.shellPath as string | undefined,
-                shellArgs: opts.shellArgs as string | string[] | undefined,
-                hideFromUser: opts.hideFromUser as boolean | undefined,
-                pty: opts.pty,
-            },
-            terminal.name
-        );
-        if (!decision.replace) {
-            log(
-                `[auto-pty] skip "${terminal.name}": ${decision.reason} ` +
-                    `(OutputWatcher fallback)`
-            );
-            registry.add(terminal);
-            return;
-        }
-
-        log(
-            `[auto-pty] replacing "${terminal.name}" ` +
-                `(${decision.reason}) with PTY-backed terminal`
-        );
-        const pterm = ptyFactory.spawn(terminal.name, getCwd());
-        pterm.show();
-        setTimeout(() => terminal.dispose(), 150);
+    const openSub = installAutoPtyReplacer({
+        registry,
+        ptyFactory,
+        getCwd,
+        log,
     });
 
     const closeSub = vscode.window.onDidCloseTerminal((terminal) => {
@@ -189,41 +147,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
         registry.clearUnseen(terminal);
     });
 
-    const editorFocusSub = vscode.window.onDidChangeActiveTextEditor((editor) => {
-        if (editor !== undefined) {
-            if (tracker.watched !== undefined) {
-                log(
-                    `[watcher] editor focused — clearing watchedTerminal ` +
-                        `was="${tracker.watched.name}"`
-                );
-                tracker.setWatched(undefined);
-            }
-            return;
-        }
-
-        const activeTabInput = vscode.window.tabGroups?.activeTabGroup?.activeTab?.input;
-        const isTerminalTab = activeTabInput instanceof vscode.TabInputTerminal;
-
-        if (isTerminalTab) {
-            if (vscode.window.activeTerminal !== undefined) {
-                if (tracker.watched !== vscode.window.activeTerminal) {
-                    log(
-                        `[watcher] terminal tab focused — restoring watchedTerminal ` +
-                            `to="${vscode.window.activeTerminal.name}"`
-                    );
-                    tracker.setWatched(vscode.window.activeTerminal);
-                }
-                registry.clearUnseen(vscode.window.activeTerminal);
-            }
-        } else {
-            if (tracker.watched !== undefined) {
-                log(
-                    `[watcher] non-terminal editor focused — clearing watchedTerminal ` +
-                        `was="${tracker.watched.name}"`
-                );
-                tracker.setWatched(undefined);
-            }
-        }
+    const editorFocusSub = installEditorFocusBridge({
+        tracker,
+        registry,
+        log,
     });
 
     // ── Commands ─────────────────────────────────────────
