@@ -12,7 +12,10 @@ import {
     PtyTerminalFactory,
     createNodePtySpawner,
 } from "./ptyTerminalFactory";
-import { createShellExecutionSource } from "./shellExecutionSource";
+import {
+    createShellExecutionSource,
+    createShellExecutionChunkFanOut,
+} from "./shellExecutionSource";
 import {
     registerTerminalCommands,
     registerGroupCommands,
@@ -21,7 +24,11 @@ import {
     installAutoPtyReplacer,
     installEditorFocusBridge,
 } from "./lifecycle";
+import { MermaidLineBuffer } from "./mermaidLineBuffer";
+import { MermaidTerminalLinkProvider } from "./mermaidLinkProvider";
+import { registerMermaidPreviewCommand } from "./mermaidPreviewCommand";
 import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
+import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import {
     captureSnapshot,
     renderActivityMarkdown,
@@ -74,6 +81,21 @@ export function register(ctx: FeatureContext): FeatureHandle {
         showCollapseAll: true,
     });
     treeView.message = `Window: ${vscode.env.sessionId.slice(0, 8)}`;
+
+    // Wire into the cross-panel TreeViewRegistry so the
+    // `superset.revealInTree` command and the `superset.revealTerminal`
+    // shortcut can walk this panel's tree. The returned disposable
+    // lives in the panel's `disposables` chain so deactivation evicts
+    // the registry entry (see `disposables` near the end of register()).
+    // We pass `treeProvider as unknown as vscode.TreeDataProvider<unknown>`
+    // because the registry's generic type is `<unknown>` to stay
+    // panel-agnostic; the runtime contract is identical.
+    const treeViewEntry = getTreeViewRegistry()?.register(
+        "superset.terminals",
+        treeView as unknown as vscode.TreeView<unknown>,
+        treeProvider as unknown as vscode.TreeDataProvider<unknown>,
+        ctx.shared.log
+    );
 
     // Report active view for panel-layout persistence (plan §3). Only
     // `visible: true` transitions matter — when the panel hides, another
@@ -140,6 +162,45 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // later — which is exactly what made `go install` and `skills add`
     // silently no-op in 0.8.10/0.8.11.
     setTerminalSpawner((name, cwd) => ptyFactory.spawn(name, cwd));
+
+    // ── Mermaid preview (terminal keyword → clickable preview link) ──
+    //
+    // The buffer receives raw data from two channels so detection works
+    // for both flavours of terminal — the PTY-backed ones this factory
+    // spawns (TUI users) and built-in VSCode shell-integration terminals
+    // (`outputWatcher.ts` covers those for mark-unseen).
+    const mermaidBuffer = new MermaidLineBuffer();
+    const offPtyData = ptyFactory.onData((terminal, data) => {
+        mermaidBuffer.append(terminal, data);
+    });
+    const shellFanOut = createShellExecutionChunkFanOut(log);
+    const offShellData = shellFanOut.subscribe((terminal, chunk) => {
+        mermaidBuffer.append(terminal, chunk);
+    });
+    // Drop a terminal's lines the moment it closes — we don't want
+    // stale "mermaid" links for terminals the user no longer sees.
+    const offCloseBuffer = registry.onDidChange((change) => {
+        if (change.type === "removed") {
+            mermaidBuffer.clear(change.terminal);
+        }
+    });
+    const linkProvider = new MermaidTerminalLinkProvider({
+        buffer: mermaidBuffer,
+        onClick: ({ body }) => {
+            // Hand off to the registered preview command so users get
+            // a single source of truth for how the body gets rendered.
+            void vscode.commands.executeCommand(
+                "superset.mermaidPreview",
+                body
+            );
+        },
+        log,
+    });
+    const offLinkProvider = vscode.window.registerTerminalLinkProvider(
+        linkProvider
+    );
+    const offMermaidPreviewCmd = registerMermaidPreviewCommand({ log });
+    log("mermaid preview wired");
 
     // ── Lifecycle subscriptions ──────────────────────────
 
@@ -221,7 +282,20 @@ export function register(ctx: FeatureContext): FeatureHandle {
         activeChangeSub,
         editorFocusSub,
         visibilitySub,
+        // Mermaid preview lifecycle: clear buffer when terminals close
+        // so the next activation doesn't inherit stale lines; tear down
+        // the link provider + command + fan-out subscriptions.
+        { dispose: offPtyData },
+        { dispose: offShellData },
+        { dispose: offCloseBuffer },
+        offLinkProvider,
+        offMermaidPreviewCmd,
+        shellFanOut,
         ...commandSubs,
+        // `treeViewEntry` is `undefined` when the registry singleton
+        // hasn't been initialised (test environment, late activation
+        // during a window reload). `?.()` makes the no-op explicit.
+        ...(treeViewEntry ? [treeViewEntry] : []),
     ];
 
     ctx.subscriptions.push(...disposables);

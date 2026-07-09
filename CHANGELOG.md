@@ -2,6 +2,30 @@
 
 本檔案記錄 Superset 擴充功能各版本變更,格式參考 [Keep a Changelog](https://keepachangelog.com/),版本號依 [Semantic Versioning](https://semver.org/)。
 
+## [0.10.0] - 2026-07-10
+
+### Added
+
+- 終端機偵測 `mermaid` 觸發關鍵字並開啟預覽:terminal 內出現獨立一行 `mermaid`(後接 diagram syntax 直到全空行)時,VSCode 會在 keyword 同一行加上 clickable link,點擊開啟預覽。預覽本身委派給使用者已安裝的 Mermaid Preview extension(如 `bierner.markdown-mermaid`);未安裝時降級為在新分頁開啟 source `.md` + 提示安裝。內部走 `MermaidLineBuffer`(per-terminal ring buffer 200 lines + ANSI strip)+ `MermaidTerminalLinkProvider`(`vscode.window.registerTerminalLinkProvider`),資料來源涵蓋 PTY-backed terminal(走 `PtyTerminalFactory.onData` 新增的 data fan-out)與 VSCode 內建 shell-integration terminal(走 `createShellExecutionChunkFanOut` 從 `execution.read()` 拉)。
+
+### Internal
+
+- 新 `src/terminals/mermaidTrigger.ts`(純函式 `findFirstMermaidMatch` / `findAllMermaidMatches`)、`mermaidLineBuffer.ts`、`mermaidLinkProvider.ts`、`mermaidPreviewCommand.ts`。
+- `PtyTerminalFactory` 增加 `onData(cb)` fan-out 訂閱;`shellExecutionSource.ts` 增加 `createShellExecutionChunkFanOut`。
+- `test/mermaidTrigger.test.ts` 12 case、`test/mermaidLineBuffer.test.ts` 11 case、`test/mermaidLinkProvider.test.ts` 7 case、`test/mermaidPreviewCommand.test.ts` 8 case 全綠;總計 568/568 tests passing (60 test files)。
+- `package.json` 新增 `superset.mermaidPreview` command entry(無 keybinding,純 link click 觸發)。
+
+## [0.9.2] - 2026-07-10
+
+### Added
+
+- 新 command `superset.installLicense`:從 QuickPick 挑選 Apache-2.0 / MIT / BSD-3-Clause,寫入 workspace 根目錄的 `LICENSE` 檔案 (year 用 `new Date().getFullYear()`,copyright holder 留 `[name of copyright owner]` placeholder 供使用者編輯)。若 `LICENSE` 已存在會跳 modal 詢問是否覆蓋;支援 `args.licenseId` / `args.force` 程式化呼叫 (可走未來的 TreeView menu)。
+
+### Internal
+
+- 新純資料模組 `src/licenseTemplates.ts`:`LicenseTemplate` / `LICENSE_TEMPLATES` / `findLicenseTemplate(id)`,Apache-2.0 / MIT / BSD-3-Clause 全文內嵌 (SPDX 標準文字,離線可用、不打網路)。
+- `test/installCommands.test.ts` 新增 4 個 case (QuickPick 三選項 / 寫入內容 / 覆蓋確認 Cancel / 覆蓋確認 Overwrite / 程式化 `licenseId` + `force` 路徑)。
+
 ## [0.8.4] - 2026-07-09
 
 ### Added

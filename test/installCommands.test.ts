@@ -13,6 +13,23 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock node:fs so installLicense can assert writeFile paths
+// without touching the real filesystem. We delegate everything
+// else through `vi.importActual` so the helpers below (e.g.
+// `path.join`) still resolve normally. Other install commands in
+// this file don't touch fs so this mock is transparent to them.
+vi.mock("node:fs", async () => {
+    const actual = await vi.importActual<typeof import("node:fs")>("node:fs");
+    return {
+        ...actual,
+        existsSync: vi.fn(() => false),
+        promises: {
+            ...actual.promises,
+            writeFile: vi.fn(async () => {}),
+        },
+    };
+});
+
 // Mock vscode with just enough surface for the install commands to
 // run. The terminals module's full activation path is exercised in
 // `extensionActivate.test.ts`; here we only care that the install
@@ -117,6 +134,8 @@ vi.mock("vscode", () => {
 
 import * as vscode from "vscode";
 import * as os from "os";
+import * as path from "path";
+import * as fs from "node:fs";
 import { globalCommandsPlugin } from "../src/globalCommandsPlugin";
 import {
     setDiagnosticChannel,
@@ -155,23 +174,15 @@ describe("terminalSpawner bridge", () => {
     beforeEach(() => {
         setTerminalSpawner(undefined);
         (vscode as unknown as { __commands: Map<string, unknown> }).__commands.clear();
-        (
-            vscode.window as unknown as { createTerminal: ReturnType<typeof vi.fn> }
-        ).createTerminal.mockClear();
-        ((vscode.window as unknown as { showInformationMessage: ReturnType<typeof vi.fn> })
-            .showInformationMessage as ReturnType<typeof vi.fn>).mockClear();
-        ((vscode.window as unknown as { showErrorMessage: ReturnType<typeof vi.fn> })
-            .showErrorMessage as ReturnType<typeof vi.fn>).mockClear();
+        asMock(vscode.window.createTerminal).mockClear();
+        asMock(vscode.window.showInformationMessage).mockClear();
+        asMock(vscode.window.showErrorMessage).mockClear();
         // Reset the input-box mock too: the default in the vi.mock
         // returns undefined (Esc / dismissed), but a per-test
         // `mockResolvedValueOnce("...")` would leak across tests if
         // we don't clear the queue.
-        ((vscode.window as unknown as { showInputBox: ReturnType<typeof vi.fn> })
-            .showInputBox as ReturnType<typeof vi.fn>).mockReset();
-        ((vscode.window as unknown as { showInputBox: ReturnType<typeof vi.fn> })
-            .showInputBox as ReturnType<typeof vi.fn>).mockResolvedValue(
-            undefined
-        );
+        asMock(vscode.window.showInputBox).mockReset();
+        asMock(vscode.window.showInputBox).mockResolvedValue(undefined);
     });
 
     it("setTerminalSpawner / getTerminalSpawner round-trip", () => {
@@ -419,5 +430,223 @@ describe("terminalSpawner bridge", () => {
 
         // User dismissed the dialog → no terminal was spawned.
         expect(spawn).not.toHaveBeenCalled();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// installLicense — QuickPick + LICENSE write + overwrite-confirmation flow.
+// ---------------------------------------------------------------------------
+
+// Cast helper — same trick used elsewhere in this file. Avoids
+// `as unknown as` casts at every call site.
+function asMock<T>(fn: T): ReturnType<typeof vi.fn> {
+    return fn as unknown as ReturnType<typeof vi.fn>;
+}
+
+async function activateLicensePlugin(): Promise<void> {
+    setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+    setPluginManager(undefined);
+    const pCtx = fakePluginContext();
+    globalCommandsPlugin.activate(pCtx as never);
+}
+
+function getLicenseCallback(): (args?: unknown) => Promise<void> {
+    return (
+        vscode as unknown as {
+            __commands: Map<string, (...a: unknown[]) => unknown>;
+        }
+    ).__commands.get("superset.installLicense") as (
+        args?: unknown
+    ) => Promise<void>;
+}
+
+describe("installLicense", () => {
+    let existsSyncMock: ReturnType<typeof vi.fn>;
+    let writeFileMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        (
+            vscode as unknown as { __commands: Map<string, unknown> }
+        ).__commands.clear();
+        asMock(vscode.window.showQuickPick).mockReset();
+        asMock(vscode.window.showWarningMessage).mockReset();
+        asMock(vscode.window.showInformationMessage).mockReset();
+
+        existsSyncMock = fs.existsSync as unknown as ReturnType<typeof vi.fn>;
+        writeFileMock = (
+            fs.promises as unknown as { writeFile: ReturnType<typeof vi.fn> }
+        ).writeFile;
+        existsSyncMock.mockReset();
+        writeFileMock.mockReset();
+        // Default: no LICENSE in the workspace, no throw.
+        existsSyncMock.mockReturnValue(false);
+        writeFileMock.mockResolvedValue(undefined);
+    });
+
+    it("shows the QuickPick with all three license templates and writes the picked one to <workspaceFolder>/LICENSE", async () => {
+        // User selects MIT (index 1) from the QuickPick.
+        const pickedItem = {
+            label: "MIT License",
+            description: "Short permissive; widely used, minimal restriction",
+            // The handler reads `picked.license.id`, so we mirror the
+            // shape of `LicensePickItem` produced by the command.
+            license: { id: "MIT", label: "MIT License" },
+        };
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce(pickedItem);
+
+        await activateLicensePlugin();
+        await getLicenseCallback()();
+
+        // QuickPick was offered the three templates; the order in the
+        // production code matches LICENSE_TEMPLATES.
+        const showQuickPick = asMock(vscode.window.showQuickPick);
+        expect(showQuickPick).toHaveBeenCalledTimes(1);
+        const pickItems = showQuickPick.mock.calls[0][0] as Array<{
+            label: string;
+            description: string;
+            license: { id: string; label: string };
+        }>;
+        expect(pickItems.map((p) => p.license.id)).toEqual([
+            "Apache-2.0",
+            "MIT",
+            "BSD-3-Clause",
+        ]);
+        expect(pickItems.map((p) => p.label)).toEqual([
+            "Apache License 2.0",
+            "MIT License",
+            "BSD 3-Clause License",
+        ]);
+
+        // fs.writeFile was called with the MIT body (no pre-existing
+        // file → no overwrite confirmation modal). The path is
+        // <workspaceFolder>/LICENSE and the text starts with the MIT
+        // banner + copyright line for the current year.
+        expect(writeFileMock).toHaveBeenCalledTimes(1);
+        const [calledPath, calledText, calledEncoding] = writeFileMock.mock
+            .calls[0] as [string, string, string];
+        expect(calledPath).toBe(path.join("/ws", "LICENSE"));
+        expect(calledEncoding).toBe("utf8");
+        expect(calledText).toMatch(/^MIT License\n\nCopyright \(c\) \d{4} /);
+        expect(calledText).toMatch(
+            /Permission is hereby granted, free of charge/
+        );
+
+        // Success toast was shown.
+        expect(asMock(vscode.window.showInformationMessage)).toHaveBeenCalledTimes(
+            1
+        );
+        expect(
+            asMock(vscode.window.showInformationMessage).mock.calls[0][0]
+        ).toMatch(/已安裝 MIT License 至 .*\/LICENSE/);
+    });
+
+    it("prompts for confirmation when LICENSE already exists and cancels if the user picks Cancel", async () => {
+        existsSyncMock.mockReturnValue(true);
+        // QuickPick still runs first (user picks MIT), then the
+        // overwrite modal pops up.
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
+            label: "MIT License",
+            description: "Short permissive; widely used, minimal restriction",
+            license: { id: "MIT", label: "MIT License" },
+        });
+        // User picks Cancel on the overwrite modal.
+        asMock(vscode.window.showWarningMessage).mockResolvedValueOnce("Cancel");
+
+        await activateLicensePlugin();
+        await getLicenseCallback()();
+
+        // Warning was shown with a modal-flag dialog mentioning LICENSE.
+        const warn = asMock(vscode.window.showWarningMessage);
+        expect(warn).toHaveBeenCalledTimes(1);
+        const [warnMsg, warnOpts] = warn.mock.calls[0] as [string, unknown];
+        expect(warnMsg).toMatch(/LICENSE 已存在/);
+        expect(warnOpts).toEqual({ modal: true });
+
+        // Because the user picked Cancel, no file was written and no
+        // success toast appeared.
+        expect(writeFileMock).not.toHaveBeenCalled();
+        expect(
+            asMock(vscode.window.showInformationMessage)
+        ).not.toHaveBeenCalled();
+    });
+
+    it("overwrites the existing LICENSE when the user picks Overwrite on the confirmation modal", async () => {
+        existsSyncMock.mockReturnValue(true);
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
+            label: "BSD 3-Clause License",
+            description: "Permissive + non-endorsement clause",
+            license: { id: "BSD-3-Clause", label: "BSD 3-Clause License" },
+        });
+        asMock(vscode.window.showWarningMessage).mockResolvedValueOnce(
+            "Overwrite"
+        );
+
+        await activateLicensePlugin();
+        await getLicenseCallback()();
+
+        // The confirmation ran, the user accepted, and the BSD-3 file
+        // was written.
+        expect(writeFileMock).toHaveBeenCalledTimes(1);
+        const [, calledText] = writeFileMock.mock.calls[0] as [string, string];
+        expect(calledText).toMatch(/^BSD 3-Clause License\n\nCopyright \(c\) \d{4}/);
+        expect(calledText).toMatch(/Neither the name of the copyright holder/);
+    });
+
+    it("skips the QuickPick when licenseId is passed as an arg and writes the requested license", async () => {
+        // Programmatic caller (e.g. a future TreeView menu) bypasses
+        // the dialog. `force: true` skips the overwrite modal too so
+        // we can assert the write in isolation.
+        existsSyncMock.mockReturnValue(true);
+        await activateLicensePlugin();
+        await getLicenseCallback()({
+            licenseId: "Apache-2.0",
+            force: true,
+        });
+
+        // No QuickPick and no overwrite warning.
+        expect(asMock(vscode.window.showQuickPick)).not.toHaveBeenCalled();
+        expect(asMock(vscode.window.showWarningMessage)).not.toHaveBeenCalled();
+
+        expect(writeFileMock).toHaveBeenCalledTimes(1);
+        const [, calledText] = writeFileMock.mock.calls[0] as [string, string];
+        // Apache body has its own banner; the year placeholder is
+        // resolved at write-time from `new Date().getFullYear()`.
+        expect(calledText).toMatch(/Apache License\n\s+Version 2\.0/);
+        expect(calledText).toMatch(
+            new RegExp(`Copyright ${new Date().getFullYear()} \\[name of copyright owner\\]`)
+        );
+    });
+
+    it("populates each QuickPick item's detail field with the license summary so the user can compare options before picking", async () => {
+        // No user pick needed for this assertion — we only care about
+        // the items offered to showQuickPick, not the result.
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+
+        await activateLicensePlugin();
+        await getLicenseCallback()();
+
+        const showQuickPick = asMock(vscode.window.showQuickPick);
+        expect(showQuickPick).toHaveBeenCalledTimes(1);
+        const pickItems = showQuickPick.mock.calls[0][0] as Array<{
+            license: { id: string };
+            detail?: string;
+        }>;
+
+        // Every item must carry a non-empty detail that mentions
+        // Permissions / Conditions / Limitations — that's the
+        // tradeoff lens the user reads while arrowing through.
+        expect(pickItems).toHaveLength(3);
+        for (const item of pickItems) {
+            expect(item.detail, `${item.license.id} missing detail`).toBeTruthy();
+            expect(item.detail).toMatch(/Permissions/);
+            expect(item.detail).toMatch(/Conditions/);
+            expect(item.detail).toMatch(/Limitations/);
+        }
+
+        // BSD-3-Clause's non-endorsement clause is its distinguishing
+        // condition; lock that down so a future template edit can't
+        // silently drop it.
+        const bsd = pickItems.find((p) => p.license.id === "BSD-3-Clause");
+        expect(bsd?.detail).toMatch(/non-endorsement/);
     });
 });

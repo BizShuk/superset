@@ -174,7 +174,10 @@ describe("ProjectsTodoTreeProvider", () => {
         const item = provider.getTreeItem(roots![0]);
         expect(item.label).toBe("cc-plugin");
         expect(item.contextValue).toBe("projectsTodoProject");
-        expect(item.collapsibleState).toBe(2); // Expanded
+        // Project rows default to Collapsed so the overview shows a
+        // flat project list at start; users expand the ones they care
+        // about. Auto-expansion was removed in 0.10.x.
+        expect(item.collapsibleState).toBe(1); // Collapsed
     });
 
     it("shows pending count badge for section rows in getTreeItem", async () => {
@@ -323,23 +326,25 @@ describe("ProjectsTodoTreeProvider", () => {
         expect(item.collapsibleState).toBe(1); // Collapsed
     });
 
-    it("expands project node when filtered children exist", async () => {
-        // Sanity-check the inverse of the collapsed case: when at least
-        // one child survives the filter, the project node stays Expanded.
+    it("keeps project node Collapsed even when filtered children exist", async () => {
+        // Sanity-check the new default: the project row stays Collapsed
+        // regardless of how many children the filter leaves — auto-
+        // expansion was removed in 0.10.x so the overview renders as a
+        // flat project list at start.
         const provider = new ProjectsTodoTreeProvider(store);
         const roots = await provider.getChildren();
 
         // env-setup has a pending task in the default setup, so it has
-        // a filtered child and should render Expanded.
+        // a filtered child. The row must STILL be Collapsed.
         const env = roots!.find((r) => r.text === "env-setup")!;
         expect(env.children!.length).toBeGreaterThan(0);
         const item = provider.getTreeItem(env);
-        expect(item.collapsibleState).toBe(2); // Expanded
+        expect(item.collapsibleState).toBe(1); // Collapsed
         expect(item.description).toBe("1 pending");
     });
 });
 
-describe("ProjectsTodoTreeProvider — workspace plans row", () => {
+describe("ProjectsTodoTreeProvider — no top-level plans row", () => {
     let tempDir: string;
     let store: ProjectsTodoStore;
 
@@ -351,27 +356,20 @@ describe("ProjectsTodoTreeProvider — workspace plans row", () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
-        // Project A: README.todo + plans  ── 應貢獻 plan
+        // alpha: 有 plan (但不會出現在 top-level row — 已廢除)
         const a = join(projectsDir, "alpha");
         mkdirSync(a);
         writeFileSync(join(a, "README.todo"), "# TODO\n- [ ] A\n");
         mkdirSync(join(a, "plans"));
         writeFileSync(join(a, "plans", "2026-07-01-a.md"), "# Plan A\n");
 
-        // Project B (under tmp): README.todo + plans  ── 應貢獻 plan
+        // beta (under tmp): 有 plan
         mkdirSync(join(projectsDir, "tmp"));
         const b = join(projectsDir, "tmp", "beta");
         mkdirSync(b);
         writeFileSync(join(b, "README.todo"), "# TODO\n- [ ] B\n");
         mkdirSync(join(b, "plans"));
         writeFileSync(join(b, "plans", "2026-07-02-b.md"), "# Plan B\n");
-
-        // playground/exp: README.todo + plans  ── 不應貢獻 plan (one-layer 邊界)
-        const p = join(projectsDir, "playground", "exp");
-        mkdirSync(p, { recursive: true });
-        writeFileSync(join(p, "README.todo"), "# TODO\n- [ ] P\n");
-        mkdirSync(join(p, "plans"));
-        writeFileSync(join(p, "plans", "2026-07-03-p.md"), "# Plan P\n");
 
         store = new ProjectsTodoStore();
         await store.load();
@@ -381,55 +379,194 @@ describe("ProjectsTodoTreeProvider — workspace plans row", () => {
         rmSync(tempDir, { recursive: true, force: true });
     });
 
-    it("renders a top-level 'Plans' row when workspace plans exist", async () => {
+    it("does NOT render a top-level 'Plans' row even when workspace plans exist", async () => {
         const provider = new ProjectsTodoTreeProvider(store);
         const roots = await provider.getChildren();
 
-        // 3 projects (alpha, beta, exp) + 1 top-level Plans row
-        const plansRow = roots!.find((r) => r.text === "Plans" && r.kind === "section");
-        expect(plansRow).toBeDefined();
-        // The row is not a project node: projectPath placeholder, no projectName match
-        expect(plansRow!.projectPath).toBe("");
-        expect(plansRow!.level).toBeUndefined(); // virtual section, same as parser "Default"
+        // Top-level merged row was removed in 0.10.x — workspace plans
+        // only appear as per-project sub-sections. Scan every root for
+        // the synthetic 'Plans' marker to confirm it's gone.
+        const topLevelPlans = roots!.find(
+            (r) =>
+                r.text === "Plans" &&
+                r.kind === "section" &&
+                r.projectPath === ""
+        );
+        expect(topLevelPlans).toBeUndefined();
     });
 
-    it("Plans row children are flat list of plans from projects/ and projects/tmp/ (not deeper)", async () => {
+    it("plans still surface under each project's own row", async () => {
         const provider = new ProjectsTodoTreeProvider(store);
         const roots = await provider.getChildren();
-        const plansRow = roots!.find((r) => r.text === "Plans" && r.kind === "section")!;
-        const plans = plansRow.children!;
+        const alpha = roots!.find((r) => r.text === "alpha")!;
+        const beta = roots!.find((r) => r.text === "beta")!;
 
-        // Only alpha and beta contribute; playground/exp is two layers deep.
-        expect(plans).toHaveLength(2);
-        // Row text is the H1 title (human-readable); filename lives in
-        // `description` for at-a-glance reference (see plansSource.ts).
-        const titles = plans.map((p) => p.text).sort();
-        expect(titles).toEqual(["Plan A", "Plan B"]);
-        const basenames = plans.map((p) => p.description).sort();
-        expect(basenames).toEqual(["2026-07-01-a", "2026-07-02-b"]);
+        const alphaPlans = alpha.children!.find((c) => c.text === "Plans");
+        expect(alphaPlans).toBeDefined();
+        expect(alphaPlans!.children!.map((p) => p.text)).toEqual(["Plan A"]);
 
-        // Each plan carries its own projectName / projectPath for inline open
-        const byName = new Map(plans.map((p) => [p.text, p]));
-        expect(byName.get("Plan A")!.projectName).toBe("alpha");
-        expect(byName.get("Plan B")!.projectName).toBe("beta");
+        const betaPlans = beta.children!.find((c) => c.text === "Plans");
+        expect(betaPlans).toBeDefined();
+        expect(betaPlans!.children!.map((p) => p.text)).toEqual(["Plan B"]);
+    });
+});
+
+describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
+    let tempDir: string;
+    let store: ProjectsTodoStore;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        tempDir = mkdtempSync(join(tmpdir(), "superset-prov-perproj-"));
+        vi.mocked(os.homedir).mockReturnValue(tempDir);
+
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+
+        // alpha: README.todo item + plan  ── 應有 [Default, Plans]
+        const a = join(projectsDir, "alpha");
+        mkdirSync(a);
+        writeFileSync(join(a, "README.todo"), "# TODO\n- [ ] alpha-task\n");
+        mkdirSync(join(a, "plans"));
+        writeFileSync(join(a, "plans", "2026-07-01-a.md"), "# Plan A\n");
+
+        // gamma: README.todo 但 plan filter 下無可見項目 + 有 plan
+        // ── 應只剩 [Plans]
+        const g = join(projectsDir, "gamma");
+        mkdirSync(g);
+        writeFileSync(join(g, "README.todo"), "# TODO\n- [x] done\n");
+        mkdirSync(join(g, "plans"));
+        writeFileSync(join(g, "plans", "2026-07-04-g.md"), "# Plan G\n");
+
+        // delta: README.todo 但完全沒有 plans  ── 不應有 Plans sub-section
+        const d = join(projectsDir, "delta");
+        mkdirSync(d);
+        writeFileSync(join(d, "README.todo"), "# TODO\n- [ ] delta-task\n");
+
+        store = new ProjectsTodoStore();
+        await store.load();
     });
 
-    it("Plans row is omitted when no workspace plans exist", async () => {
-        // Fresh store with no plans fixtures
-        const emptyDir = mkdtempSync(join(tmpdir(), "superset-prov-empty-"));
-        try {
-            vi.mocked(os.homedir).mockReturnValue(emptyDir);
-            mkdirSync(join(emptyDir, "projects"));
-            const only = join(emptyDir, "projects", "only");
-            mkdirSync(only);
-            writeFileSync(join(only, "README.todo"), "# TODO\n- [ ] x\n");
-            const emptyStore = new ProjectsTodoStore();
-            await emptyStore.load();
-            const provider = new ProjectsTodoTreeProvider(emptyStore);
-            const roots = await provider.getChildren();
-            expect(roots!.find((r) => r.text === "Plans" && r.kind === "section")).toBeUndefined();
-        } finally {
-            rmSync(emptyDir, { recursive: true, force: true });
-        }
+    afterEach(() => {
+        rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it("appends a synthetic 'Plans' sub-section after README.todo sections when a project has plans", async () => {
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        // alpha's row should be present
+        const alpha = roots!.find((r) => r.text === "alpha" && r.kind === "section")!;
+        expect(alpha).toBeDefined();
+
+        // alpha's children = [Default (alpha-task), Plans (Plan A)]
+        expect(alpha.children).toBeDefined();
+        expect(alpha.children).toHaveLength(2);
+        expect(alpha.children![0].text).toBe("Default");
+        expect(alpha.children![1].text).toBe("Plans");
+        expect(alpha.children![1].kind).toBe("section");
+
+        // The per-project Plans section carries its own plans
+        const plansSection = alpha.children![1];
+        expect(plansSection.children).toBeDefined();
+        expect(plansSection.children).toHaveLength(1);
+        expect(plansSection.children![0].kind).toBe("plan");
+        expect(plansSection.children![0].text).toBe("Plan A");
+        expect(plansSection.children![0].filePath).toBe(
+            join(alpha.projectPath, "plans", "2026-07-01-a.md"),
+        );
+    });
+
+    it("renders the per-project Plans sub-section as Expanded with '1 plan' badge", async () => {
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+        const alpha = roots!.find((r) => r.text === "alpha")!;
+        const plansSection = alpha.children!.find((c) => c.text === "Plans")!;
+
+        const item = provider.getTreeItem(plansSection);
+        expect(item.contextValue).toBe("projectsTodoPlansSection");
+        expect(item.collapsibleState).toBe(2); // Expanded
+        expect(item.description).toBe("1 plan");
+    });
+
+    it("survives the hide-completed filter (project with only completed README.todo + plans shows Plans section only)", async () => {
+        // gamma's README.todo is all-completed; under default
+        // hide-completed mode, the README.todo contributes zero
+        // children but the Plans section still surfaces.
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        const gamma = roots!.find((r) => r.text === "gamma")!;
+        expect(gamma.children).toHaveLength(1);
+        expect(gamma.children![0].text).toBe("Plans");
+        expect(gamma.children![0].children).toHaveLength(1);
+        expect(gamma.children![0].children![0].text).toBe("Plan G");
+
+        // gamma's row stays Collapsed even though the Plans section survives
+        // the filter (no checked state to hide). Auto-expansion was
+        // removed in 0.10.x — users expand project rows on demand.
+        const item = provider.getTreeItem(gamma);
+        expect(item.collapsibleState).toBe(1); // Collapsed
+        // "0 pending" because Plan G is not a checkbox — countPending
+        // ignores kind !== "checkbox".
+        expect(item.description).toBe("0 pending");
+    });
+
+    it("does NOT attach a Plans sub-section to projects without plans", async () => {
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        const delta = roots!.find((r) => r.text === "delta")!;
+        expect(delta.children).toHaveLength(1);
+        expect(delta.children![0].text).toBe("Default");
+        expect(delta.children!.find((c) => c.text === "Plans")).toBeUndefined();
+    });
+
+    it("per-project plan items carry projectName + projectPath for inline openProject", async () => {
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+        const alpha = roots!.find((r) => r.text === "alpha")!;
+        const planItem = alpha.children![1].children![0];
+
+        expect(planItem.projectName).toBe("alpha");
+        expect(planItem.projectPath).toBe(alpha.projectPath);
+    });
+
+    it("per-project plan items respect the priority filter passthrough (plans survive any priority filter)", async () => {
+        // Toggle P0 — neither alpha-task nor Plan A has a P0 tag, but
+        // the plan item must still appear under alpha's Plans sub-section
+        // because applyPriorityFilter lets kind === "plan" items through.
+        const provider = new ProjectsTodoTreeProvider(store);
+        provider.togglePriorityFilter("P0");
+
+        const roots = await provider.getChildren();
+        const alpha = roots!.find((r) => r.text === "alpha")!;
+        // README.todo task has no P tag → filtered out, so only the
+        // Plans sub-section survives under alpha.
+        expect(alpha.children).toHaveLength(1);
+        expect(alpha.children![0].text).toBe("Plans");
+        expect(alpha.children![0].children).toHaveLength(1);
+        expect(alpha.children![0].children![0].text).toBe("Plan A");
+    });
+
+    it("top-level 'Plans' row no longer aggregates plans (only per-project sub-sections remain)", async () => {
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+
+        // Top-level merged row was removed in 0.10.x. Plans now only
+        // surface under each project's own row.
+        const topLevelPlans = roots!.find(
+            (r) =>
+                r.text === "Plans" &&
+                r.kind === "section" &&
+                r.projectPath === ""
+        );
+        expect(topLevelPlans).toBeUndefined();
+
+        // Per-project sub-sections still carry the plans.
+        const alpha = roots!.find((r) => r.text === "alpha")!;
+        const gamma = roots!.find((r) => r.text === "gamma")!;
+        expect(alpha.children!.find((c) => c.text === "Plans")!.children).toHaveLength(1);
+        expect(gamma.children!.find((c) => c.text === "Plans")!.children).toHaveLength(1);
     });
 });

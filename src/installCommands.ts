@@ -1,9 +1,10 @@
 // Install commands — three install/setup commands that all need to
-// spawn a fresh terminal and run a shell command in it. Extracted
-// from `globalCommandsPlugin.ts` as Plan 2 Stage B.
+// spawn a fresh terminal and run a shell command in it, plus the
+// offline license-file install. Extracted from
+// `globalCommandsPlugin.ts` as Plan 2 Stage B.
 //
 // Exposes a single `registerInstallCommands(ctx)` that wires all
-// three commands and returns when done; `globalCommandsPlugin`'s
+// commands and returns when done; `globalCommandsPlugin`'s
 // `activate()` calls it alongside its own chrome-command registration.
 
 import * as fs from "node:fs";
@@ -12,6 +13,18 @@ import * as vscode from "vscode";
 import type { PluginContext } from "./plugin";
 import { getTerminalSpawner } from "./crossModuleState";
 import { quoteShellArg, spawnRunTerminal } from "./spawnRunTerminal";
+import {
+    LICENSE_TEMPLATES,
+    findLicenseTemplate,
+    type LicenseId,
+} from "./licenseTemplates";
+
+const LICENSE_FILE_NAME = "LICENSE";
+
+/** QuickPick row shape — `license` carries the chosen template back to the handler. */
+type LicensePickItem = vscode.QuickPickItem & {
+    license: (typeof LICENSE_TEMPLATES)[number];
+};
 
 interface InstallToolsSpec {
     label: string;
@@ -171,9 +184,95 @@ async function installIgnoreTemplate(
 }
 
 /**
- * Register all three install commands against the given
- * `PluginContext`. Each is registered via `ctx.registerDisposable`
- * so the manager owns disposal. Idempotent — call once from
+ * Install a license file (`LICENSE`) into the workspace root from an
+ * embedded template. Shows a QuickPick with Apache-2.0 / MIT / BSD-3,
+ * asks for confirmation if `LICENSE` already exists, then writes the
+ * chosen template verbatim. Year placeholder is filled at write-time
+ * with `new Date().getFullYear()`; copyright-holder span stays as
+ * `[name of copyright owner]` for the user to replace.
+ *
+ * `args.licenseId` (optional) skips the QuickPick for programmatic
+ * invocation (e.g. wired from a future TreeView menu). `args.force`
+ * suppresses the overwrite-confirmation modal — caller is then
+ * responsible for the user-facing safety guarantee.
+ */
+async function installLicense(
+    ctx: PluginContext,
+    args?: { licenseId?: LicenseId; force?: boolean }
+): Promise<void> {
+    const targetPath = path.join(ctx.workspaceFolder, LICENSE_FILE_NAME);
+
+    // Pick the template. Programmatic callers can short-circuit the
+    // QuickPick via args.licenseId; the rest of the flow is shared.
+    let licenseId: LicenseId | undefined = args?.licenseId;
+    if (!licenseId) {
+        const pickItems: LicensePickItem[] = LICENSE_TEMPLATES.map(
+            (license) => ({
+                label: license.label,
+                description: license.description,
+                // Multi-line preview of permissions / conditions /
+                // limitations. VS Code renders `detail` as a gray
+                // sub-panel below the focused row, so the user can
+                // arrow through the three options and compare without
+                // opening the full text.
+                detail: license.summary,
+                license,
+            })
+        );
+        const picked = await vscode.window.showQuickPick(pickItems, {
+            title: "Superset: Install License",
+            placeHolder: "選擇要安裝的 license",
+            matchOnDescription: true,
+        });
+        if (!picked) {
+            ctx.log(
+                "globalCommands: installLicense cancelled by user (quickpick dismissed)"
+            );
+            return;
+        }
+        licenseId = picked.license.id;
+    }
+
+    const template = findLicenseTemplate(licenseId);
+
+    // Safety: same pattern as installIgnoreTemplate — if the file
+    // already exists, ask before overwriting. A hand-rolled LICENSE
+    // is exactly the kind of file the user might want to *keep* if
+    // they customised it. `args.force` skips the gate for tests
+    // and trusted programmatic callers.
+    if (!args?.force && fs.existsSync(targetPath)) {
+        const choice = await vscode.window.showWarningMessage(
+            `Superset: ${LICENSE_FILE_NAME} 已存在於 workspace 根目錄,將被 ${template.label} 覆蓋。\n\n繼續?`,
+            { modal: true },
+            "Overwrite",
+            "Cancel"
+        );
+        if (choice !== "Overwrite") {
+            ctx.log(
+                `globalCommands: installLicense cancelled by user (overwrite declined for ${licenseId})`
+            );
+            return;
+        }
+    }
+
+    await fs.promises.writeFile(
+        targetPath,
+        template.build(new Date().getFullYear()),
+        "utf8"
+    );
+
+    vscode.window.showInformationMessage(
+        `Superset: 已安裝 ${template.label} 至 ${targetPath}`
+    );
+    ctx.log(
+        `globalCommands: installLicense wrote ${licenseId} to ${targetPath}`
+    );
+}
+
+/**
+ * Register all install commands against the given `PluginContext`.
+ * Each is registered via `ctx.registerDisposable` so the manager
+ * owns disposal. Idempotent — call once from
  * `globalCommandsPlugin.activate()`.
  */
 export function registerInstallCommands(ctx: PluginContext): void {
@@ -194,6 +293,13 @@ export function registerInstallCommands(ctx: PluginContext): void {
             "superset.installIgnoreTemplate",
             (args?: { targets?: string[]; force?: boolean }) =>
                 installIgnoreTemplate(ctx, args)
+        )
+    );
+    ctx.registerDisposable(
+        vscode.commands.registerCommand(
+            "superset.installLicense",
+            (args?: { licenseId?: LicenseId; force?: boolean }) =>
+                installLicense(ctx, args)
         )
     );
 }

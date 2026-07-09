@@ -3,6 +3,7 @@ import { TerminalRegistry } from "./terminalRegistry";
 import { stripUnseenPrefix } from "./treeSpec";
 import { GroupStore, UNGROUPED_ID, type Group, type GroupColor } from "./groupStore";
 import { buildQuickPickItems } from "./jumpToTerminal";
+import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 
 const GROUP_COLORS: GroupColor[] = [
     "red",
@@ -69,6 +70,35 @@ export function registerTerminalCommands(
         vscode.commands.registerCommand("superset.openTuiTerminal", () => {
             spawnPty("Superset TUI", getCwd()).show();
         }),
+        // Cross-panel shortcut for revealing a specific `vscode.Terminal`
+        // in the terminals TreeView. The full version is
+        // `superset.revealInTree` (in globalCommandsPlugin), which takes
+        // a generic predicate; this one accepts the terminal object
+        // directly and uses reference equality — `vscode.Terminal`
+        // structurally satisfies `TerminalHandle` (name/show/dispose),
+        // and the tree's terminal items are the same `vscode.Terminal`
+        // instances stored in the registry, so identity match is sound.
+        // Logs through `log` are not available in this signature, so
+        // failures (registry missing, terminal not tracked) are silent
+        // and just return `false` — same contract as `revealInTree`.
+        vscode.commands.registerCommand(
+            "superset.revealTerminal",
+            async (terminal: vscode.Terminal | undefined): Promise<boolean> => {
+                if (!guarded(terminal)) return false;
+                const reg = getTreeViewRegistry();
+                if (!reg) return false;
+                return reg.reveal(
+                    "superset.terminals",
+                    (item) => item === terminal,
+                    // No `log` channel wired into `TerminalCommandDeps`;
+                    // pass a no-op so the registry can still log
+                    // (BFS debug, double-register warnings) without
+                    // throwing — and without changing the command
+                    // surface area for callers.
+                    () => {}
+                );
+            }
+        ),
         vscode.commands.registerCommand("superset.newTerminal", () => {
             spawnPty("bash", getCwd()).show();
         }),

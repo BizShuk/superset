@@ -93,33 +93,34 @@ describe("ProjectsTodoStore", () => {
         expect(listener).toHaveBeenCalledTimes(2);
     });
 
-    it("picks up README.todo at depth 2 (group/project)", async () => {
+    it("ignores README.todo at depth 2 (group/project)", async () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
-        // ~/projects/<group>/<project>/README.todo  (depth 2, 應收)
+        // ~/projects/<a>/<b>/README.todo  (depth 2, 不應收 — 非 live project 邊界)
         const nested = join(projectsDir, "product", "reports", "weekly");
         mkdirSync(nested, { recursive: true });
         writeFileSync(join(nested, "README.todo"), "# TODO\n- [ ] deep task\n");
 
-        // ~/projects/<group>/README.todo  (depth 1, 也要收)
-        const groupOnly = join(projectsDir, "product", "reports");
-        writeFileSync(join(groupOnly, "README.todo"), "# TODO\n- [ ] intermediate\n");
+        // ~/projects/<project>/README.todo  (depth 1, 應收)
+        const topLevel = join(projectsDir, "alpha");
+        mkdirSync(topLevel);
+        writeFileSync(join(topLevel, "README.todo"), "# TODO\n- [ ] top level\n");
 
         const store = new ProjectsTodoStore();
         await store.load();
 
         const stores = store.getStores();
-        expect(stores.size).toBe(2);
-        expect(stores.has(nested)).toBe(true);
-        expect(stores.has(groupOnly)).toBe(true);
+        expect(stores.size).toBe(1);
+        expect(stores.has(nested)).toBe(false);
+        expect(stores.has(topLevel)).toBe(true);
     });
 
-    it("picks up README.todo at depth 3 (group/sub/project) but ignores depth 4", async () => {
+    it("ignores README.todo at depth 3 and 4", async () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
-        // ~/projects/<a>/<b>/<project>/README.todo  (depth 3, 應收)
+        // ~/projects/<a>/<b>/<project>/README.todo  (depth 3, 不應收)
         const depth3 = join(projectsDir, "a", "b", "c");
         mkdirSync(depth3, { recursive: true });
         writeFileSync(join(depth3, "README.todo"), "# TODO\n- [ ] depth3\n");
@@ -133,34 +134,34 @@ describe("ProjectsTodoStore", () => {
         await store.load();
 
         const stores = store.getStores();
-        expect(stores.has(depth3)).toBe(true);
+        expect(stores.has(depth3)).toBe(false);
         expect(stores.has(depth4)).toBe(false);
     });
 
-    it("still picks up ~/projects/tmp/<project>/README.todo at depth 2", async () => {
+    it("picks up ~/projects/tmp/<project>/README.todo at depth 1 (from tmp)", async () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
         mkdirSync(join(projectsDir, "tmp"));
 
-        // ~/projects/tmp/<a>/<project>/README.todo  (depth 3 from ~/projects, 應收)
-        const nested = join(projectsDir, "tmp", "a", "b");
-        mkdirSync(nested, { recursive: true });
-        writeFileSync(join(nested, "README.todo"), "# TODO\n- [ ] tmp nested\n");
+        // ~/projects/tmp/<project>/README.todo  (tmp 的第一層子目錄, 應收)
+        const tmpProj = join(projectsDir, "tmp", "inProgress");
+        mkdirSync(tmpProj);
+        writeFileSync(join(tmpProj, "README.todo"), "# TODO\n- [ ] tmp top\n");
 
         const store = new ProjectsTodoStore();
         await store.load();
 
         const stores = store.getStores();
-        expect(stores.has(nested)).toBe(true);
+        expect(stores.has(tmpProj)).toBe(true);
     });
 
-    it("ignores paths deeper than 3 levels under tmp", async () => {
+    it("ignores paths deeper than 1 layer under tmp", async () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
         mkdirSync(join(projectsDir, "tmp"));
 
-        // ~/projects/tmp/<a>/<b>/<project>/README.todo  (depth 4 from ~/projects, 不應收)
-        const tooDeep = join(projectsDir, "tmp", "a", "b", "c");
+        // ~/projects/tmp/<a>/<project>/README.todo  (tmp 的孫層, 不應收)
+        const tooDeep = join(projectsDir, "tmp", "a", "b");
         mkdirSync(tooDeep, { recursive: true });
         writeFileSync(join(tooDeep, "README.todo"), "# TODO\n- [ ] too deep\n");
 
@@ -171,7 +172,7 @@ describe("ProjectsTodoStore", () => {
         expect(stores.has(tooDeep)).toBe(false);
     });
 
-    it("skips hidden directories at any depth", async () => {
+    it("skips hidden first-layer directories and still picks up visible peers", async () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
@@ -180,15 +181,15 @@ describe("ProjectsTodoStore", () => {
         mkdirSync(hidden);
         writeFileSync(join(hidden, "README.todo"), "# TODO\n- [ ] hidden\n");
 
-        // ~/projects/<group>/.inner/README.todo  (深度 2 但隱藏, 不應收)
-        const hiddenInner = join(projectsDir, "group", ".inner");
-        mkdirSync(hiddenInner, { recursive: true });
-        writeFileSync(join(hiddenInner, "README.todo"), "# TODO\n- [ ] inner hidden\n");
-
-        // ~/projects/<group>/<project>/README.todo  (應收)
-        const visible = join(projectsDir, "group", "proj");
-        mkdirSync(visible, { recursive: true });
+        // ~/projects/<visible>/README.todo  (第一層可見, 應收)
+        const visible = join(projectsDir, "visible-proj");
+        mkdirSync(visible);
         writeFileSync(join(visible, "README.todo"), "# TODO\n- [ ] visible\n");
+
+        // ~/projects/<visible>/.inner/README.todo  (深層隱藏, 本來就不在掃描範圍)
+        const hiddenInner = join(visible, ".inner");
+        mkdirSync(hiddenInner);
+        writeFileSync(join(hiddenInner, "README.todo"), "# TODO\n- [ ] inner hidden\n");
 
         const store = new ProjectsTodoStore();
         await store.load();
@@ -200,105 +201,60 @@ describe("ProjectsTodoStore", () => {
         expect(stores.has(hiddenInner)).toBe(false);
     });
 
-    it("scans one-layer workspace plans: only ~/projects/<p>/plans and ~/projects/tmp/<p>/plans", async () => {
+    it("scans one-layer README.todo", async () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
         mkdirSync(join(projectsDir, "tmp"));
 
-        // (a) ~/projects/<project>/plans/*.md  ── 應收
+        // (a) ~/projects/<project>/README.todo  ── 應收
         const aProj = join(projectsDir, "alpha");
         mkdirSync(aProj, { recursive: true });
-        mkdirSync(join(aProj, "plans"));
-        writeFileSync(join(aProj, "plans", "2026-07-01-a.md"), "# alpha plan\n");
         writeFileSync(join(aProj, "README.todo"), "# TODO\n- [ ] a\n");
 
-        // (b) ~/projects/tmp/<project>/plans/*.md  ── 應收
+        // (b) ~/projects/tmp/<project>/plans/*.md (tmp root 副產品,
+        // 確認 root 仍被掃;README.todo 在 beta 不放,測試焦點是邊界)
         const bProj = join(projectsDir, "tmp", "beta");
         mkdirSync(bProj, { recursive: true });
         mkdirSync(join(bProj, "plans"));
         writeFileSync(join(bProj, "plans", "2026-07-02-b.md"), "# beta plan\n");
 
-        // (c) ~/projects/<a>/<b>/plans/*.md (孫層)  ── **不**收 (one-layer 邊界)
-        //     Note: README.todo 掃描仍走最深 3 層,plan scan 嚴格 one-layer。
+        // (c) ~/projects/<a>/<b>/README.todo (孫層)  ── **不**收 (one-layer 邊界)
         const deepProj = join(projectsDir, "alpha", "sub");
         mkdirSync(deepProj, { recursive: true });
-        mkdirSync(join(deepProj, "plans"));
-        writeFileSync(join(deepProj, "plans", "2026-07-04-d.md"), "# deep plan\n");
-        // deepProj 的 README.todo 仍會被 README walker 收到 (depth 2)
         writeFileSync(join(deepProj, "README.todo"), "# TODO\n- [ ] deep\n");
 
-        // (d) ~/projects/plans/*.md (workspace root, 不在 project 子目錄)  ── 不收
-        mkdirSync(join(projectsDir, "plans"));
-        writeFileSync(join(projectsDir, "plans", "2026-07-05-r.md"), "# root plan\n");
-
-        // (e) 隱藏的 project/plans  ── 不收
+        // (d) ~/projects/.hidden/README.todo  ── 不收 (dotfile 跳過)
         const hiddenProj = join(projectsDir, ".hidden");
         mkdirSync(hiddenProj, { recursive: true });
-        mkdirSync(join(hiddenProj, "plans"));
-        writeFileSync(join(hiddenProj, "plans", "2026-07-06-h.md"), "# hidden plan\n");
-
-        // (f) playground/exp/plans  ── **不**進 workspace plans (playground/exp 是
-        //     兩層深,plan scan 嚴格 one-layer)。但其 README.todo 仍會被 stores 收。
-        const playProj = join(projectsDir, "playground", "exp");
-        mkdirSync(playProj, { recursive: true });
-        mkdirSync(join(playProj, "plans"));
-        writeFileSync(join(playProj, "plans", "2026-07-03-p.md"), "# play plan\n");
-        writeFileSync(join(playProj, "README.todo"), "# TODO\n- [ ] play\n");
+        writeFileSync(join(hiddenProj, "README.todo"), "# TODO\n- [ ] hidden\n");
 
         const store = new ProjectsTodoStore();
         await store.load();
 
-        // Workspace plan scan:嚴格 one-layer,只看 <root>/<child>/plans/*.md
+        // README.todo scan:嚴格 one-layer,只看 <root>/<child>/README.todo
         // 其中 root ∈ {projects, tmp}。
-        const plans = store.getWorkspacePlans();
-        const planBasenames = plans.map((p) => p.info.basename).sort();
-        expect(planBasenames).toEqual([
-            "2026-07-01-a.md",
-            "2026-07-02-b.md",
-        ]);
-
-        // 對應 projectName / projectPath 標記正確
-        const byName = new Map(plans.map((p) => [p.info.basename, p]));
-        expect(byName.get("2026-07-01-a.md")?.projectName).toBe("alpha");
-        expect(byName.get("2026-07-01-a.md")?.projectPath).toBe(aProj);
-        expect(byName.get("2026-07-02-b.md")?.projectName).toBe("beta");
-        expect(byName.get("2026-07-02-b.md")?.projectPath).toBe(bProj);
-
-        // 排序:先 projectName,再 basename
-        const order = plans.map((p) => `${p.projectName}/${p.info.basename}`);
-        const expected = [...order].sort((x, y) => x.localeCompare(y));
-        expect(order).toEqual(expected);
-
-        // README.todo 仍照原本最深 3 層掃,playground/exp 進 stores
         expect(store.getStores().has(aProj)).toBe(true);
-        expect(store.getStores().has(playProj)).toBe(true);
-        expect(store.getStores().has(deepProj)).toBe(true);
-    });
-
-    it("returns [] from getWorkspacePlans when no plans folders exist", async () => {
-        const projectsDir = join(tempDir, "projects");
-        mkdirSync(projectsDir);
-
-        const store = new ProjectsTodoStore();
-        await store.load();
-
-        expect(store.getWorkspacePlans()).toEqual([]);
+        // deepProj 在 alpha/sub → 不收
+        expect(store.getStores().has(deepProj)).toBe(false);
+        // bProj 沒有 README.todo → 不收
+        expect(store.getStores().has(bProj)).toBe(false);
+        // .hidden 跳過
+        expect(store.getStores().has(hiddenProj)).toBe(false);
     });
 
     it("survives missing ~/projects/tmp directory", async () => {
         const projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
-        // ~/projects 存在,但 ~/projects/tmp 不存在;plan scan 應安靜跳過第二 root
+        // ~/projects 存在,但 ~/projects/tmp 不存在;tmp root 安靜跳過
         const aProj = join(projectsDir, "alpha");
         mkdirSync(aProj, { recursive: true });
-        mkdirSync(join(aProj, "plans"));
-        writeFileSync(join(aProj, "plans", "2026-07-01-a.md"), "# a\n");
+        writeFileSync(join(aProj, "README.todo"), "# TODO\n- [ ] a\n");
 
         const store = new ProjectsTodoStore();
         await store.load();
 
-        expect(store.getWorkspacePlans().length).toBe(1);
-        expect(store.getWorkspacePlans()[0]?.projectName).toBe("alpha");
+        expect(store.getStores().size).toBe(1);
+        expect(store.getStores().has(aProj)).toBe(true);
     });
 });

@@ -69,12 +69,29 @@ export interface PtyTerminalFactoryDeps {
  */
 export class PtyTerminalFactory {
     private readonly ptyBacked = new Set<vscode.Terminal>();
+    private readonly dataListeners = new Set<
+        (terminal: vscode.Terminal, data: string) => void
+    >();
 
     constructor(private readonly deps: PtyTerminalFactoryDeps) {}
 
     /** True if this factory created `terminal`. */
     isPtyBacked(terminal: vscode.Terminal): boolean {
         return this.ptyBacked.has(terminal);
+    }
+
+    /**
+     * Subscribe to every byte that flows out of any PTY-backed terminal
+     * this factory spawned. Used by the mermaid buffer (and any future
+     * consumer that needs raw PTY output). Returns a disposer.
+     */
+    onData(
+        cb: (terminal: vscode.Terminal, data: string) => void
+    ): () => void {
+        this.dataListeners.add(cb);
+        return () => {
+            this.dataListeners.delete(cb);
+        };
     }
 
     /** Spawn a PTY-backed terminal named `name` rooted at `cwd`. */
@@ -93,6 +110,20 @@ export class PtyTerminalFactory {
             cwd,
             env: process.env,
             log,
+        });
+        // Pipeline: every byte the host emits fans out to internal
+        // VSCode plumbing AND any external data subscriber (e.g. the
+        // mermaid buffer). `host.onWrite` is multi-listener so this
+        // is safe to attach alongside the Pseudoterminal adapter.
+        host.onWrite((data) => {
+            if (!terminalRef) return;
+            for (const cb of this.dataListeners) {
+                try {
+                    cb(terminalRef, data);
+                } catch (err) {
+                    log(`[pty-factory] data listener ERROR: ${err}`);
+                }
+            }
         });
         const pty = createPtyPseudoterminal(host);
         terminalRef = vscode.window.createTerminal({ name, pty });

@@ -32,7 +32,7 @@ Update version in @package.json every change based on <majore,minor,patch>
 | 持續跑測試                     | `npm run test:watch`       |
 | 打包成 `.vsix`                 | `npx @vscode/vsce package` |
 
-> `engines.vscode` 為 `^1.90.0`，需要 Shell Integration API 與 TabInputTerminal 穩定後的版本。1.90 之前 `Terminal.name` 還可寫，之後變 getter-only — 我們對齊到 1.90+ 的語意。
+> `engines.vscode` 為 `^1.93.0`，需要 Shell Integration API 與 TabInputTerminal 穩定後的版本。1.90 之前 `Terminal.name` 還可寫，之後變 getter-only — 我們對齊到 1.93+ 的語意 (1.90 引入了 `Terminal.name` getter-only，但 `node` engines 還停在 `>=20.0.0`)。
 
 ---
 
@@ -286,7 +286,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 `src/projectsTodo/` 是另一個獨立 module (不要跟 `src/projects/` 搞混 — 後者只是列出 `~/projects/` 下的資料夾,**沒有** TODO 內容)。`Projects TODO` 顯示在 `superset-overall` 這個 viewContainer (Activity Bar 第二顆 icon),定位是跨專案待辦總覽。
 
-掃描範圍 (`ProjectsTodoStore.load`):從 `~/projects/` 出發往下遞迴,最深 3 層 (`MAX_SCAN_DEPTH`),任何含有 `README.todo` 檔案的資料夾都會被收。每個被收的資料夾會掛一個內部 `TodoStore` 來 reuse 既有的 parse / write 邏輯,外面再 observe `loaded` 事件觸發 tree refresh。
+掃描範圍 (`ProjectsTodoStore.load`):從 `~/projects/` 與 `~/projects/tmp/` 兩個根目錄各自的**第一層**子目錄掃描,任何含有 `README.todo` 檔案的資料夾都會被收。**不向下遞迴** — 深層資料夾 (例如 `~/projects/data/pkg/stock/`) 屬於它所屬專案的內部子目錄,不由 overview 收為獨立 project。Plan scan 與 README scan 共用同一條 `getPlanRoots(home)`,確保兩邊的 project 邊界一致。每個被收的資料夾會掛一個內部 `TodoStore` 來 reuse 既有的 parse / write 邏輯,外面再 observe `loaded` 事件觸發 tree refresh。
 
 `★ 設計 ─────────────────────────────────────`
 
@@ -296,14 +296,37 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
     3. 啟用了 priority filter (例如只看 `P0`) 但該專案只有其他 priority 的 task
 - 舊版 `getChildren()` 在上述情境下會跳過整個 project row (使用者看到的 bug — 「all-done 專案從 overview 消失」)。修正後改為:
     - project row 永遠保留
-    - 過濾後若 children 為空 → 收合 (`CollapsibleState.Collapsed`),展開才會看到空內容
-    - 過濾後 children 非空 → 展開 (`Expanded`),即時看到 sections
+    - project row **一律預設收合** (`CollapsibleState.Collapsed`) — 不論 children 是否為空。50 個專案的工作區自動展開會炸成 100+ 行,淹沒 project 總數的價值;使用者想看哪個就手動展開。
 - 這個語意呼應「Overview 是一覽表」的使用情境 — 使用者想知道「哪些專案還有 todo 檔」,而不是「哪些專案還有**可見的** task」;`- [x]` 的歸檔、priority filter 的主動篩選都不該讓 project 從 overview 消失。
   `─────────────────────────────────────────────`
 
 `Pending` 計數 (`countPending(element.children)`) 仍是「目前過濾條件下可見的未勾選 task 數」 — 過濾條件會影響 children list,所以該數字會跟著 filter 走。當 children 為空時顯示 `0 pending`,這是「目前 filter 下沒有可見未完成 task」的真實狀態,而非「檔案內沒有未完成 task」(差異在 hide-completed + 全部 `[x]` 的情境)。
 
-測試覆蓋:`projectsTodoTreeProvider.test.ts` 加了 4 個 case — all-completed、empty file、priority filter 全排除、collapsed/expanded 兩態。
+### Per-Project Plans Sub-Section
+
+Overview 同時在兩個地方呈現 `plans/*.md`:
+
+- **Top-level merged row**(原本行為):panel 末端一個 `## Plans` row,把整個 `~/projects` workspace 的 plan 攤平,每筆附 `projectName` / `projectPath` 給 inline `openProject` 使用 — 跨專案「正在進行哪些設計文件」的一覽表。
+- **Per-project sub-section**(新行為):每個 project row 的 children 末端再 append 一個 `## Plans` sub-section,只放**這個 project 自己**的 plan — 「drill 進這個 project 看自己的 design doc」。
+
+兩者**並存**而非擇一。共用語意:
+
+- 兩處都走 `makePlansSection()`(同一個 `plansSource.ts` helper)與 `planInfoToTodoItem()`(同一個 PlanInfo → TodoItem 轉換),不會出現兩種渲染邏輯。
+- 兩處的 plan 條目都帶 `kind: "plan"` + `viewItem == projectsTodoPlan` + `filePath` — 既有 inline menu(open、complete、backlog、archive、delete、copy、`openProject`)直接複用,不開新 `viewItem` 類型。
+- `parentSection` 兩處都填 `"Plans"`(沿用 `planInfoToTodoItem` 既定值),filter 輔助判斷不需分流。
+- Plans 跳過 `applyPriorityFilter` / `filterCompleted` 既有的 `kind === "plan"` passthrough(見 `todoTreeProvider.ts` 兩處的 `if (item.kind === "plan") return item` 與 `filterItem` 的 `if (item.kind === "section")` 早返),所以 priority filter / hide-completed 不會讓 plan 從 sub-section 消失。
+- Per-project sub-section 與 top-level row 是**獨立建構**的兩棵子樹 — 不共享 `children` 陣列 — 修改其中一處不會污染另一處。
+
+排序:per-project 的 `## Plans` sub-section 永遠在該 project 的 README.todo sections 之後(`filtered.push(makePlansSection(planChildren))` 在 `applyPriorityFilter` 完成後 append,不改 README sections 的相對順序)。
+
+`★ 設計 ─────────────────────────────────────`
+
+- 為什麼不直接讀 `workspacePlans` 再 partition:每個 per-project sub-section 透過 `store.getPlanItems()` 拿到的 PlanInfo **本來就只屬於這個 project**(TodoStore 把 `workspaceRoot` 鎖在自己 projectPath),所以 N 個 project 等於 N 次零散讀取,結果與「讀全部再 partition」一致但程式意圖更清楚。
+- 為什麼不重複使用 top-level `getWorkspacePlans()`:後者是 `ProjectsTodoStore` 預先聚合 + 排序過的 workspace 視角,不能直接餵給單一 project 的 sub-section(會越界顯示別人的 plan)。兩個視角刻意分開儲存,避免一邊的改動影響另一邊。
+- 為什麼 `countPending` 不算 plan:`countPending` 只看 `kind === "checkbox" && !item.checked`,plan 是 read-only 設計文件,本來就不算「待完成工作」;per-project sub-section 加上後,project row 的 `N pending` badge 數字不變,語意保持「可見未勾選 task 數」。
+  `─────────────────────────────────────────────`
+
+測試覆蓋:`projectsTodoTreeProvider.test.ts` 加了 4 個 case — all-completed、empty file、priority filter 全排除、collapsed 預設 (即使 children 存在也保持 Collapsed)。
 
 ---
 
@@ -400,8 +423,8 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 | `projectsStore.test.ts`            | ProjectStore 掃描與分組                                                | 2      |
 | `projectsPlugin.test.ts`           | projectsPlugin 介面契約                                                | 3      |
 | `projectsTodoStore.test.ts`        | ProjectsTodoStore 跨專案掃描                                           | 8      |
-| `projectsTodoTreeProvider.test.ts` | ProjectsTodoTreeProvider 渲染 + 過濾                                   | 12     |
-| `installCommands.test.ts`          | installDefaultTools / skillInstall 走 PTY spawner + `&& exit` 自動關閉 | 5      |
+| `projectsTodoTreeProvider.test.ts` | ProjectsTodoTreeProvider 渲染 + 過濾                                   | 22     |
+| `installCommands.test.ts`          | installDefaultTools / skillInstall 走 PTY spawner + `&& exit` 自動關閉 + installLicense QuickPick / detail 摘要 / 寫入 / 覆蓋確認 | 12     |
 | `smoke.test.ts`                    | 整體 smoke                                                             | 1      |
 
 `TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/terminals/treeSpec.ts` 純函式。
@@ -438,18 +461,17 @@ Local panel 把當前工作區 root 下的 `plans/*.md` 收成 `<workspace>/<fil
 
 `kind: "list"` 是「`- foo` 沒 checkbox 標記的 free-form note」,可能有 priority tag 也可能進 archive。Plan 是「整份 design doc 的 read-only entry」,這兩個語意混用會逼 `applyPriorityFilter` / `filterCompleted` / `countPending` 處處加 `if (item.filePath)` 分流。明確定義新 kind 比到處加 hack 乾淨,也避免 plan 被誤勾/誤 archive 的 UI 風險。
 
-### Overview — Workspace Plans Row (0.8.5+)
+### Overview — Workspace Plans Row (0.8.5+, 0.10.x 廢除)
 
-Overview (`superset-overall` viewContainer) 不再為每個 project 各自附加 `## Plans` section,改成在 panel 末端開一個 top-level **「Plans」row**,把整個 `~/projects` workspace 的 plan 文件扁平列出。
+0.8.5 起 Overview (`superset-overall` viewContainer) 在 panel 末端開一個 top-level **「Plans」row**,把整個 `~/projects` workspace 的 plan 文件扁平列出;0.10.x 起**廢除**,因為這個 row 在 50 個專案的工作區會產生 100+ 筆攤平條目,淹沒 project-level 概覽。Plan 資料改由每個 project 自己的 `## Plans` sub-section 呈現(見上)。
 
-### 設計重點 (overview)
+### 設計重點 (legacy,已廢除)
 
-- **Two-root, one-layer scan**:`getPlanRoots(home)` 回傳 `["~/projects", "~/projects/tmp"]` 兩條絕對路徑;`scanRootPlans(root)` 對每個 root 走 `readdir` 找第一層子目錄,呼叫 `scanPlans(child)` 讀其 `plans/*.md`。**不**遞迴到孫層,所以 `~/projects/foo/sub/plans/` 屬於 `foo` 自身,不由 overview 額外展開。
-- **為何用這兩個 root**:`~/projects` 是所有專案的家目錄,`~/projects/tmp/` 是「進行中子分類」,兩者對應根 `CLAUDE.md` §分層。`~/tmp` 不存在;`playground/` 與 `archive/` 是同層分類,其中的「實驗/歸檔樣本」本身不是 live 專案,故不列入。
-- **Flat list**:Top-level「Plans」row 的 children 是所有 plan 攤平後的清單(每筆帶 `projectName` / `projectPath` 標記來源,給 inline `openProject` 用),按 `(projectName, basename)` 字典序排序。不再有「plans-only 專案」這個概念 — 只有 `README.todo` 才定義一個 project,plans 永遠是附加的 read-only 條目。
-- **filter passthrough**:Overview 的 `hide-completed` 與 priority filter 對 plan 完全不影響 (plan 沒有 checked / priority 概念),所以 plan 永遠出現在該 row 之下。
-- **API 重命名**:`getPlanItems(p)` / `getPlanItemsEntries()` 已移除,改用 `getWorkspacePlans(): readonly WorkspacePlan[]` 一次拿整份。`WorkspacePlan = { info, projectName, projectPath }`,`info` 仍是原 `PlanInfo`。
-- **Inline `openProject`**:Plan 子項右側的 `openProject` icon (由 `package.json` `viewItem == projectsTodoPlan` 提供) 跳到 plan 所屬的 project 目錄。Top-level「Plans」row 本身沒有這個 menu (它的 `projectPath` 是空字串 sentinel,`openProject` handler 會 null-check 後 no-op)。
+以下記錄舊版行為,僅供日後考古。當前 overview **不**再有 top-level「Plans」row。
+
+- **Two-root, one-layer scan**:曾用 `scanRootPlans(root)` 對每個 root 走 `readdir` 找第一層子目錄,呼叫 `scanPlans(child)` 讀其 `plans/*.md`。
+- **API 變更**:`getPlanItems(p)` / `getPlanItemsEntries()` 早在 0.8.5 階段就被 `getWorkspacePlans(): readonly WorkspacePlan[]` 取代;0.10.x 連 `getWorkspacePlans` / `WorkspacePlan` 也一併刪除(API 與 store 端 `workspacePlans` 私有欄位、`scanRootPlans` 方法全部 drop)。
+
 - VSCode Terminal API 官方文件:<https://code.visualstudio.com/docs/terminal/shell-integration>
 - VSCode Pseudoterminal:<https://code.visualstudio.com/api/references/vscode-api#Pseudoterminal>
 - node-pty:<https://github.com/homebridge/node-pty-prebuilt-multiarch>

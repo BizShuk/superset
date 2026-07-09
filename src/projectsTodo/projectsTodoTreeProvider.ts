@@ -105,12 +105,13 @@ export class ProjectsTodoTreeProvider
             const pending = countPending(element.children);
             item.description = `${pending} pending`;
             item.tooltip = element.projectPath;
-            // Collapse when nothing to show under the current filter so the
-            // tree doesn't expand into empty space. Expand otherwise so the
-            // user sees sections immediately.
-            item.collapsibleState = (element.children?.length ?? 0) > 0
-                ? vscode.TreeItemCollapsibleState.Expanded
-                : vscode.TreeItemCollapsibleState.Collapsed;
+            // Always default the project row to Collapsed. The overview
+            // is a flat list of every live project — auto-expanding each
+            // one explodes into 100+ rows on a 50-project workspace and
+            // buries the project count. Users expand the ones they care
+            // about. Empty children would also collapse here, but the
+            // Collapsed default already covers both cases.
+            item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
             item.contextValue = "projectsTodoProject";
             // No item.command — clicking the row text folds/unfolds the section.
             // Opening the project is an inline button (see package.json menus).
@@ -253,8 +254,13 @@ export class ProjectsTodoTreeProvider
         const projectItems: ProjectTodoItem[] = [];
 
         // Project rows — only projects that actually have a README.todo.
-        // Plans are NOT attached under each project anymore; they live in
-        // a top-level "Plans" row at the end of the overview.
+        // Each project surfaces its own `plans/*.md` as a synthetic
+        // "Plans" sub-section under its row, appended after the
+        // README.todo sections so users can drill into a project and see
+        // its design docs locally. The top-level "Plans" row at the end
+        // of the overview still aggregates every project's plans for
+        // the "what's happening across all projects" snapshot — both
+        // views coexist.
         for (const [projectPath, store] of this.store.getStores()) {
             const projectName = path.basename(projectPath);
             const raw = store.getItems();
@@ -271,6 +277,34 @@ export class ProjectsTodoTreeProvider
             // of whether every task is checked, the file is empty, or the
             // active priority filter excludes all of this project's tasks.
 
+            // Per-project plans: append a synthetic "Plans" section AFTER
+            // the README.todo sections so users can drill into this project
+            // and see its own design docs. Plans survive both filters (no
+            // checked state, no priority tag — see `applyPriorityFilter` /
+            // `filterCompleted` passthrough), so the section appears as
+            // long as the project has any plans at all. When the README.todo
+            // filter leaves zero visible items, this section is the only
+            // thing keeping the project row expanded instead of collapsed.
+            const projectPlans = store.getPlanItems();
+            if (projectPlans.length > 0) {
+                const planChildren: ProjectTodoItem[] = projectPlans.map((p) => {
+                    const base = planInfoToTodoItem(p);
+                    return {
+                        line: base.line,
+                        text: base.text,
+                        description: base.description,
+                        kind: base.kind,
+                        checked: base.checked,
+                        filePath: base.filePath,
+                        parentSection: base.parentSection,
+                        level: base.level,
+                        projectName,
+                        projectPath,
+                    };
+                });
+                filtered.push(makePlansSection(planChildren));
+            }
+
             // Decorate items with project information
             const decoratedChildren = decorateItems(filtered, projectName, projectPath);
 
@@ -284,48 +318,6 @@ export class ProjectsTodoTreeProvider
                 projectPath,
             };
             projectItems.push(projectItem);
-        }
-
-        // Top-level "Plans" row — flat list of plans from
-        // `~/projects/<p>/plans/*.md` and `~/projects/tmp/<p>/plans/*.md`
-        // (one-layer only). Each plan is read-only and survives every
-        // filter (no priority, no completed state).
-        //
-        // The `projectName` / `projectPath` fields are required on
-        // `ProjectTodoItem`, so we fill them with placeholders. The
-        // "is project node" check in `getTreeItem` is guarded by
-        // `path.basename(projectPath) === text`, which won't match
-        // here, and the per-item rendering reads only `filePath` (set
-        // on each plan child, not on this row).
-        const workspacePlans = this.store.getWorkspacePlans();
-        if (workspacePlans.length > 0) {
-            const planChildren: ProjectTodoItem[] = workspacePlans.map((p) => {
-                const base = planInfoToTodoItem(p.info);
-                return {
-                    line: base.line,
-                    text: base.text,
-                    description: base.description,
-                    kind: base.kind,
-                    checked: base.checked,
-                    filePath: base.filePath,
-                    parentSection: base.parentSection,
-                    level: base.level,
-                    projectName: p.projectName,
-                    projectPath: p.projectPath,
-                };
-            });
-            const sectionBase = makePlansSection(planChildren);
-            projectItems.push({
-                line: sectionBase.line,
-                text: sectionBase.text,
-                description: sectionBase.description,
-                kind: sectionBase.kind,
-                level: sectionBase.level,
-                checked: sectionBase.checked,
-                children: planChildren,
-                projectName: "<workspace>",
-                projectPath: "",
-            });
         }
 
         // Sort project folders by name alphabetically

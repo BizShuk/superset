@@ -89,13 +89,18 @@ flowchart TD
 
 ## 6. 漸進落地步驟 (Incremental Steps)
 
-| 步驟 (Step) | 做什麼 (What) | 驗證 (Verify) | 回滾 (Rollback) |
-| :--- | :--- | :--- | :--- |
-| `1. 設計與實作 TreeViewRegistry` | 在 `src/plugin/treeViewRegistry.ts` 中實作 `TreeViewRegistry` 類別與遞迴搜尋演算法。 | 撰寫單元測試 `test/treeViewRegistry.test.ts` 驗證 `walk` 遍歷與尋值邏輯，確保 `npm test` 通過。 | 刪除 `src/plugin/treeViewRegistry.ts` 檔案與其測試。 |
-| `2. 擴充插件上下文介面` | 在 `src/plugin/types.ts` 與 `src/plugin/context.ts` 中新增 `registerTreeView` 方法，並將其連接至全域的 `TreeViewRegistry` 實例。 | 執行 `npm run build` 確認型別編譯無誤。 | 還原 `src/plugin/types.ts` 與 `src/plugin/context.ts` 中關於此方法之修改。 |
-| `3. 註冊定位命令與連接組裝層` | 在 `src/globalCommandsPlugin.ts` 中註冊 `superset.revealInTree` 通用定位命令，並由其調用 `TreeViewRegistry`。 | 確保編譯成功，並可在測試環境呼叫此命令無崩潰。 | 還原 `src/globalCommandsPlugin.ts` 中該命令之註冊。 |
-| `4. 連接 terminals 插件` | 修改 `src/terminals/index.ts`，在 `treeView` 建立後呼叫 `ctx.registerTreeView`；同時註冊簡化的快捷命令 `superset.revealTerminal`。 | 撰寫測試或進行手動驗證，確保傳入 `Terminal` 節點後，TreeView 能順利 focus 且 highlight。 | 還原 `src/terminals/index.ts` 之變更。 |
-| `5. 連接其他插件與整合測試` | 修改 `mdns`、`topology`、`todo` 等模組的 `index.ts` 將 TreeView 註冊。 | 執行整體測試，確認沒有 regression，所有 TreeView 全綠。 | 還原 `mdns`、`topology`、`todo` 之變更。 |
+| 步驟 (Step) | 做什麼 (What) | 驗證 (Verify) | 回滾 (Rollback) | 狀態 |
+| :--- | :--- | :--- | :--- | :--- |
+| `1. 設計與實作 TreeViewRegistry` | 在 `src/plugin/treeViewRegistry.ts` 中實作 `TreeViewRegistry` 類別與遞迴搜尋演算法。 | 撰寫單元測試 `test/treeViewRegistry.test.ts` 驗證 `walk` 遍歷與尋值邏輯，確保 `npm test` 通過。 | 刪除 `src/plugin/treeViewRegistry.ts` 檔案與其測試。 | ✓ Done (`b74cbc1`) |
+| `2. 擴充插件上下文介面` | 在 `src/plugin/types.ts` 與 `src/plugin/context.ts` 中新增 `registerTreeView` 方法，並將其連接至全域的 `TreeViewRegistry` 實例。 | 執行 `npm run build` 確認型別編譯無誤。 | 還原 `src/plugin/types.ts` 與 `src/plugin/context.ts` 中關於此方法之修改。 | ✓ Done (`b74cbc1`) |
+| `3. 註冊定位命令與連接組裝層` | 在 `src/globalCommandsPlugin.ts` 中註冊 `superset.revealInTree` 通用定位命令，並由其調用 `TreeViewRegistry`。 | 確保編譯成功，並可在測試環境呼叫此命令無崩潰。 | 還原 `src/globalCommandsPlugin.ts` 中該命令之註冊。 | ✓ Done (`b74cbc1`) |
+| `4. 連接 terminals 插件` | 修改 `src/terminals/index.ts`，在 `treeView` 建立後呼叫 `ctx.registerTreeView`；同時註冊簡化的快捷命令 `superset.revealTerminal`。 | 撰寫測試或進行手動驗證，確保傳入 `Terminal` 節點後，TreeView 能順利 focus 且 highlight。 | 還原 `src/terminals/index.ts` 之變更。 | ✓ Done (`src/terminals/index.ts` 在 treeView 建立後接 `getTreeViewRegistry()?.register("superset.terminals", ...)`;`src/terminals/commands.ts` 新增 `superset.revealTerminal` 命令;`package.json` 加命令 entry;`test/terminalsRevealRegistry.test.ts` 守護 viewId 已註冊) |
+| `5. 連接其他插件與整合測試` | 修改 `mdns`、`topology`、`todo`、`projectsTodo` 等模組的 `index.ts` 將 TreeView 註冊。 | 執行整體測試，確認沒有 regression，所有 TreeView 全綠。 | 還原 `mdns`、`topology`、`todo`、`projectsTodo` 之變更。 | ✓ Done (`b74cbc1` 接 `todo`,`0cf2faf` 接 `mdns` / `topology` / `projectsTodo`) |
+
+> **§6 步驟實際落地對照**:
+> - `todo` (本地工作區面板 `superset.todo`) 由 `b74cbc1` 在 `src/todo/index.ts` 透過 `FeatureContext` 路徑接入 (PluginContext shim 包裝)
+> - `mdns` / `topology` / `projectsTodo` 由 `0cf2faf` 接入。`projectsTodo` (overview 跨專案面板 `superset.projectsTodo`) 是 step 5 原始條列之外的擴展 — 加它的動機是「跨專案聚合視圖也是合理的 reveal 目標」(例如從 status bar 想跳到某個 project 的 todo row),列入 step 5 是回填式擴展範圍
+> - `terminals` (step 4) 後續由獨立的 wiring commit 補上,沿 `FeatureContext` → plugin shim 路徑在 `src/terminals/index.ts:74-86` 直接呼叫 `getTreeViewRegistry()?.register("superset.terminals", ...)`,並新增 `superset.revealTerminal` 命令 (`src/terminals/commands.ts` 內,predicate 用 reference equality — 因為 `vscode.Terminal` 結構上滿足 `TerminalHandle` (name/show/dispose),tree 內的 terminal 節點就是 vscode.Terminal instance 本身,`item === terminal` 即可)
 
 ## 7. 風險與假設 (Risks & Assumptions)
 
@@ -105,3 +110,20 @@ flowchart TD
 - 假設：折疊節點的展開可能涉及非同步加載延遲。
   - `風險`：如果節點層級過深且每層都是非同步讀取，定位可能會延遲甚至卡死。
   - `對策`：遍歷過程中設定最大深度（例如最深 5 層）以及定位超時機制 (如 3 秒)，超時後自動中斷並記錄警告。
+  - **實際落地**:`b74cbc1` 在 `src/plugin/treeViewRegistry.ts` 以 `MAX_WALK_DEPTH = 5` 與 `WALK_TIMEOUT_MS = 3000` 兩個常數落實,BFS 走訪時同步檢查 timeout;`test/treeViewRegistry.test.ts` 5 個 case 涵蓋 register/get/dispose/BFS find/no-match/unknown viewId/double-register warning。
+
+## 8. Implementation Status (實際落地狀態)
+
+**已實作 (Shipped)**
+
+- `src/plugin/treeViewRegistry.ts` — 集中註冊表,5 個 method (`register` / `get` / `find` / `reveal` / `listViewIds`),內建 BFS + depth/timeout 熔斷
+- `src/plugin/types.ts` + `src/plugin/context.ts` — `PluginContext.registerTreeView` 介面 + wired through `getTreeViewRegistry()` singleton
+- `src/globalCommandsPlugin.ts` — `superset.revealInTree` 命令註冊,args `{ viewId, predicate }`
+- `src/extension.ts` — `setTreeViewRegistry()` 在 plugin activate 之前設定
+- 接的面板:`todo` (b74cbc1),`mdns` / `topology` / `projectsTodo` (0cf2faf),`terminals` (step 4 後續 commit)
+- `superset.revealTerminal` shortcut 命令 — 接受 `vscode.Terminal`,內部走 `registry.reveal("superset.terminals", item => item === terminal, log)` (predicate 用 reference equality,因為 `vscode.Terminal` 結構上滿足 `TerminalHandle`,tree 內 terminal 節點就是 instance 本身)
+- 測試:`test/treeViewRegistry.test.ts` 5 case + `test/terminalsRevealRegistry.test.ts` 守護 wiring + 各 plugin 既有測試 (518 全綠)
+
+**Known Gaps (Follow-up 工項)**
+
+- ⏸ **Reference Equality 對策未文件化**:§7 第一條風險的對策 (DataProvider 應回傳 stable 實例) 沒有對應的程式碼契約或測試守護,目前靠既有 panel 的實作「剛好」滿足 — `terminals` 與 `todo` 兩 panel 因為 terminal 與 todo item 本來就來自穩定的 registry 容器,TreeElement 引用是 stable 的;`mdns` / `topology` / `projectsTodo` 是否滿足,則需要個別 audit

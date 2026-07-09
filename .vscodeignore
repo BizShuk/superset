@@ -27,4 +27,5 @@ README.todo
 README.md
 CHANGELOG.md
 CLAUDE.md
-LICENSE
+# LICENSE is kept — required by vsce for Marketplace validation;
+# other meta files above are documentation-only and stay excluded.
