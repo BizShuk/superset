@@ -113,8 +113,11 @@ export interface TodoCommandTreeProvider {
     isShowingCompleted(): boolean;
     isPriorityEnabled(priority: "P0" | "P1" | "P2"): boolean;
     togglePriority(priority: "P0" | "P1" | "P2"): void;
-    setViewType(viewType: "section" | "priority" | "file"): void;
-    getViewType(): "section" | "priority" | "file";
+    /** View-type switching. Optional because the projectsTodo panel
+     *  only supports 'section' / 'priority' views (no 'file' view) —
+     *  the factory's ViewSec/PX/File commands become no-ops there. */
+    setViewType?(viewType: "section" | "priority" | "file"): void;
+    getViewType?(): "section" | "priority" | "file";
     /** Hidden / completed counts for the badge title. */
     getHiddenCount?(): number;
     /** Section names the user can move an item into. Used by the

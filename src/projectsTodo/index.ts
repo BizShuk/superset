@@ -14,6 +14,14 @@ import {
 } from "../todo/planActions";
 import { formatPlanCopyText } from "../todo/plansSource";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import {
+    createTodoCommands,
+    type TodoCommandContext,
+    type TodoCommandStore,
+    type TodoCommandTreeProvider,
+    type TodoCommandPlanActions,
+    type TodoEngineItem,
+} from "../todoEngine";
 import type { ProjectTodoItem } from "./types";
 
 const PROJECTS_TODO_VIEW_TITLE = "Projects TODO";
@@ -137,6 +145,138 @@ export function register(ctx: FeatureContext): FeatureHandle {
     plansWatcher.onDidCreate(onPlansFileChanged);
     plansWatcher.onDidDelete(onPlansFileChanged);
 
+    // ── Emit the superset.projectsTodo* commands via the shared
+    //    todoEngine factory. Placed AFTER the file-watcher setup
+    //    so failure modes (e.g. lightweight `vscode` mock missing
+    //    RelativePattern) still bail before any command registers.
+    //    The store adapter here routes each item-level mutation
+    //    through `store.getStore(item.projectPath)` because each
+    //    project has its own sub-TodoStore.
+    const getSubStore = (projectPath: string) =>
+        store.getStore(projectPath);
+    const dispatchItem = async (
+        kind:
+            | "toggle"
+            | "updatePriority"
+            | "archiveTodo"
+            | "rollbackTodo"
+            | "moveTodo"
+            | "deleteTodo"
+            | "updateText",
+        item: TodoEngineItem,
+        ...rest: unknown[]
+    ): Promise<void> => {
+        const sub = getSubStore(item.projectPath ?? "");
+        if (!sub) return;
+        // sub-store types are TodoStore; the factory calls into the
+        // adapter shape, which matches TodoStore's mutation surface.
+        const fn = (sub as unknown as Record<string, (...a: unknown[]) => unknown>)[kind];
+        if (typeof fn === "function") await fn(item, ...rest);
+    };
+    const projectsStoreAdapter: TodoCommandStore = {
+        toggle: (item) => dispatchItem("toggle", item),
+        updatePriority: (item, p) =>
+            dispatchItem("updatePriority", item, p),
+        addTodo: async (text, section) => {
+            // addTodo isn't a per-item dispatch — projectsTodo has a
+            // command-palette flow that picks a project first. The
+            // local `todoNewCmd` keeps that UX; this stub here just
+            // exists to satisfy the adapter contract.
+            void text;
+            void section;
+        },
+        moveTodo: (item, section) => dispatchItem("moveTodo", item, section),
+        archiveTodo: (item) => dispatchItem("archiveTodo", item),
+        rollbackTodo: (item) => dispatchItem("rollbackTodo", item),
+        archiveSection: async (item) => {
+            const sub = getSubStore(item.projectPath ?? "");
+            if (!sub) return;
+            await (sub as unknown as {
+                archiveSection: (i: TodoEngineItem) => Promise<void>;
+            }).archiveSection(item);
+        },
+        unarchiveSection: async (item) => {
+            const sub = getSubStore(item.projectPath ?? "");
+            if (!sub) return;
+            await (sub as unknown as {
+                unarchiveSection: (i: TodoEngineItem) => Promise<void>;
+            }).unarchiveSection(item);
+        },
+        deleteSection: async (item) => {
+            const sub = getSubStore(item.projectPath ?? "");
+            if (!sub) return;
+            await (sub as unknown as {
+                deleteSection: (i: TodoEngineItem) => Promise<void>;
+            }).deleteSection(item);
+        },
+        updateText: (line, text) =>
+            dispatchItem("updateText", {
+                line,
+                text,
+                checked: false,
+                kind: "checkbox",
+            } as TodoEngineItem),
+        deleteTodo: (item) => dispatchItem("deleteTodo", item),
+        reset: async () => {
+            await store.load();
+        },
+    };
+    const projectsTreeAdapter: TodoCommandTreeProvider = {
+        toggleShowCompleted: () => {
+            provider.toggleShowCompleted();
+        },
+        isShowingCompleted: () => provider.isShowingCompleted(),
+        isPriorityEnabled: (p) => provider.isPriorityEnabled(p),
+        togglePriority: (p) => {
+            provider.togglePriorityFilter(p);
+        },
+        // projectsTodo panel only supports section / priority views;
+        // the factory's ViewFile command is a no-op for this panel.
+        // The provider doesn't expose setViewType/getViewType because
+        // it doesn't have a "File" view; cast through unknown so the
+        // factory's optional accessors don't fail typecheck.
+        setViewType: (t: "section" | "priority" | "file") => {
+            (provider as unknown as {
+                setViewType?: (t: "section" | "priority" | "file") => void;
+            }).setViewType?.(t);
+        },
+        getViewType: () =>
+            (provider as unknown as {
+                getViewType?: () => "section" | "priority" | "file";
+            }).getViewType?.() ?? "section",
+        getSectionList: () => [
+            "Default",
+            ...store
+                .getStores()
+                .keys()
+                .next()
+                .value
+                ? ""
+                : "",
+        ].filter(Boolean),
+    };
+    const projectsPlanAdapter: TodoCommandPlanActions = {
+        complete: (root, name) => completePlanFs(root, name),
+        backlog: (root, name) => backlogPlanFs(root, name),
+        archive: (root, name) => archivePlanFs(root, name),
+        delete: (root, name) => deletePlanFs(root, name),
+    };
+    const projectsFactorySet = createTodoCommands({
+        prefix: "projectsTodo",
+        log: ctx.shared.log,
+        showInfo: (m) => vscode.window.showInformationMessage(m),
+        showError: (m) => vscode.window.showErrorMessage(m),
+        refreshTree: () => {
+            refreshProjectsTodoFilterBadge();
+        },
+        workspaceFolder: ctx.workspaceFolder,
+        getActiveItem: () => undefined,
+        store: projectsStoreAdapter,
+        treeProvider: projectsTreeAdapter,
+        planActions: projectsPlanAdapter,
+        reportPlanActionError,
+    } satisfies TodoCommandContext);
+
     // Drive the native checkbox click.
     //   - `kind: "checkbox"`: toggle via the per-project sub-store.
     //   - `kind: "plan"`: route through `superset.projectsTodoCompletePlan`,
@@ -175,44 +315,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
-    const toggleCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoToggle",
-        async (item?: ProjectTodoItem) => {
-            if (!item || item.kind === "list") return;
-            if (item.kind === "plan") return;
-            const subStore = store.getStore(item.projectPath);
-            if (subStore) {
-                await subStore.toggle(item);
-            }
-        }
-    );
 
-    const changePriorityCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoChangePriority",
-        async (item?: ProjectTodoItem) => {
-            if (!item || item.kind !== "checkbox") return;
-            const subStore = store.getStore(item.projectPath);
-            if (!subStore) return;
-
-            const currentMatch = item.text.match(/^(\[|\()?(P[0-2])(\]|\))?/i);
-            const currentPriority = currentMatch?.[2]?.toUpperCase() || "None";
-
-            const pick = await vscode.window.showQuickPick(
-                [
-                    { label: "P0", description: "Highest priority" },
-                    { label: "P1", description: "Medium priority" },
-                    { label: "P2", description: "Low priority" },
-                    { label: "None", description: "No priority" },
-                ],
-                {
-                    placeHolder: `Current: ${currentPriority} — select new priority`,
-                }
-            );
-
-            if (!pick) return;
-            await subStore.updatePriority(item, pick.label as "P0" | "P1" | "P2" | "None");
-        }
-    );
 
     const todoNewCmd = vscode.commands.registerCommand(
         "superset.projectsTodoNew",
@@ -368,136 +471,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
      * `loaded`, which ProjectsTodoStore re-emits to the tree
      * provider, which then refreshes the row out of view.
      */
-    const completePlanCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoCompletePlan",
-        async (item?: ProjectTodoItem) => {
-            if (!item?.filePath || !item.projectPath) return;
-            const basename = path.basename(item.filePath);
-            try {
-                await completePlanFs(item.projectPath, basename);
-                await store.getStore(item.projectPath)?.reset();
-                vscode.window.showInformationMessage(
-                    `Plan moved to docs/specs/: ${basename}`,
-                );
-            } catch (err) {
-                reportPlanActionError("complete", basename, err);
-            }
-        }
-    );
 
-    const backlogPlanCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoBacklogPlan",
-        async (item?: ProjectTodoItem) => {
-            if (!item?.filePath || !item.projectPath) return;
-            const basename = path.basename(item.filePath);
-            try {
-                await backlogPlanFs(item.projectPath, basename);
-                await store.getStore(item.projectPath)?.reset();
-                vscode.window.showInformationMessage(
-                    `Plan moved to docs/backlog/: ${basename}`,
-                );
-            } catch (err) {
-                reportPlanActionError("backlog", basename, err);
-            }
-        }
-    );
 
-    const archivePlanCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoArchivePlan",
-        async (item?: ProjectTodoItem) => {
-            if (!item?.filePath || !item.projectPath) return;
-            const basename = path.basename(item.filePath);
-            try {
-                await archivePlanFs(item.projectPath, basename);
-                await store.getStore(item.projectPath)?.reset();
-                vscode.window.showInformationMessage(
-                    `Plan moved to plans/archive/: ${basename}`,
-                );
-            } catch (err) {
-                reportPlanActionError("archive", basename, err);
-            }
-        }
-    );
 
-    const deletePlanCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoDeletePlan",
-        async (item?: ProjectTodoItem) => {
-            if (!item?.filePath || !item.projectPath) return;
-            const basename = path.basename(item.filePath);
-            try {
-                await deletePlanFs(item.projectPath, basename);
-                await store.getStore(item.projectPath)?.reset();
-                vscode.window.showInformationMessage(`Plan deleted: ${basename}`);
-            } catch (err) {
-                reportPlanActionError("delete", basename, err);
-            }
-        }
-    );
 
-    const copyTodoCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoCopy",
-        async (item?: ProjectTodoItem) => {
-            if (!item || !item.text) return;
-            try {
-                // Plan rows: copy `[title](file://...)` so the user
-                // can paste a clickable Markdown link into another
-                // doc. Plain text fallback otherwise.
-                const planCopy = formatPlanCopyText(item);
-                const payload = planCopy ?? item.text;
-                await vscode.env.clipboard.writeText(payload);
-            } catch (err) {
-                vscode.window.showErrorMessage(`Failed to copy: ${err}`);
-            }
-        }
-    );
 
-    const archiveTodoCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoArchive",
-        async (item?: ProjectTodoItem) => {
-            if (!item) return;
-            if (item.kind === "plan") return;
-            const subStore = store.getStore(item.projectPath);
-            if (subStore) {
-                await subStore.archiveTodo(item);
-            }
-        }
-    );
 
-    const rollbackTodoCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoRollback",
-        async (item?: ProjectTodoItem) => {
-            if (!item) return;
-            if (item.kind === "plan") return;
-            const subStore = store.getStore(item.projectPath);
-            if (subStore) {
-                await subStore.rollbackTodo(item);
-            }
-        }
-    );
 
-    const archiveSectionCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoArchiveSection",
-        async (item?: ProjectTodoItem) => {
-            if (!item) return;
-            if (item.text === "Plans") return;
-            const subStore = store.getStore(item.projectPath);
-            if (subStore) {
-                await subStore.archiveSection(item);
-            }
-        }
-    );
 
-    const unarchiveSectionCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoUnarchiveSection",
-        async (item?: ProjectTodoItem) => {
-            if (!item) return;
-            if (item.text === "Plans") return;
-            const subStore = store.getStore(item.projectPath);
-            if (subStore) {
-                await subStore.unarchiveSection(item);
-            }
-        }
-    );
 
     const changeSectionCmd = vscode.commands.registerCommand(
         "superset.projectsTodoChangeSection",
@@ -567,26 +548,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
-    const todoRenameCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoRename",
-        async (item?: ProjectTodoItem) => {
-            if (!item) return;
-            if (item.kind !== "checkbox" && item.kind !== "list") return;
-            const subStore = store.getStore(item.projectPath);
-            if (!subStore) return;
-
-            const newText = await vscode.window.showInputBox({
-                prompt: "重新命名待辦事項 (Rename TODO Item)",
-                value: item.text,
-            });
-
-            if (newText === undefined) return;
-            const trimmed = newText.trim();
-            if (trimmed === "" || trimmed === item.text) return;
-
-            await subStore.updateText(item.line, trimmed);
-        }
-    );
 
     const deleteTodoCmd = vscode.commands.registerCommand(
         "superset.projectsTodoDelete",
@@ -630,65 +591,26 @@ export function register(ctx: FeatureContext): FeatureHandle {
         );
     };
 
-    const makePriorityToggleCmds = (p: "P0" | "P1" | "P2") => {
-        const handler = () => {
-            provider.togglePriorityFilter(p);
-            syncPriorityContext();
-            refreshProjectsTodoFilterBadge();
-        };
-        return [
-            vscode.commands.registerCommand(`superset.projectsTodoFilter${p}`, handler),
-            vscode.commands.registerCommand(`superset.projectsTodoFilter${p}On`, handler),
-        ];
-    };
 
-    const [filterP0Cmd, filterP0OnCmd] = makePriorityToggleCmds("P0");
-    const [filterP1Cmd, filterP1OnCmd] = makePriorityToggleCmds("P1");
-    const [filterP2Cmd, filterP2OnCmd] = makePriorityToggleCmds("P2");
 
     syncPriorityContext();
 
-    const hideCompletedCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoFilterHideCompleted",
-        applyFilterToggle
-    );
 
-    const showAllCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoFilterShowAll",
-        applyFilterToggle
-    );
 
     ctx.subscriptions.push(
         openProjectCmd,
-        toggleCmd,
-        changePriorityCmd,
         todoNewCmd,
         openTodoFileCmd,
         openTodoLinkCmd,
-        completePlanCmd,
-        backlogPlanCmd,
-        archivePlanCmd,
-        deletePlanCmd,
-        copyTodoCmd,
-        archiveTodoCmd,
-        rollbackTodoCmd,
-        archiveSectionCmd,
-        unarchiveSectionCmd,
         changeSectionCmd,
         deleteSectionCmd,
-        todoRenameCmd,
         deleteTodoCmd,
-        hideCompletedCmd,
-        showAllCmd,
-        filterP0Cmd,
-        filterP0OnCmd,
-        filterP1Cmd,
-        filterP1OnCmd,
-        filterP2Cmd,
-        filterP2OnCmd,
         view,
         projectsWatcher,
         plansWatcher,
+        // todoEngine factory-issued superset.projectsTodo* commands.
+        // Each handler delegates back to the per-project sub-store.
+        ...projectsFactorySet.disposables,
         // TreeViewRegistry entry — see TODO/mDNS wiring notes.
         treeViewEntry ?? { dispose: () => undefined },
         { dispose: () => provider.stop() }
@@ -698,32 +620,12 @@ export function register(ctx: FeatureContext): FeatureHandle {
         dispose() {
             provider.stop();
             openProjectCmd.dispose();
-            toggleCmd.dispose();
-            changePriorityCmd.dispose();
             todoNewCmd.dispose();
             openTodoFileCmd.dispose();
             openTodoLinkCmd.dispose();
-            completePlanCmd.dispose();
-            backlogPlanCmd.dispose();
-            archivePlanCmd.dispose();
-            deletePlanCmd.dispose();
-            copyTodoCmd.dispose();
-            archiveTodoCmd.dispose();
-            rollbackTodoCmd.dispose();
-            archiveSectionCmd.dispose();
-            unarchiveSectionCmd.dispose();
             changeSectionCmd.dispose();
             deleteSectionCmd.dispose();
-            todoRenameCmd.dispose();
             deleteTodoCmd.dispose();
-            hideCompletedCmd.dispose();
-            showAllCmd.dispose();
-            filterP0Cmd.dispose();
-            filterP0OnCmd.dispose();
-            filterP1Cmd.dispose();
-            filterP1OnCmd.dispose();
-            filterP2Cmd.dispose();
-            filterP2OnCmd.dispose();
             view.dispose();
             projectsWatcher.dispose();
             plansWatcher.dispose();

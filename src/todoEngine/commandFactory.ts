@@ -133,13 +133,13 @@ export function createTodoCommands(
     add("FilterP2Toggle", "FilterP2", togglePriority("P2"));
     add("FilterP2ToggleOn", "FilterP2On", togglePriority("P2"));
     add("ViewSec", "ViewSec", () =>
-        ctx.treeProvider.setViewType("section")
+        ctx.treeProvider.setViewType?.("section")
     );
     add("ViewPX", "ViewPX", () =>
-        ctx.treeProvider.setViewType("priority")
+        ctx.treeProvider.setViewType?.("priority")
     );
     add("ViewFile", "ViewFile", () =>
-        ctx.treeProvider.setViewType("file")
+        ctx.treeProvider.setViewType?.("file")
     );
 
     // ── Mutation commands ──────────────────────────────────────
