@@ -91,6 +91,16 @@
                 "icon": "$(target)"
             },
             {
+                "command": "superset.openSettings",
+                "title": "Superset: Open Settings",
+                "icon": "$(settings-gear)"
+            },
+            {
+                "command": "superset.showDiagnostics",
+                "title": "Superset: Show Diagnostics",
+                "icon": "$(pulse)"
+            },
+            {
                 "command": "superset.openTuiTerminal",
                 "title": "Superset: Open TUI Terminal"
             },

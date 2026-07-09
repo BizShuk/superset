@@ -16,6 +16,18 @@ import { collectSupersetKeys } from "./resetCaches";
 import { getDiagnosticChannel, getPluginManager } from "./crossModuleState";
 import { registerInstallCommands } from "./installCommands";
 import { getTreeViewRegistry } from "./plugin/treeViewRegistry";
+import {
+    renderDiagnosticsMarkdown,
+    renderSettingsMarkdown,
+    type DiagnosticsSnapshot,
+} from "./diagnosticsPanel";
+import type { ExtensionManifest } from "./diagnosticsPanel.types";
+// `package.json` is shipped as a real file; the build emits it to
+// `out/extension.js`'s sibling, so we can `require` it. We type the
+// return as our narrow `ExtensionManifest` so the renderer stays
+// free of `vscode` types.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const packageJson: ExtensionManifest = require("../package.json");
 
 export const GLOBAL_COMMANDS_PLUGIN_ID = "globalCommands";
 
@@ -144,6 +156,67 @@ export const globalCommandsPlugin: ExtensionPlugin = {
                         args.viewId,
                         args.predicate,
                         ctx.log
+                    );
+                }
+            )
+        );
+
+        // Open Settings — render the registered `superset.*` command
+        // surface as a Markdown overview, then open in the markdown
+        // preview. Minimal viable version of the original
+        // OpenSettings WebView plan (☆5) — the WebView can be
+        // layered on top later without changing this command.
+        ctx.registerDisposable(
+            vscode.commands.registerCommand(
+                "superset.openSettings",
+                async () => {
+                    const md = renderSettingsMarkdown(packageJson);
+                    const doc = await vscode.workspace.openTextDocument({
+                        content: md,
+                        language: "markdown",
+                    });
+                    await vscode.commands.executeCommand(
+                        "markdown.showPreview",
+                        doc.uri
+                    );
+                }
+            )
+        );
+
+        // Show Diagnostics — one-shot snapshot of every subsystem.
+        // Pulls counts from the live PluginManager (the
+        // PluginManager doesn't currently expose per-plugin state
+        // for terminals/mDNS counts, so the snapshot is best-effort
+        // with `0` placeholders for subsystems that don't expose a
+        // counter yet). Future iterations can pipe real counts once
+        // the registries expose observers.
+        ctx.registerDisposable(
+            vscode.commands.registerCommand(
+                "superset.showDiagnostics",
+                async () => {
+                    const manager = getPluginManager();
+                    const pluginIds = manager
+                        ? (manager as unknown as {
+                              listIds?: () => string[];
+                          }).listIds?.() ?? []
+                        : [];
+                    const snapshot: DiagnosticsSnapshot = {
+                        capturedAt: new Date(),
+                        terminalCount: 0,
+                        unseenTerminalCount: 0,
+                        mDNSServiceCount: 0,
+                        todoItemCount: 0,
+                        projectsTodoProjectCount: 0,
+                        activePluginIds: pluginIds,
+                    };
+                    const md = renderDiagnosticsMarkdown(snapshot);
+                    const doc = await vscode.workspace.openTextDocument({
+                        content: md,
+                        language: "markdown",
+                    });
+                    await vscode.commands.executeCommand(
+                        "markdown.showPreview",
+                        doc.uri
                     );
                 }
             )
