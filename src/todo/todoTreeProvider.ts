@@ -269,14 +269,21 @@ export class TodoTreeProvider
     }
 
     /**
-     * Render a `kind: "plan"` item — a read-only entry synthesised
-     * from a file under the workspace's `plans/` folder. Plans are
-     * never toggleable (no `checkboxState`), and we deliberately do
-     * NOT set `item.command` here: opening happens via the inline
-     * "Open" icon button that `package.json` wires to
-     * `superset.todoOpenPlan` via the `viewItem == todoPlan`
-     * `group: "inline"` menu entry — the same pattern as
-     * `todoOpenLink`.
+     * Render a `kind: "plan"` item — a synthetic entry backed by a
+     * file under the workspace's `plans/` folder.
+     *
+     * The row carries a native checkbox column (`checkboxState =
+     * Unchecked`): clicking the checkbox fires
+     * `onDidChangeCheckboxState` in the index handler, which routes
+     * to `superset.todoCompletePlan` and moves the file to
+     * `docs/specs/`. The row then disappears (the plan no longer
+     * lives in `plans/`), so the user never sees the checkbox in a
+     * "checked" state — disappearance IS the feedback.
+     *
+     * Opening happens via the inline "Open" icon button wired to
+     * `superset.todoOpenLink` via the `viewItem == todoPlan`
+     * `group: "inline"` menu entry — the same pattern as the rest
+     * of the link rows.
      */
     private buildPlanItem(element: TodoItem): vscode.TreeItem {
         const item = new vscode.TreeItem(element.text);
@@ -285,6 +292,7 @@ export class TodoTreeProvider
         item.tooltip = `${element.description ?? element.text}\n${element.filePath ?? ""}`;
         item.collapsibleState = vscode.TreeItemCollapsibleState.None;
         item.contextValue = "todoPlan";
+        item.checkboxState = vscode.TreeItemCheckboxState.Unchecked;
         return item;
     }
 

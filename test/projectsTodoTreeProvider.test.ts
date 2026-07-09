@@ -401,13 +401,17 @@ describe("ProjectsTodoTreeProvider — workspace plans row", () => {
 
         // Only alpha and beta contribute; playground/exp is two layers deep.
         expect(plans).toHaveLength(2);
-        const basenames = plans.map((p) => p.text).sort();
+        // Row text is the H1 title (human-readable); filename lives in
+        // `description` for at-a-glance reference (see plansSource.ts).
+        const titles = plans.map((p) => p.text).sort();
+        expect(titles).toEqual(["Plan A", "Plan B"]);
+        const basenames = plans.map((p) => p.description).sort();
         expect(basenames).toEqual(["2026-07-01-a", "2026-07-02-b"]);
 
         // Each plan carries its own projectName / projectPath for inline open
         const byName = new Map(plans.map((p) => [p.text, p]));
-        expect(byName.get("2026-07-01-a")!.projectName).toBe("alpha");
-        expect(byName.get("2026-07-02-b")!.projectName).toBe("beta");
+        expect(byName.get("Plan A")!.projectName).toBe("alpha");
+        expect(byName.get("Plan B")!.projectName).toBe("beta");
     });
 
     it("Plans row is omitted when no workspace plans exist", async () => {

@@ -4,9 +4,41 @@ import type { FeatureContext, FeatureHandle } from "../shared";
 import { TodoStore } from "./todoStore";
 import { TodoTreeProvider, extractLink, resolveTodoLink } from "./todoTreeProvider";
 import { computeTodoBadgeTitle } from "./badge";
+import {
+    completePlan as completePlanFs,
+    backlogPlan as backlogPlanFs,
+    archivePlan as archivePlanFs,
+    deletePlan as deletePlanFs,
+    PlanActionError,
+} from "./planActions";
+import { formatPlanCopyText } from "./plansSource";
 import type { TodoItem } from "./types";
 
 const TODO_VIEW_TITLE = "TODO";
+
+/** Map a `PlanActionError` to a contextual user-visible message. */
+function reportPlanActionError(
+    action: "complete" | "backlog" | "archive" | "delete",
+    basename: string,
+    err: unknown,
+): void {
+    if (err instanceof PlanActionError) {
+        const verb = action === "delete" ? "delete" : `move (${action})`;
+        if (err.code === "exists") {
+            vscode.window.showErrorMessage(
+                `Cannot ${verb} "${basename}": a file already exists at the destination. Resolve manually and retry.`,
+            );
+        } else if (err.code === "missing") {
+            vscode.window.showErrorMessage(
+                `Cannot ${verb} "${basename}": source plan no longer exists (was it moved already?).`,
+            );
+        } else {
+            vscode.window.showErrorMessage(`Failed to ${verb} "${basename}": ${err.message}`);
+        }
+    } else {
+        vscode.window.showErrorMessage(`Failed to ${action} plan "${basename}": ${err}`);
+    }
+}
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const store = new TodoStore(ctx.workspaceFolder);
@@ -105,12 +137,25 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // Drive the native checkbox click. The framework only fires this when
     // the checkbox icon (not the row text) is clicked. Each entry is the
-    // (item, newState) pair the framework hands us — we forward to the
-    // store, which writes the file and emits the change that re-renders.
+    // (item, newState) pair the framework hands us.
+    //
+    // Two row kinds carry a checkbox:
+    //   - `kind: "checkbox"` (regular todo): toggle the checked state
+    //     via the store, which writes the file and emits the change
+    //     that re-renders the tree with the new state.
+    //   - `kind: "plan"`: route through `superset.todoCompletePlan`,
+    //     which moves the file to `docs/specs/` and refreshes the
+    //     store. The row disappears from the tree entirely, so the
+    //     checkbox is never seen in a "checked" state.
     view.onDidChangeCheckboxState?.(async (e) => {
         for (const [item] of e.items) {
             if (item.kind === "checkbox") {
                 await store.toggle(item);
+            } else if (item.kind === "plan") {
+                await vscode.commands.executeCommand(
+                    "superset.todoCompletePlan",
+                    item,
+                );
             }
         }
     });
@@ -204,14 +249,19 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     const todoNewCmd = vscode.commands.registerCommand(
         "superset.todoNew",
-        async () => {
+        async (item?: TodoItem) => {
+            // When invoked from the inline "+" next to a section row, VSCode
+            // passes the section's TodoItem as the first arg — use its text
+            // as the target section. From the top-level nav "+" (no arg),
+            // or from a non-section context, fall back to "Default".
+            const sectionName = item?.kind === "section" ? item.text : "Default";
             const text = await vscode.window.showInputBox({
                 prompt: "新增待辦事項描述 (New TODO Description)",
                 placeHolder: "輸入待辦事項內容...",
             });
             if (!text || text.trim() === "") return;
 
-            await store.addTodo(text.trim(), "Default");
+            await store.addTodo(text.trim(), sectionName);
         }
     );
 
@@ -236,32 +286,41 @@ export function register(ctx: FeatureContext): FeatureHandle {
     );
 
     /**
-     * Open a `plans/*.md` file in the markdown preview. Wired to the
-     * inline "Open" icon button on every `kind: "plan"` row via the
-     * `viewItem == todoPlan` `group: "inline"` menu entry in
-     * `package.json` — symmetric with `superset.todoOpenLink`.
+     * Open the target of a `kind: "checkbox/list"` row that carries
+     * a `[text](url)` link in its label, OR open a `kind: "plan"` row's
+     * backing `.md` file in the markdown preview.
+     *
+     * Wired to the inline `$(link-external)` icon button on every
+     * `viewItem == todoCheckboxWithLink || todoListWithLink || ...`
+     * row PLUS every `viewItem == todoPlan` row via the
+     * `group: "inline"` menu entries in `package.json`. The plan case
+     * was previously its own `superset.todoOpenPlan` command but was
+     * unified here so the icon stays consistent and the menu wiring
+     * stays minimal.
      */
-    const openPlanCmd = vscode.commands.registerCommand(
-        "superset.todoOpenPlan",
-        async (arg?: { filePath?: string; title?: string }) => {
-            if (!arg?.filePath) return;
-            const uri = vscode.Uri.file(arg.filePath);
-            try {
-                const doc = await vscode.workspace.openTextDocument(uri);
-                if (doc.languageId !== "markdown") {
-                    await vscode.languages.setTextDocumentLanguage(doc, "markdown");
-                }
-                await vscode.commands.executeCommand("markdown.showPreview", uri);
-            } catch (err) {
-                vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
-            }
-        }
-    );
-
     const openTodoLinkCmd = vscode.commands.registerCommand(
         "superset.todoOpenLink",
         async (item?: TodoItem) => {
             if (!item) return;
+
+            // Plan rows: open the backing `.md` file directly via
+            // markdown preview. `item.text` is the H1 title (no link
+            // syntax), so we must short-circuit BEFORE extractLink().
+            if (item.kind === "plan") {
+                if (!item.filePath) return;
+                const uri = vscode.Uri.file(item.filePath);
+                try {
+                    const doc = await vscode.workspace.openTextDocument(uri);
+                    if (doc.languageId !== "markdown") {
+                        await vscode.languages.setTextDocumentLanguage(doc, "markdown");
+                    }
+                    await vscode.commands.executeCommand("markdown.showPreview", uri);
+                } catch (err) {
+                    vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
+                }
+                return;
+            }
+
             const target = extractLink(item.text);
             if (!target) return;
 
@@ -287,14 +346,102 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    /**
+     * Plan lifecycle actions — every command takes a `kind: "plan"`
+     * row, derives the basename from `item.filePath`, calls the
+     * matching pure helper from `./planActions`, then refreshes the
+     * store so the moved/deleted file disappears from the tree.
+     *
+     *   completePlan → plans/<f> → docs/specs/<f>    (inline ✓ button)
+     *   backlogPlan  → plans/<f> → docs/backlog/<f> (2_edit@1)
+     *   archivePlan  → plans/<f> → plans/archive/<f> (2_edit@2)
+     *   deletePlan   → plans/<f> → (gone)            (3_delete)
+     *
+     * `planActions` is pure (no vscode import) so its errors are
+     * surfaced as `PlanActionError`; we map them to user-friendly
+     * VSCode notifications here.
+     */
+    const completePlanCmd = vscode.commands.registerCommand(
+        "superset.todoCompletePlan",
+        async (item?: TodoItem) => {
+            if (!item?.filePath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await completePlanFs(ctx.workspaceFolder, basename);
+                await store.reset();
+                vscode.window.showInformationMessage(
+                    `Plan moved to docs/specs/: ${basename}`,
+                );
+            } catch (err) {
+                reportPlanActionError("complete", basename, err);
+            }
+        }
+    );
+
+    const backlogPlanCmd = vscode.commands.registerCommand(
+        "superset.todoBacklogPlan",
+        async (item?: TodoItem) => {
+            if (!item?.filePath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await backlogPlanFs(ctx.workspaceFolder, basename);
+                await store.reset();
+                vscode.window.showInformationMessage(
+                    `Plan moved to docs/backlog/: ${basename}`,
+                );
+            } catch (err) {
+                reportPlanActionError("backlog", basename, err);
+            }
+        }
+    );
+
+    const archivePlanCmd = vscode.commands.registerCommand(
+        "superset.todoArchivePlan",
+        async (item?: TodoItem) => {
+            if (!item?.filePath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await archivePlanFs(ctx.workspaceFolder, basename);
+                await store.reset();
+                vscode.window.showInformationMessage(
+                    `Plan moved to plans/archive/: ${basename}`,
+                );
+            } catch (err) {
+                reportPlanActionError("archive", basename, err);
+            }
+        }
+    );
+
+    const deletePlanCmd = vscode.commands.registerCommand(
+        "superset.todoDeletePlan",
+        async (item?: TodoItem) => {
+            if (!item?.filePath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await deletePlanFs(ctx.workspaceFolder, basename);
+                await store.reset();
+                vscode.window.showInformationMessage(`Plan deleted: ${basename}`);
+            } catch (err) {
+                reportPlanActionError("delete", basename, err);
+            }
+        }
+    );
+
     const copyTodoCmd = vscode.commands.registerCommand(
         "superset.todoCopy",
         async (item?: TodoItem) => {
             if (!item || !item.text) return;
             try {
-                await vscode.env.clipboard.writeText(item.text);
+                // Plan rows: copy `[title](file://...)` so the user
+                // can paste a clickable Markdown link into another
+                // doc. Falls back to plain text if `formatPlanCopyText`
+                // rejects the input (defensive — should not happen
+                // for menu-driven invocations on a plan row).
+                const planCopy = formatPlanCopyText(item);
+                const payload = planCopy ?? item.text;
+                await vscode.env.clipboard.writeText(payload);
             } catch (err) {
-                vscode.window.showErrorMessage(`Failed to copy todo text: ${err}`);
+                vscode.window.showErrorMessage(`Failed to copy: ${err}`);
             }
         }
     );
@@ -466,8 +613,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
         changePriorityCmd,
         todoNewCmd,
         openTodoFileCmd,
-        openPlanCmd,
         openTodoLinkCmd,
+        completePlanCmd,
+        backlogPlanCmd,
+        archivePlanCmd,
+        deletePlanCmd,
         copyTodoCmd,
         archiveTodoCmd,
         rollbackTodoCmd,
@@ -501,8 +651,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
             changePriorityCmd.dispose();
             todoNewCmd.dispose();
             openTodoFileCmd.dispose();
-            openPlanCmd.dispose();
             openTodoLinkCmd.dispose();
+            completePlanCmd.dispose();
+            backlogPlanCmd.dispose();
+            archivePlanCmd.dispose();
+            deletePlanCmd.dispose();
             copyTodoCmd.dispose();
             archiveTodoCmd.dispose();
             rollbackTodoCmd.dispose();

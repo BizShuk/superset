@@ -5,9 +5,41 @@ import { ProjectsTodoStore } from "./projectsTodoStore";
 import { ProjectsTodoTreeProvider } from "./projectsTodoTreeProvider";
 import { computeTodoBadgeTitle } from "../todo/badge";
 import { extractLink, resolveTodoLink } from "../todo/todoTreeProvider";
+import {
+    completePlan as completePlanFs,
+    backlogPlan as backlogPlanFs,
+    archivePlan as archivePlanFs,
+    deletePlan as deletePlanFs,
+    PlanActionError,
+} from "../todo/planActions";
+import { formatPlanCopyText } from "../todo/plansSource";
 import type { ProjectTodoItem } from "./types";
 
 const PROJECTS_TODO_VIEW_TITLE = "Projects TODO";
+
+/** Map a `PlanActionError` to a contextual user-visible message. */
+function reportPlanActionError(
+    action: "complete" | "backlog" | "archive" | "delete",
+    basename: string,
+    err: unknown,
+): void {
+    if (err instanceof PlanActionError) {
+        const verb = action === "delete" ? "delete" : `move (${action})`;
+        if (err.code === "exists") {
+            vscode.window.showErrorMessage(
+                `Cannot ${verb} "${basename}": a file already exists at the destination. Resolve manually and retry.`,
+            );
+        } else if (err.code === "missing") {
+            vscode.window.showErrorMessage(
+                `Cannot ${verb} "${basename}": source plan no longer exists (was it moved already?).`,
+            );
+        } else {
+            vscode.window.showErrorMessage(`Failed to ${verb} "${basename}": ${err.message}`);
+        }
+    } else {
+        vscode.window.showErrorMessage(`Failed to ${action} plan "${basename}": ${err}`);
+    }
+}
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const store = new ProjectsTodoStore();
@@ -94,7 +126,13 @@ export function register(ctx: FeatureContext): FeatureHandle {
     plansWatcher.onDidCreate(onPlansFileChanged);
     plansWatcher.onDidDelete(onPlansFileChanged);
 
-    // Drive the native checkbox click
+    // Drive the native checkbox click.
+    //   - `kind: "checkbox"`: toggle via the per-project sub-store.
+    //   - `kind: "plan"`: route through `superset.projectsTodoCompletePlan`,
+    //     which moves the file to `docs/specs/` and triggers a full
+    //     store reload. The plan row disappears (the moved file is
+    //     no longer in `plans/`), so the checkbox is never seen in
+    //     a "checked" state.
     view.onDidChangeCheckboxState?.(async (e) => {
         for (const [item] of e.items) {
             const pItem = item as ProjectTodoItem;
@@ -103,6 +141,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
                 if (subStore) {
                     await subStore.toggle(pItem);
                 }
+            } else if (pItem.kind === "plan") {
+                await vscode.commands.executeCommand(
+                    "superset.projectsTodoCompletePlan",
+                    pItem,
+                );
             }
         }
     });
@@ -187,13 +230,19 @@ export function register(ctx: FeatureContext): FeatureHandle {
                 return;
             }
 
+            // When invoked from the inline "+" next to a section row,
+            // VSCode passes the section's ProjectTodoItem — use its text
+            // as the target section. From the project-row "+" or top-level
+            // nav (no section context), fall back to "Default".
+            const sectionName = item?.kind === "section" ? item.text : "Default";
+
             const text = await vscode.window.showInputBox({
                 prompt: "新增待辦事項描述 (New TODO Description)",
                 placeHolder: "輸入待辦事項內容...",
             });
             if (!text || text.trim() === "") return;
 
-            await subStore.addTodo(text.trim(), "Default");
+            await subStore.addTodo(text.trim(), sectionName);
         }
     );
 
@@ -235,33 +284,40 @@ export function register(ctx: FeatureContext): FeatureHandle {
     );
 
     /**
-     * Open a `plans/*.md` file in the markdown preview. Wired to the
-     * inline "Open" icon button on every `kind: "plan"` row in the
-     * projects TODO tree via the `viewItem == projectsTodoPlan`
-     * `group: "inline"` menu entry in `package.json` — symmetric with
-     * `superset.projectsTodoOpenLink`.
+     * Open the target of a `kind: "checkbox/list"` row that carries
+     * a `[text](url)` link in its label, OR open a `kind: "plan"` row's
+     * backing `.md` file in the markdown preview.
+     *
+     * Wired to the inline `$(link-external)` icon button on every
+     * `viewItem == projectsTodoCheckboxWithLink || ...` row PLUS every
+     * `viewItem == projectsTodoPlan` row via the `group: "inline"` menu
+     * entries in `package.json`. The plan case was previously its own
+     * `superset.projectsTodoOpenPlan` command but was unified here so
+     * the icon stays consistent and the menu wiring stays minimal.
      */
-    const openPlanCmd = vscode.commands.registerCommand(
-        "superset.projectsTodoOpenPlan",
-        async (arg?: { filePath?: string; title?: string }) => {
-            if (!arg?.filePath) return;
-            const uri = vscode.Uri.file(arg.filePath);
-            try {
-                const doc = await vscode.workspace.openTextDocument(uri);
-                if (doc.languageId !== "markdown") {
-                    await vscode.languages.setTextDocumentLanguage(doc, "markdown");
-                }
-                await vscode.commands.executeCommand("markdown.showPreview", uri);
-            } catch (err) {
-                vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
-            }
-        }
-    );
-
     const openTodoLinkCmd = vscode.commands.registerCommand(
         "superset.projectsTodoOpenLink",
         async (item?: ProjectTodoItem) => {
             if (!item) return;
+
+            // Plan rows: open the backing `.md` file directly via
+            // markdown preview. `item.text` is the H1 title (no link
+            // syntax), so we must short-circuit BEFORE extractLink().
+            if (item.kind === "plan") {
+                if (!item.filePath) return;
+                const uri = vscode.Uri.file(item.filePath);
+                try {
+                    const doc = await vscode.workspace.openTextDocument(uri);
+                    if (doc.languageId !== "markdown") {
+                        await vscode.languages.setTextDocumentLanguage(doc, "markdown");
+                    }
+                    await vscode.commands.executeCommand("markdown.showPreview", uri);
+                } catch (err) {
+                    vscode.window.showErrorMessage(`Failed to open plan: ${err}`);
+                }
+                return;
+            }
+
             const target = extractLink(item.text);
             if (!target) return;
 
@@ -287,14 +343,99 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    /**
+     * Plan lifecycle actions for the projects overview. Same four
+     * transitions as `src/todo/index.ts` (complete → docs/specs/,
+     * backlog → docs/backlog/, archive → plans/archive/, delete).
+     * The workspace root is `item.projectPath` rather than the
+     * single-workspace root used by the local TODO panel; the
+     * overview can show plans from many projects so each row's
+     * action must target its own project's filesystem.
+     *
+     * After a successful move/delete we re-load the affected sub-
+     * store (not the whole overview) — the sub-store re-emits
+     * `loaded`, which ProjectsTodoStore re-emits to the tree
+     * provider, which then refreshes the row out of view.
+     */
+    const completePlanCmd = vscode.commands.registerCommand(
+        "superset.projectsTodoCompletePlan",
+        async (item?: ProjectTodoItem) => {
+            if (!item?.filePath || !item.projectPath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await completePlanFs(item.projectPath, basename);
+                await store.getStore(item.projectPath)?.reset();
+                vscode.window.showInformationMessage(
+                    `Plan moved to docs/specs/: ${basename}`,
+                );
+            } catch (err) {
+                reportPlanActionError("complete", basename, err);
+            }
+        }
+    );
+
+    const backlogPlanCmd = vscode.commands.registerCommand(
+        "superset.projectsTodoBacklogPlan",
+        async (item?: ProjectTodoItem) => {
+            if (!item?.filePath || !item.projectPath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await backlogPlanFs(item.projectPath, basename);
+                await store.getStore(item.projectPath)?.reset();
+                vscode.window.showInformationMessage(
+                    `Plan moved to docs/backlog/: ${basename}`,
+                );
+            } catch (err) {
+                reportPlanActionError("backlog", basename, err);
+            }
+        }
+    );
+
+    const archivePlanCmd = vscode.commands.registerCommand(
+        "superset.projectsTodoArchivePlan",
+        async (item?: ProjectTodoItem) => {
+            if (!item?.filePath || !item.projectPath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await archivePlanFs(item.projectPath, basename);
+                await store.getStore(item.projectPath)?.reset();
+                vscode.window.showInformationMessage(
+                    `Plan moved to plans/archive/: ${basename}`,
+                );
+            } catch (err) {
+                reportPlanActionError("archive", basename, err);
+            }
+        }
+    );
+
+    const deletePlanCmd = vscode.commands.registerCommand(
+        "superset.projectsTodoDeletePlan",
+        async (item?: ProjectTodoItem) => {
+            if (!item?.filePath || !item.projectPath) return;
+            const basename = path.basename(item.filePath);
+            try {
+                await deletePlanFs(item.projectPath, basename);
+                await store.getStore(item.projectPath)?.reset();
+                vscode.window.showInformationMessage(`Plan deleted: ${basename}`);
+            } catch (err) {
+                reportPlanActionError("delete", basename, err);
+            }
+        }
+    );
+
     const copyTodoCmd = vscode.commands.registerCommand(
         "superset.projectsTodoCopy",
         async (item?: ProjectTodoItem) => {
             if (!item || !item.text) return;
             try {
-                await vscode.env.clipboard.writeText(item.text);
+                // Plan rows: copy `[title](file://...)` so the user
+                // can paste a clickable Markdown link into another
+                // doc. Plain text fallback otherwise.
+                const planCopy = formatPlanCopyText(item);
+                const payload = planCopy ?? item.text;
+                await vscode.env.clipboard.writeText(payload);
             } catch (err) {
-                vscode.window.showErrorMessage(`Failed to copy todo text: ${err}`);
+                vscode.window.showErrorMessage(`Failed to copy: ${err}`);
             }
         }
     );
@@ -512,8 +653,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
         changePriorityCmd,
         todoNewCmd,
         openTodoFileCmd,
-        openPlanCmd,
         openTodoLinkCmd,
+        completePlanCmd,
+        backlogPlanCmd,
+        archivePlanCmd,
+        deletePlanCmd,
         copyTodoCmd,
         archiveTodoCmd,
         rollbackTodoCmd,
@@ -545,8 +689,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
             changePriorityCmd.dispose();
             todoNewCmd.dispose();
             openTodoFileCmd.dispose();
-            openPlanCmd.dispose();
             openTodoLinkCmd.dispose();
+            completePlanCmd.dispose();
+            backlogPlanCmd.dispose();
+            archivePlanCmd.dispose();
+            deletePlanCmd.dispose();
             copyTodoCmd.dispose();
             archiveTodoCmd.dispose();
             rollbackTodoCmd.dispose();

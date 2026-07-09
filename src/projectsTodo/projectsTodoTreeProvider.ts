@@ -73,10 +73,12 @@ export class ProjectsTodoTreeProvider
     }
 
     getTreeItem(element: ProjectTodoItem): vscode.TreeItem {
-        // 0. Plan item — read-only entry from plans/<file>.md.
+        // 0. Plan item — synthetic entry from plans/<file>.md.
         // Symmetric with the local `todoPlan` rendering: file icon,
         // description = title, no `command` (open happens via the
-        // inline menu icon wired in package.json).
+        // inline menu icon wired in package.json). The native
+        // checkbox column routes clicks to the projects-side
+        // complete-plan command via onDidChangeCheckboxState.
         if (element.kind === "plan") {
             const item = new vscode.TreeItem(element.text);
             item.iconPath = new vscode.ThemeIcon("file-text");
@@ -84,6 +86,7 @@ export class ProjectsTodoTreeProvider
             item.tooltip = `${element.description ?? element.text}\n${element.filePath ?? ""}`;
             item.collapsibleState = vscode.TreeItemCollapsibleState.None;
             item.contextValue = "projectsTodoPlan";
+            item.checkboxState = vscode.TreeItemCheckboxState.Unchecked;
             return item;
         }
 

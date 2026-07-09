@@ -7,6 +7,7 @@
 // `TodoStore` / `ProjectsTodoStore`.
 
 import { readdir, readFile, stat } from "fs/promises";
+import { pathToFileURL } from "node:url";
 import * as path from "path";
 import type { TodoItem } from "./types";
 
@@ -105,6 +106,11 @@ export function basenameFallback(basename: string): string {
  * `TodoStore` and `ProjectsTodoStore` can build identical items
  * from the same source.
  *
+ * `text` carries the human-readable title (H1 if present, basename
+ * fallback otherwise) so the row reads like a normal todo item;
+ * `description` shows the raw basename (sans `.md`) so users can
+ * still see the date-prefixed filename at a glance.
+ *
  * `filePath` is set so the tree provider's menu-based open command
  * can resolve the absolute path; `parentSection` is set to the
  * synthetic "Plans" section label so future filter helpers can
@@ -113,8 +119,8 @@ export function basenameFallback(basename: string): string {
 export function planInfoToTodoItem(info: PlanInfo): TodoItem {
     return {
         line: PLAN_ITEM_LINE,
-        text: info.basename.replace(/\.md$/i, ""),
-        description: info.title,
+        text: info.title,
+        description: info.basename.replace(/\.md$/i, ""),
         kind: "plan",
         checked: false,
         children: [],
@@ -147,4 +153,20 @@ export function makePlansSection(items: TodoItem[]): TodoItem {
         children: items,
         description: "Design documents under ./plans/",
     };
+}
+
+/**
+ * Format a plan row's text as a Markdown link `[<title>](file://<path>)`
+ * for the Copy command. Returns `null` when the input isn't a plan
+ * or has no `filePath` — callers should fall back to copying the
+ * plain label in that case (no link to attach).
+ *
+ * Uses `node:url.pathToFileURL` so the path is properly percent-encoded
+ * (spaces become `%20`, etc.) without pulling in a `vscode` import —
+ * keeps this module pure and unit-testable in vitest.
+ */
+export function formatPlanCopyText(item: TodoItem): string | null {
+    if (item.kind !== "plan" || !item.filePath) return null;
+    const url = pathToFileURL(item.filePath).toString();
+    return `[${item.text}](${url})`;
 }

@@ -8,6 +8,7 @@ import {
     basenameFallback,
     planInfoToTodoItem,
     makePlansSection,
+    formatPlanCopyText,
     PLANS_DIR_NAME,
 } from "../src/todo/plansSource";
 
@@ -143,8 +144,8 @@ describe("plansSource", () => {
                 mtimeMs: 12345,
             });
             expect(item.kind).toBe("plan");
-            expect(item.text).toBe("2026-07-08-foo"); // .md stripped
-            expect(item.description).toBe("Foo Title");
+            expect(item.text).toBe("Foo Title"); // H1 title as the main row text
+            expect(item.description).toBe("2026-07-08-foo"); // basename sans .md as secondary
             expect(item.filePath).toBe("/tmp/plans/2026-07-08-foo.md");
             expect(item.checked).toBe(false);
             expect(item.children).toEqual([]);
@@ -178,6 +179,53 @@ describe("plansSource", () => {
             expect(section.level).toBeUndefined();
             expect(section.children).toEqual(items);
             expect(section.description).toContain("plans");
+        });
+    });
+
+    describe("formatPlanCopyText", () => {
+        it("formats a plan row as [title](file://...) markdown link", () => {
+            const item = planInfoToTodoItem({
+                basename: "2026-07-08-foo.md",
+                title: "Foo Title",
+                filePath: "/tmp/plans/2026-07-08-foo.md",
+                mtimeMs: 0,
+            });
+            const out = formatPlanCopyText(item);
+            expect(out).toBe("[Foo Title](file:///tmp/plans/2026-07-08-foo.md)");
+        });
+
+        it("percent-encodes spaces and special chars in the path", () => {
+            const item = planInfoToTodoItem({
+                basename: "x.md",
+                title: "X",
+                filePath: "/tmp/with space/and#hash.md",
+                mtimeMs: 0,
+            });
+            const out = formatPlanCopyText(item);
+            expect(out).toBe("[X](file:///tmp/with%20space/and%23hash.md)");
+        });
+
+        it("returns null for non-plan items", () => {
+            expect(
+                formatPlanCopyText({
+                    kind: "checkbox",
+                    line: 0,
+                    text: "foo",
+                    checked: false,
+                }),
+            ).toBeNull();
+        });
+
+        it("returns null when filePath is missing on a plan item", () => {
+            expect(
+                formatPlanCopyText({
+                    kind: "plan",
+                    line: 0,
+                    text: "no path",
+                    checked: false,
+                    filePath: undefined,
+                }),
+            ).toBeNull();
         });
     });
 });
