@@ -8,10 +8,14 @@
 // `registerInstallCommands()` below.
 
 import * as vscode from "vscode";
-import { type ExtensionPlugin, type PluginContext } from "./plugin";
+import {
+    type ExtensionPlugin,
+    type PluginContext,
+} from "./plugin";
 import { collectSupersetKeys } from "./resetCaches";
 import { getDiagnosticChannel, getPluginManager } from "./crossModuleState";
 import { registerInstallCommands } from "./installCommands";
+import { getTreeViewRegistry } from "./plugin/treeViewRegistry";
 
 export const GLOBAL_COMMANDS_PLUGIN_ID = "globalCommands";
 
@@ -105,6 +109,45 @@ export const globalCommandsPlugin: ExtensionPlugin = {
 
         // Install commands — extracted to ./installCommands for SRP.
         registerInstallCommands(ctx);
+
+        // Cross-panel `superset.revealInTree` command. Walks the
+        // named panel's tree (registered via ctx.registerTreeView)
+        // looking for an item matching `predicate`, then focuses +
+        // selects the matching row. Returns `true` on success, `false`
+        // when the viewId is unknown or the predicate never matches.
+        // Args: { viewId: string, predicate: (item: unknown) => boolean }
+        ctx.registerDisposable(
+            vscode.commands.registerCommand(
+                "superset.revealInTree",
+                async (args?: {
+                    viewId?: string;
+                    predicate?: (item: unknown) => boolean;
+                }) => {
+                    if (
+                        !args ||
+                        typeof args.viewId !== "string" ||
+                        typeof args.predicate !== "function"
+                    ) {
+                        ctx.log(
+                            "globalCommands: revealInTree called without {viewId, predicate}"
+                        );
+                        return false;
+                    }
+                    const registry = getTreeViewRegistry();
+                    if (!registry) {
+                        ctx.log(
+                            "globalCommands: revealInTree — TreeViewRegistry not initialized"
+                        );
+                        return false;
+                    }
+                    return registry.reveal(
+                        args.viewId,
+                        args.predicate,
+                        ctx.log
+                    );
+                }
+            )
+        );
 
         ctx.log("globalCommands: registered");
     },

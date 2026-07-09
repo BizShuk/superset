@@ -44,6 +44,19 @@ export interface PluginContext {
      * sequentially with per-handler error isolation.
      */
     registerResetHandler(handler: () => void | Promise<void>): void;
+
+    /**
+     * Register a `vscode.TreeView` + `TreeDataProvider` with the
+     * shared `TreeViewRegistry` so the `superset.revealInTree`
+     * command can walk this panel's tree. Returns a disposable
+     * the caller is expected to push through `registerDisposable`
+     * so deactivation clears the entry.
+     */
+    registerTreeView(
+        viewId: string,
+        treeView: vscode.TreeView<unknown>,
+        treeDataProvider: vscode.TreeDataProvider<unknown>
+    ): vscode.Disposable;
 }
 
 /**

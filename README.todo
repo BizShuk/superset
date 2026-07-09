@@ -12,14 +12,10 @@
 
 ### Terminals
 
-- [ ] [P1] [feature] Workspace-aware group suggestions — 當新 PTY 終端機開啟時,自動偵測其 cwd/git remote 並與既有群組比對自動歸類 — [plans/2026-07-05-architecture-workspace-aware-group-suggestions.md](plans/2026-07-05-architecture-workspace-aware-group-suggestions.md)
 - [ ] [feature] Group metadata persistence — persist `cwd` / `gitRemote` keys in `context.workspaceState` so the auto-group heuristic survives VSCode restart. See scan note 2026-06-23#2A. — [plans/2026-06-24-feature-group-metadata-persistence.md](plans/2026-06-24-feature-group-metadata-persistence.md)
-- [ ] [feature] Terminal lifecycle audit log — see [plans/2026-06-23-feature-terminal-lifecycle-audit-log.md](plans/2026-06-23-feature-terminal-lifecycle-audit-log.md)
-- [ ] [feature] Terminal fuzzy search — see [plans/2026-06-23-feature-terminal-fuzzy-search.md](plans/2026-06-23-feature-terminal-fuzzy-search.md)
 
 ### mDNS
 
-- [ ] [P2] [feature] mDNS one-click connect — 偵測到服務後「一鍵連」是自然延伸 (SSH/Browser/AirPlay);依 service type 派發對應 opener — [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
 
 ### Topology
 
@@ -33,7 +29,6 @@ _(無 active item)_
 
 - [ ] [P2] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P. — [plans/2026-07-05-architecture-open-settings-webview.md](plans/2026-07-05-architecture-open-settings-webview.md)
 - [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. — [plans/2026-07-05-architecture-panel-layout-persistence.md](plans/2026-07-05-architecture-panel-layout-persistence.md)
-- [ ] [P2] [feature] `Superset: Reveal in Tree` command — given a `TerminalHandle`, focus the `superset.terminals` TreeView and select the matching row. Wires `vscode.commands.executeCommand("treeView.reveal", item)`. Composes with every panel by reusing the same `(viewId, predicate)` helper. See scan note 2026-06-23#4Q. — [plans/2026-07-05-architecture-reveal-in-tree.md](plans/2026-07-05-architecture-reveal-in-tree.md)
 - [ ] [P2] [chore] `Superset: Show Diagnostics` webview — one-click snapshot of every subsystem (terminals / mDNS / topology / todo / engines / activation session), with Copy-to-clipboard and Save-to-file buttons. Complements the existing `superset.showLogs` (time-series log) with a structured "now" view, unblocks GitHub-issue triage. See scan note 2026-06-24#6A. — [plans/2026-06-24-chore-show-diagnostics-webview.md](plans/2026-06-24-chore-show-diagnostics-webview.md)
 - [ ] [P1] [chore] VSIX cross-platform packaging sanity — `.vscodeignore` exclude dev artifacts (test/, src/, scripts/) while intentionally keeping `@homebridge/node-pty-prebuilt-multiarch/prebuilds/` for all target platforms; add `scripts/verify-vsix.sh` that post-checks the .vsix; wire into `npm run build`. See scan note 2026-06-23#5A. ✓ Stage 3 完成,見 [plans/2026-07-05-architecture-vsix-cross-platform-sanity.md](plans/2026-07-05-architecture-vsix-cross-platform-sanity.md)
 - [ ] [P1] [chore] GitHub Actions CI + issue / PR templates — add `.github/workflows/ci.yml` (3-OS matrix: macos / ubuntu / windows, runs `npm test` + `tsc --noEmit`), `.github/workflows/coverage.yml`, `.github/workflows/release.yml`; add `ISSUE_TEMPLATE/`, `PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`. See scan note 2026-06-24#7A. — [plans/2026-06-24-chore-github-actions-ci.md](plans/2026-06-24-chore-github-actions-ci.md)

@@ -13,6 +13,7 @@ import {
 } from "./planActions";
 import { formatPlanCopyText } from "./plansSource";
 import type { TodoItem } from "./types";
+import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 
 const TODO_VIEW_TITLE = "TODO";
 
@@ -57,6 +58,17 @@ export function register(ctx: FeatureContext): FeatureHandle {
         // for the exact row the user clicks, so no cascade.
         manageCheckboxStateManually: true,
     });
+
+    // Wire into the cross-panel TreeViewRegistry so the
+    // `superset.revealInTree` command can walk this panel's tree.
+    // The panel keeps its own dispose chain — the registry entry is
+    // disposed alongside the treeView (see `disposables` below).
+    const treeViewEntry = getTreeViewRegistry()?.register(
+        "superset.todo",
+        view as unknown as vscode.TreeView<unknown>,
+        provider as unknown as vscode.TreeDataProvider<unknown>,
+        ctx.shared.log
+    );
 
     // Context key + TreeView title reflect current filter state.
     const updateTodoFilterBadge = (filtering: boolean, hidden: number) => {
@@ -641,6 +653,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
         view,
         todoFileWatcher,
         plansWatcher,
+        // TreeViewRegistry entry — disposed alongside the view so the
+        // `superset.revealInTree` command can't walk a stale panel.
+        treeViewEntry ?? { dispose: () => undefined },
         { dispose: () => provider.stop() }
     );
 

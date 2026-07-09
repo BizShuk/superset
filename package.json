@@ -86,6 +86,11 @@
                 "title": "Superset: Show Diagnostic Logs"
             },
             {
+                "command": "superset.revealInTree",
+                "title": "Superset: Reveal in Tree",
+                "icon": "$(target)"
+            },
+            {
                 "command": "superset.openTuiTerminal",
                 "title": "Superset: Open TUI Terminal"
             },

@@ -4,6 +4,7 @@
 
 import type * as vscode from "vscode";
 import type { PluginContext } from "./types";
+import { getTreeViewRegistry } from "./treeViewRegistry";
 
 export interface BaseContext {
     readonly extensionContext: vscode.ExtensionContext;
@@ -19,6 +20,10 @@ export interface BaseContext {
  *
  * `registerResetHandler` writes to a shared array so the manager can
  * fan out a single reset command to all plugins.
+ *
+ * `registerTreeView` wires the panel's `vscode.TreeView` +
+ * `TreeDataProvider` into the shared `TreeViewRegistry`. Panels that
+ * don't own a TreeView (e.g. globalCommands) can ignore this.
  */
 export function createPluginContext(
     base: BaseContext,
@@ -37,6 +42,21 @@ export function createPluginContext(
         },
         registerResetHandler: (h) => {
             resetHandlers.push(h);
+        },
+        registerTreeView: (viewId, treeView, treeDataProvider) => {
+            const registry = getTreeViewRegistry();
+            if (!registry) {
+                base.log(
+                    `registerTreeView(${viewId}): registry not initialized`
+                );
+                return { dispose: () => undefined };
+            }
+            return registry.register(
+                viewId,
+                treeView,
+                treeDataProvider,
+                base.log
+            );
         },
     };
 }

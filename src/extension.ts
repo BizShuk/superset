@@ -16,6 +16,10 @@ import {
     setDiagnosticChannel,
     setPluginManager,
 } from "./crossModuleState";
+import {
+    setTreeViewRegistry,
+    TreeViewRegistry,
+} from "./plugin/treeViewRegistry";
 
 /**
  * Composition root — pre-plugin-orchestration this file directly
@@ -59,6 +63,11 @@ export function activate(
     // looks up the manager eagerly.
     setDiagnosticChannel(diag);
     setPluginManager(manager);
+    // The shared TreeViewRegistry backs the cross-panel
+    // `superset.revealInTree` command. Set BEFORE any plugin
+    // activates so the panel's `registerTreeView()` calls see the
+    // global instance.
+    setTreeViewRegistry(new TreeViewRegistry());
 
     // Plugin activation order is significant. `treePreview` and
     // `todoPreview` contribute markdown-it hooks; the manager
