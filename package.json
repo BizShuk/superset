@@ -157,6 +157,11 @@
                 "icon": "$(plug)"
             },
             {
+                "command": "superset.terminalActivitySummary",
+                "title": "Superset: Terminal Activity Summary",
+                "icon": "$(list-unordered)"
+            },
+            {
                 "command": "superset.topologyScan",
                 "title": "Superset: Scan Network Topology",
                 "icon": "$(radio-tower)"

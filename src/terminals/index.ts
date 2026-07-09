@@ -22,6 +22,10 @@ import {
     installEditorFocusBridge,
 } from "./lifecycle";
 import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
+import {
+    captureSnapshot,
+    renderActivityMarkdown,
+} from "../terminalActivitySummary";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const log = ctx.shared.log;
@@ -155,6 +159,28 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // ── Commands ─────────────────────────────────────────
 
+    // Terminal Activity Summary — snapshots the registry into a
+    // temporary Markdown document and opens it in the markdown
+    // preview. Closes the gap where the panel only surfaces a
+    // boolean "unseen" indicator — the user gets a per-terminal
+    // table (PID, cwd, hidden, PTY, unseen) plus per-terminal
+    // details in one read.
+    const activitySummaryCmd = vscode.commands.registerCommand(
+        "superset.terminalActivitySummary",
+        async () => {
+            const rows = captureSnapshot(registry);
+            const md = renderActivityMarkdown(rows, new Date());
+            const doc = await vscode.workspace.openTextDocument({
+                content: md,
+                language: "markdown",
+            });
+            await vscode.commands.executeCommand(
+                "markdown.showPreview",
+                doc.uri
+            );
+        }
+    );
+
     const commandSubs = [
         ...registerTerminalCommands({
             registry,
@@ -163,6 +189,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             getCwd,
         }),
         ...registerGroupCommands(groupStore),
+        activitySummaryCmd,
     ];
 
     // ── Register disposables ─────────────────────────────
