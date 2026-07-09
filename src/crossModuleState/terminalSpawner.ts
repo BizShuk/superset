@@ -12,10 +12,10 @@
 //
 // Why not inject through `SharedDeps`? `SharedDeps` is the legacy
 // `FeatureContext` shape that pre-dates the plugin era. The
-// `globalCommandsPlugin` already has a clean shim pattern via
-// `setPluginManager()` / `setDiagnosticChannel()` (see the top of
-// `globalCommandsPlugin.ts`); we follow the same convention here rather
-// than expanding the legacy shape.
+// `globalCommandsPlugin` already follows the same setter convention via
+// `setPluginManager()` / `setDiagnosticChannel()` (see sibling files in
+// this directory); we follow the same convention here rather than
+// expanding the legacy shape.
 
 import type * as vscode from "vscode";
 

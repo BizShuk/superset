@@ -9,33 +9,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import {
-    type ExtensionPlugin,
-    type PluginContext,
-    type PluginManager,
-} from "./plugin";
+import { type ExtensionPlugin, type PluginContext } from "./plugin";
 import { collectSupersetKeys } from "./resetCaches";
-import { getTerminalSpawner } from "./terminals/terminalSpawner";
+import {
+    getDiagnosticChannel,
+    getPluginManager,
+    getTerminalSpawner,
+} from "./crossModuleState";
 
 export const GLOBAL_COMMANDS_PLUGIN_ID = "globalCommands";
-
-/** The diagnostic `OutputChannel` reference, captured by the plugin
- *  from the PluginContext. There is no `PluginContext.diag` accessor
- *  (the manager only exposes `log`); the channel is set once by
- *  `extension.ts` via `setDiagnosticChannel()` after construction. */
-let diagnosticChannel: vscode.OutputChannel | undefined;
-export function setDiagnosticChannel(channel: vscode.OutputChannel): void {
-    diagnosticChannel = channel;
-}
-
-/** Manager reference, set by `extension.ts` after construction. The
- *  resetCaches command needs to call `manager.resetAll()` so each
- *  plugin's reset handlers run in order under the manager's error
- *  boundary. */
-let managerRef: PluginManager | undefined;
-export function setPluginManager(mgr: PluginManager | undefined): void {
-    managerRef = mgr;
-}
 
 export const globalCommandsPlugin: ExtensionPlugin = {
     id: GLOBAL_COMMANDS_PLUGIN_ID,
@@ -56,8 +38,9 @@ export const globalCommandsPlugin: ExtensionPlugin = {
                     )) {
                         await ctx.workspaceState.update(key, undefined);
                     }
-                    if (managerRef) {
-                        await managerRef.resetAll();
+                    const manager = getPluginManager();
+                    if (manager) {
+                        await manager.resetAll();
                     }
                     vscode.window.showInformationMessage(
                         "Superset: 快取已重置"
@@ -96,7 +79,7 @@ export const globalCommandsPlugin: ExtensionPlugin = {
 
         ctx.registerDisposable(
             vscode.commands.registerCommand("superset.showLogs", () => {
-                diagnosticChannel?.show(true);
+                getDiagnosticChannel()?.show(true);
             })
         );
 
@@ -397,7 +380,7 @@ async function spawnRunTerminal(
         await new Promise((resolve) => setTimeout(resolve, 200));
         terminal.sendText(finalCmdline + "\r");
     } catch (err) {
-        diagnosticChannel?.appendLine(
+        getDiagnosticChannel()?.appendLine(
             `[superset] spawnRunTerminal failed for "${cmdline}": ${
                 err instanceof Error ? err.message : String(err)
             }`

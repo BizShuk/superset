@@ -117,15 +117,13 @@ vi.mock("vscode", () => {
 
 import * as vscode from "vscode";
 import * as os from "os";
+import { globalCommandsPlugin } from "../src/globalCommandsPlugin";
 import {
-    globalCommandsPlugin,
     setDiagnosticChannel,
     setPluginManager,
-} from "../src/globalCommandsPlugin";
-import {
     setTerminalSpawner,
     getTerminalSpawner,
-} from "../src/terminals/terminalSpawner";
+} from "../src/crossModuleState";
 
 // A minimal `PluginContext` sufficient for the global-commands plugin
 // to register its commands.

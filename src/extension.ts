@@ -11,11 +11,11 @@ import { mdnsPlugin } from "./mdns/plugin";
 import { topologyPlugin } from "./topology/plugin";
 import { todoPlugin } from "./todo/plugin";
 import { projectsTodoPlugin } from "./projectsTodo/plugin";
+import { globalCommandsPlugin } from "./globalCommandsPlugin";
 import {
-    globalCommandsPlugin,
     setDiagnosticChannel,
     setPluginManager,
-} from "./globalCommandsPlugin";
+} from "./crossModuleState";
 
 /**
  * Composition root — pre-plugin-orchestration this file directly

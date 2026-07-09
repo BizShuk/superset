@@ -17,7 +17,7 @@ import {
     registerTerminalCommands,
     registerGroupCommands,
 } from "./commands";
-import { setTerminalSpawner } from "./terminalSpawner";
+import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const log = ctx.shared.log;
