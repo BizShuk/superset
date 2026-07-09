@@ -79,15 +79,23 @@ export function createTodoCommands(
     };
     add("FilterHideCompleted", "FilterHideCompleted", applyFilterToggle);
     add("FilterShowAll", "FilterShowAll", applyFilterToggle);
-    add("FilterP0Toggle", "FilterP0", () =>
-        ctx.treeProvider.togglePriority("P0")
-    );
-    add("FilterP1Toggle", "FilterP1", () =>
-        ctx.treeProvider.togglePriority("P1")
-    );
-    add("FilterP2Toggle", "FilterP2", () =>
-        ctx.treeProvider.togglePriority("P2")
-    );
+
+    // Priority filter buttons. Each priority needs two command
+    // ids (the dim "off" variant + the filled "on" variant) so the
+    // `when`-clause in package.json can swap the icon — the icon
+    // is taken from the registered command at registration time.
+    // Both variants call the same toggle handler.
+    const togglePriority = (p: "P0" | "P1" | "P2") => (): void => {
+        ctx.treeProvider.togglePriority(p);
+        syncPriorityContext();
+        refreshFilterBadge();
+    };
+    add("FilterP0Toggle", "FilterP0", togglePriority("P0"));
+    add("FilterP0ToggleOn", "FilterP0On", togglePriority("P0"));
+    add("FilterP1Toggle", "FilterP1", togglePriority("P1"));
+    add("FilterP1ToggleOn", "FilterP1On", togglePriority("P1"));
+    add("FilterP2Toggle", "FilterP2", togglePriority("P2"));
+    add("FilterP2ToggleOn", "FilterP2On", togglePriority("P2"));
     add("ViewSec", "ViewSec", () =>
         ctx.treeProvider.setViewType("section")
     );

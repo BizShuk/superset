@@ -152,10 +152,10 @@ describe("createTodoCommands", () => {
         vi.clearAllMocks();
     });
 
-    it("emits 26 commands for the `todo` prefix", () => {
+    it("emits 29 commands for the `todo` prefix", () => {
         const ctx = makeCtx("todo");
         const set = createTodoCommands(ctx);
-        expect(set.disposables).toHaveLength(26);
+        expect(set.disposables).toHaveLength(29);
         const ids = registerSpy.mock.calls.map((c) => c[0] as string);
         expect(ids).toContain("superset.todoToggle");
         expect(ids).toContain("superset.todoChangePriority");
@@ -183,6 +183,9 @@ describe("createTodoCommands", () => {
         expect(ids).toContain("superset.todoFilterP0");
         expect(ids).toContain("superset.todoFilterP1");
         expect(ids).toContain("superset.todoFilterP2");
+        expect(ids).toContain("superset.todoFilterP0On");
+        expect(ids).toContain("superset.todoFilterP1On");
+        expect(ids).toContain("superset.todoFilterP2On");
     });
 
     it("emits 25 commands for the `projectsTodo` prefix", () => {
