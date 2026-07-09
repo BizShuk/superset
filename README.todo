@@ -1,70 +1,57 @@
 # TODO
 
+> 本檔為當前工作區 (`~/projects/tmp/superset`) 的待辦與歸檔索引。
+> 結構規範:`## Active` 內分 7 個 `###` 子標題對應 README/CLAUDE.md 的 feature 章節;`## Archive` 保留 @Archived 引用以便日後找回。
+> 完成項目集中於 [`docs/archive/todo-completed-2026-07.md`](docs/archive/todo-completed-2026-07.md)。
+
+## Active
 
 ### Architecture
 
-- [ ] [P1] [feature] business-scope-evaluation: 評估 `~/projects/` 統一介面下,superset 8 個模組的高槓桿演化方向 — 最高槓桿為 `.project_index` 註冊表消費(`ProjectStore` 分層去 hardcode、新增 repo 自動收錄,對齊根 CLAUDE.md);與 [consistency-redundancy-scalability](plans/2026-07-08-chore-consistency-redundancy-scalability.md) 範圍不重疊(該 plan 處理 todo×projectsTodo 重複與檔案結構,本 plan 處理分層資料來源) — [plans/2026-07-08-business-scope-evaluation.md](plans/2026-07-08-business-scope-evaluation.md)
+- [ ] [P1] [feature] business-scope-evaluation: 評估 `~/projects/` 統一介面下,superset 8 個模組的高槓桿演化方向 — [plans/2026-07-08-business-scope-evaluation.md](plans/2026-07-08-business-scope-evaluation.md)
 
 ### Terminals
 
+- [ ] [P1] [feature] Workspace-aware group suggestions — 當新 PTY 終端機開啟時,自動偵測其 cwd/git remote 並與既有群組比對自動歸類 — [plans/2026-07-05-architecture-workspace-aware-group-suggestions.md](plans/2026-07-05-architecture-workspace-aware-group-suggestions.md)
+- [ ] [feature] Group metadata persistence — persist `cwd` / `gitRemote` keys in `context.workspaceState` so the auto-group heuristic survives VSCode restart. See scan note 2026-06-23#2A. — [plans/2026-06-24-feature-group-metadata-persistence.md](plans/2026-06-24-feature-group-metadata-persistence.md)
+- [ ] [feature] Terminal lifecycle audit log — see [plans/2026-06-23-feature-terminal-lifecycle-audit-log.md](plans/2026-06-23-feature-terminal-lifecycle-audit-log.md)
+- [ ] [feature] Terminal fuzzy search — see [plans/2026-06-23-feature-terminal-fuzzy-search.md](plans/2026-06-23-feature-terminal-fuzzy-search.md)
 
 ### mDNS
 
+- [ ] [P2] [feature] mDNS one-click connect — 偵測到服務後「一鍵連」是自然延伸 (SSH/Browser/AirPlay);依 service type 派發對應 opener — [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
+
 ### Topology
+
+- [ ] [feature] Topology background scan — see [plans/2026-06-23-feature-topology-background-scan.md](plans/2026-06-23-feature-topology-background-scan.md)
 
 ### TODO Panel
 
+_(無 active item)_
+
 ### Platform & UX
+
+- [ ] [P2] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P. — [plans/2026-07-05-architecture-open-settings-webview.md](plans/2026-07-05-architecture-open-settings-webview.md)
+- [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. — [plans/2026-07-05-architecture-panel-layout-persistence.md](plans/2026-07-05-architecture-panel-layout-persistence.md)
+- [ ] [P2] [feature] `Superset: Reveal in Tree` command — given a `TerminalHandle`, focus the `superset.terminals` TreeView and select the matching row. Wires `vscode.commands.executeCommand("treeView.reveal", item)`. Composes with every panel by reusing the same `(viewId, predicate)` helper. See scan note 2026-06-23#4Q. — [plans/2026-07-05-architecture-reveal-in-tree.md](plans/2026-07-05-architecture-reveal-in-tree.md)
+- [ ] [P2] [chore] `Superset: Show Diagnostics` webview — one-click snapshot of every subsystem (terminals / mDNS / topology / todo / engines / activation session), with Copy-to-clipboard and Save-to-file buttons. Complements the existing `superset.showLogs` (time-series log) with a structured "now" view, unblocks GitHub-issue triage. See scan note 2026-06-24#6A. — [plans/2026-06-24-chore-show-diagnostics-webview.md](plans/2026-06-24-chore-show-diagnostics-webview.md)
+- [ ] [P1] [chore] VSIX cross-platform packaging sanity — `.vscodeignore` exclude dev artifacts (test/, src/, scripts/) while intentionally keeping `@homebridge/node-pty-prebuilt-multiarch/prebuilds/` for all target platforms; add `scripts/verify-vsix.sh` that post-checks the .vsix; wire into `npm run build`. See scan note 2026-06-23#5A. ✓ Stage 3 完成,見 [plans/2026-07-05-architecture-vsix-cross-platform-sanity.md](plans/2026-07-05-architecture-vsix-cross-platform-sanity.md)
+- [ ] [P1] [chore] GitHub Actions CI + issue / PR templates — add `.github/workflows/ci.yml` (3-OS matrix: macos / ubuntu / windows, runs `npm test` + `tsc --noEmit`), `.github/workflows/coverage.yml`, `.github/workflows/release.yml`; add `ISSUE_TEMPLATE/`, `PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`. See scan note 2026-06-24#7A. — [plans/2026-06-24-chore-github-actions-ci.md](plans/2026-06-24-chore-github-actions-ci.md)
 
 ### Plans
 
-- [ ] architecture-tree-comment-highlight: 在 markdown tree 區塊或 tree 檔案中，能夠清楚區分註解與檔名/資料夾的顏色 — [docs/specs/2026-07-05-tree-comment-highlight.md](docs/specs/2026-07-05-tree-comment-highlight.md)
+_(無 active item)_
 
 ## Archive
 
+下列項目已歸檔為 plans (未實作,保留 plan 以便日後重新啟用):
+
 - [ ] architecture-highlight-regex: 使用者透過設定自訂的規則運算式決定哪些終端機輸出內容才觸發未讀高亮提示 — [plans/2026-07-05-architecture-highlight-regex.md](plans/2026-07-05-architecture-highlight-regex.md) @2026-07-08_12:31:34 @Archived @Plans
 - [ ] [feature] Add `window.onDidWriteTerminalData` (deprecated fallback) for TUI detection — see [plans/2026-07-05-dynamic-orbiting-pearl.md](plans/2026-07-05-dynamic-orbiting-pearl.md) @2026-07-08_12:31:27 @Archived @Terminals
-- [ ] architecture-open-settings-webview: 使用者在 Webview 介面中集中管理所有 Superset 設定，並能即時看見各面板的資料狀態標章與更新設定 — [plans/2026-07-05-architecture-open-settings-webview.md](plans/2026-07-05-architecture-open-settings-webview.md) @2026-07-08_11:50:26 @Archived @Plans
-- [ ] architecture-panel-layout-persistence: 記住 superset viewContainer 內最後一次 active 的子 view，並在下次啟動 VS Code 時自動恢復該焦點 — [plans/2026-07-05-architecture-panel-layout-persistence.md](plans/2026-07-05-architecture-panel-layout-persistence.md) @2026-07-08_11:49:54 @Archived @Plans
-- [ ] architecture-reveal-in-tree: 設計一個能在 TreeView 中自動 focus 並定位特定節點的共用機制，支援 terminals、mdns 等所有面板 — [plans/2026-07-05-architecture-reveal-in-tree.md](plans/2026-07-05-architecture-reveal-in-tree.md) @2026-07-08_11:49:43 @Archived @Plans
-- [ ] architecture-workspace-aware-group-suggestions: 當新 PTY 終端機開啟時，自動偵測其 cwd/git remote 並與既有群組比對自動歸類 — [plans/2026-07-05-architecture-workspace-aware-group-suggestions.md](plans/2026-07-05-architecture-workspace-aware-group-suggestions.md) @2026-07-08_11:48:20 @Archived @Plans
-- [x] [P2] [feature] Default subgroup panel sizes — on first open, set panel heights: Terminals fixed at 200px, TODO expanded to fill remaining space (largest), mDNS/Topology collapsed. @2026-07-05*11:09:47 @Completed @Platform*&\_UX
-- [x] [P2] [feature] `Superset: Reset All Caches` command — one-button wipe of `context.workspaceState` keys, mDNS in-memory cache, and `TopologyStore` state. Backs the "something's stale, start over" workflow; cheap (~30 LOC) and unblocks debugging. See scan note 2026-06-23#4U. [Reset All Caches 實作計畫 (Implementation Plan)](docs/specs/2026-06-24-feature-reset-caches.md) @2026-07-05*11:09:45 @Completed @Platform*&\_UX
-- [x] [P1] [feature] TODO Markdown 預覽:CSS 摺疊與過濾 — 為 `README.todo` 內建預覽加純 CSS 互動 (`:has()` + checkbox hack),不開 Webview、零 preview JS。新 feature module `src/todoPreview/`,沿用 `treePreview` 的 markdown-it hook 路線。See [docs/specs/2026-07-01-feature-todo-css-preview.md](docs/specs/2026-07-01-feature-todo-css-preview.md). @2026-07-05*11:09:35 @Completed @Platform*&\_UX
-    - [x] [P1] 共用前置:markdown-it `core` ruler `wrapSections` 把每個 heading section 包成 `.sec` 容器 (`data-title` + 每節唯一 id),抽純函式進 `sectionWrap.ts` 可單測
-    - [x] [P1] 功能 1:一顆按鈕隱藏已完成 (`- [x]` `input:checked`)、刪除線 (`li:has(s)`)、`## Archive` 整區 (`.sec[data-title="Archive" i]`)
-    - [x] [P1] 功能 2:每節從標題 `label` 點擊摺疊 (`.sec:has(.sec-tgl:checked) .sec-body`) + caret ▼/▶ 切換
-    - [x] [P2] 功能 2b:master `fold all` / `unfold all` 按鈕 (OR 覆蓋語意,兩態文字 swap);「先全收再單獨展開」為 JS-only,不在此範圍
-    - [x] [P2] filter bar:`core` ruler 於文件最前注 sticky 工具列,`styles/todo-preview.css` 加進 `package.json` `markdown.previewStyles`
-    - [x] [P1] 接線:`extension.ts` `activate()` 包一層串接 `treePreview` + `todoPreview` 兩個 `extendMarkdownIt`
-    - [x] [P2] 測試:`test/todoPreview.test.ts` 覆蓋 `sectionWrap` / filter-bar 純函式 (8 cases)
-- [x] [P0] TODO subgroup panel add a button to open README.todo @2026-07-05_11:09:17 @Completed @TODO_Panel
-- [x] TODO subgroup panel add a button to open README.todo @2026-07-05_11:09:15 @Completed @TODO_Panel
-- [x] [P1] deal with network topology routing parsing error (host ip adress is not listed in trace path) — `deriveLocalIp(interfaces, gateway)` 從 `listInterfaces()` + `getDefaultGateway()` 推導本機 IPv4 (優先 /24 subnet match,fallback 第一個非 internal IPv4);`TopologyStore.scan()` prepend 到 trace,description 顯示 `本機`。See [docs/specs/2026-06-30-topology-trace-local-ip.md](docs/specs/2026-06-30-topology-trace-local-ip.md). @2026-07-05_11:09:12 @Completed @Topology
-- [x] [feature] mDNS detail-view query cache — `MdnsShowDetail` currently re-resolves on every invocation. Cache `buildMdnsDetailFields` output for 60s keyed by `${name}|${type}|${host}|${port}` to avoid spamming mDNS for already-seen services. Pairs with service expiration. See scan note 2026-06-23#3I. @2026-07-05_11:09:10 @Completed @mDNS
-- [x] [Bug] save README.todo with sub todo item (parent checked) will cause sub todo item auto marked as completed — TreeView 用 `manageCheckboxStateManually: true` 停掉框架的父→子勾選傳播 (`src/todo/index.ts`) @2026-07-05_11:09:08 @Completed
-- [x] TODO subgroup banner `Open README.todo` button should open with markdown preview @2026-07-05_11:08:49 @Completed
-- [x] [P1] markdown tree syntax: distinguish color for comment @2026-07-05_11:08:46 @Completed
-- [x] Create highlight regex functionality @2026-07-05_11:08:43 @Completed
-- [x] [P1] [feature] mDNS service dedup by `host|port|type` — multi-NIC / IPv4+IPv6 currently produce duplicate rows. `MdnsRegistry` upserts by name but not by network identity; add secondary key so the tree shows one canonical row per service. See scan note 2026-06-23#3J. @2026-07-05_10:53:26 @Completed @mDNS
-- [x] [feature] Terminal jump-to via `Superset: Go to Terminal` quick-pick — fuzzy pick of all open terminals, used as a `Ctrl+Shift+P` target. Composes with [terminal fuzzy search](plans/2026-06-23-feature-terminal-fuzzy-search.md): the pick reuses the same `matchesTerminal` helper. See scan note 2026-06-23#2E. @2026-07-05_10:53:23 @Completed @Terminals
-- [x] deal with terminal "Antigravity Agent" terminal life cycle @2026-07-05_10:53:20 @Completed @Terminals
-- [x] [P1] [chore] topology 模組解耦與優化計畫實作 — 根據 [docs/specs/2026-07-02-architecture-topology.md](docs/specs/2026-07-02-architecture-topology.md) 進行 `topology` 模組的轉換解析層、狀態管理與命名風格對齊之拆分解耦 — `topology/transformer.ts` 純函式拆自原 171 行 God Function,新增 `SCAN_TIMEOUT_MS = 10_000` 熔斷防呆;`topology/topologyStore.ts` 改為 thin coordinator。包含於 [`6b76ca1`](https://github.com/BizShuk/superset/commit/6b76ca1bda56ea3fabe61c291116c4cee9671436) @2026-07-05_10:53:17 @Completed @Architecture
-- [x] [P1] [chore] 整體擴充套件插件化與生命週期治理計畫實作 — 根據 [docs/specs/2026-07-02-architecture-pluginization.md](docs/specs/2026-07-02-architecture-pluginization.md) 進行 Composition Root 的解耦與模組插件化改進 — `src/plugin/{manager,context,types,index}.ts` + `globalCommandsPlugin.ts` 統一框架,`extension.ts` 從 172 行縮為 94 行 declarative composition root,`activateAll` 對每 plugin 獨立 try-catch 錯誤邊界。包含於 [`6b76ca1`](https://github.com/BizShuk/superset/commit/6b76ca1bda56ea3fabe61c291116c4cee9671436) @2026-07-05_10:53:14 @Completed @Architecture
-- [x] [P1] [chore] VSCode baseline alignment — bump `engines.vscode` to `^1.90.0` (code already assumes 1.90+ behaviors: `TabInputTerminal`, `Terminal.name` getter-only), pin `@types/vscode` to `~1.90.0`, add `engines.node >=20.0.0`, remove dead `nameWriteSupported` runtime probe in `highlightPresenter.ts`, update docs. See [plans/2026-06-23-chore-vscode-baseline-alignment.md](plans/2026-06-23-chore-vscode-baseline-alignment.md). See scan note 2026-06-23#4A. @2026-07-05_10:53:12 @Completed @Architecture
-- [x] [P1] [chore] terminals 模組解耦與優化計畫實作 — 根據 [docs/specs/2026-07-02-architecture-terminals.md](docs/specs/2026-07-02-architecture-terminals.md) 進行 `terminals` 模組的生命週期協調器、進程控制層與狀態持久化層的拆分解耦 — `terminals/plugin.ts` shim + `ptyProcessContract.test.ts` 12 case 介面契約鎖定;`PtyProcess` 介面抽象完整,後續真要做 coordinator 可從事件源切面開始。包含於 [`6b76ca1`](https://github.com/BizShuk/superset/commit/6b76ca1bda56ea3fabe61c291116c4cee9671436) @2026-07-05_10:52:47 @Completed @Architecture
-- [x] [P1] [chore] mDNS 模組解耦與優化計畫實作 — 根據 [docs/specs/2026-07-02-architecture-mdns.md](docs/specs/2026-07-02-architecture-mdns.md) 進行 `mdns` 模組的解析層、狀態與去重層以及過期清理層的拆分解耦 — `mdns/parser.ts` + `mdns/store.ts` + `mdns/expiration.ts` 三層分離,`mdnsRegistry.ts` 從 487 行縮為 252 行,既有的 23 個測試全綠。包含於 [`6b76ca1`](https://github.com/BizShuk/superset/commit/6b76ca1bda56ea3fabe61c291116c4cee9671436) @2026-07-05_10:52:44 @Completed @Architecture
-- [x] [P1] [chore] 架構解耦與優化計畫實作 — 根據 [docs/specs/2026-07-02-architecture-superset.md](docs/specs/2026-07-02-architecture-superset.md) 進行 `todo` 模組的解析層、持久化層與狀態層拆分解耦 — `todo/parser.ts` + `todo/repository.ts` + `todo/todoStore.ts` SRP 對齊,既有的 25 個 `TodoStore` 黑箱測試未改 any 一行即全綠。包含於 [`6b76ca1`](https://github.com/BizShuk/superset/commit/6b76ca1bda56ea3fabe61c291116c4cee9671436) @2026-07-05_10:52:41 @Completed @Architecture
-- [x] [P1] [chore] 整體系統架構整合與演進計畫實作 — 根據 [docs/specs/2026-07-02-architecture-master.md](docs/specs/2026-07-02-architecture-master.md) (原 plan: [plans/architecture-master.md](plans/architecture-master.md)) 進行全系統重構與模組解耦的逐步整合 — [`6b76ca1`](https://github.com/BizShuk/superset/commit/6b76ca1bda56ea3fabe61c291116c4cee9671436),version 0.6.0 @2026-07-05_10:52:39 @Completed @Architecture
-- [ ] [P2] [feature] `Superset: Open Settings` webview — consolidate all `superset.*` settings (audit level, topology scan interval, future group-meta toggle) into one panel, plus a status badge for each panel's source-of-truth (registry / mDNS / topology / todo). See scan note 2026-06-23#3P. [Open Settings Webview 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-open-settings-webview.md)
-- [ ] [P2] [feature] Panel layout persistence — remember the last-active sub-view (`terminals` / `explore` / `mdns` / `topology` / `todo`) per window and restore on next `activate`. Stored alongside the audit log, but keyed off `workbench.view.extension.superset`. Avoids clashing with VSCode's own `workbench.panel.defaultLocation`. [Panel Layout Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-panel-layout-persistence.md)
-- [ ] [P2] [feature] `Superset: Reveal in Tree` command — given a `TerminalHandle`, focus the `superset.terminals` TreeView and select the matching row. Wires `vscode.commands.executeCommand("treeView.reveal", item)` (stable since 1.47). Composes with every panel by reusing the same `(viewId, predicate)` helper. See scan note 2026-06-23#4Q. [Reveal in Tree 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-reveal-in-tree.md)
-- [ ] [P1] [feature] Workspace-aware group suggestions — see [plans/2026-06-23-feature-workspace-aware-group-suggestions.md](plans/2026-06-23-feature-workspace-aware-group-suggestions.md)
-- [ ] [P2] [feature] mDNS one-click connect — see [plans/2026-06-23-feature-mdns-one-click-connect.md](plans/2026-06-23-feature-mdns-one-click-connect.md)
-- [ ] [P2] [chore] `Superset: Show Diagnostics` webview — one-click snapshot of every subsystem (terminals / mDNS / topology / todo / engines / activation session), with Copy-to-clipboard and Save-to-file buttons. Complements the existing `superset.showLogs` (time-series log) with a structured "now" view, unblocks GitHub-issue triage. See [plans/2026-06-24-chore-show-diagnostics-webview.md](plans/2026-06-24-chore-show-diagnostics-webview.md). See scan note 2026-06-24#6A.
-- [ ] [P1] [chore] VSIX cross-platform packaging sanity — `.vscodeignore` exclude dev artifacts (test/, src/, scripts/, **/**tests**/**) while intentionally keeping `@homebridge/node-pty-prebuilt-multiarch/prebuilds/` for all target platforms; add `scripts/verify-vsix.sh` that post-checks the .vsix; wire into `npm run build`. See [plans/2026-06-23-chore-vsix-cross-platform-sanity.md](plans/2026-06-23-chore-vsix-cross-platform-sanity.md). See scan note 2026-06-23#5A.
-- [ ] [P1] [chore] GitHub Actions CI + issue / PR templates — add `.github/workflows/ci.yml` (3-OS matrix: macos / ubuntu / windows, runs `npm test` + `tsc --noEmit`), `.github/workflows/coverage.yml` (vitest --coverage to PR artifact), `.github/workflows/release.yml` (tag-triggered `vsce package` for [#5A VSIX sanity](plans/2026-06-23-chore-vsix-cross-platform-sanity.md)); add `ISSUE_TEMPLATE/{bug_report,feature_request}.md`, `PULL_REQUEST_TEMPLATE.md`, `CONTRIBUTING.md`, README CI badge. See [plans/2026-06-24-chore-github-actions-ci.md](plans/2026-06-24-chore-github-actions-ci.md). See scan note 2026-06-24#7A.
-- [ ] [feature] Group metadata persistence — follow-up of [workspace-aware group suggestions](plans/2026-06-23-feature-workspace-aware-group-suggestions.md). Persist `cwd` / `gitRemote` keys in `context.workspaceState` so the auto-group heuristic survives VSCode restart. See scan note 2026-06-23#2A. [Group Metadata Persistence 實作計畫 (Implementation Plan)](plans/2026-06-24-feature-group-metadata-persistence.md)
-- [ ] [feature] Terminal lifecycle audit log — see [plans/2026-06-23-feature-terminal-lifecycle-audit-log.md](plans/2026-06-23-feature-terminal-lifecycle-audit-log.md)
-- [ ] [feature] Topology background scan — see [plans/2026-06-23-feature-topology-background-scan.md](plans/2026-06-23-feature-topology-background-scan.md)
-- [ ] [P1] [feature] Terminal fuzzy search — see [plans/2026-06-23-feature-terminal-fuzzy-search.md](plans/2026-06-23-feature-terminal-fuzzy-search.md)
+- [ ] architecture-open-settings-webview: 使用者在 Webview 介面中集中管理所有 Superset 設定 — [plans/2026-07-05-architecture-open-settings-webview.md](plans/2026-07-05-architecture-open-settings-webview.md) @2026-07-08_11:50:26 @Archived @Plans
+- [ ] architecture-panel-layout-persistence: 記住 superset viewContainer 內最後一次 active 的子 view — [plans/2026-07-05-architecture-panel-layout-persistence.md](plans/2026-07-05-architecture-panel-layout-persistence.md) @2026-07-08_11:49:54 @Archived @Plans
+- [ ] architecture-reveal-in-tree: 設計一個能在 TreeView 中自動 focus 並定位特定節點的共用機制 — [plans/2026-07-05-architecture-reveal-in-tree.md](plans/2026-07-05-architecture-reveal-in-tree.md) @2026-07-08_11:49:43 @Archived @Plans
+- [ ] architecture-workspace-aware-group-suggestions: 當新 PTY 終端機開啟時,自動偵測其 cwd/git remote — [plans/2026-07-05-architecture-workspace-aware-group-suggestions.md](plans/2026-07-05-architecture-workspace-aware-group-suggestions.md) @2026-07-08_11:48:20 @Archived @Plans
+- [ ] architecture-tree-comment-highlight: 在 markdown tree 區塊或 tree 檔案中,能夠清楚區分註解與檔名/資料夾的顏色 — 已實作,見 [docs/specs/2026-07-05-tree-comment-highlight.md](docs/specs/2026-07-05-tree-comment-highlight.md) @2026-07-08_11:50:26 @Archived @Plans
+
+完成歷史見 [`docs/archive/todo-completed-2026-07.md`](docs/archive/todo-completed-2026-07.md)。
