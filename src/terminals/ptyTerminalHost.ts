@@ -50,6 +50,14 @@ export interface PtyTerminalHostDeps {
     env: NodeJS.ProcessEnv;
     isRecentlyActive?: (terminal: TerminalHandle) => boolean;
     log?: (msg: string) => void;
+    /**
+     * Optional command to run inside the shell once it spawns.
+     * Used by the mDNS one-click-connect flow (`Superset: Connect`)
+     * to write `ssh pi@nas.local` into the freshly-opened PTY
+     * without forcing the user to type it. Defer one tick so the
+     * shell prompt has time to settle before we type.
+     */
+    initialCommand?: string;
 }
 
 /**
@@ -109,6 +117,21 @@ export class PtyTerminalHost {
             log?.(`[pty] exit code=${code}`);
             this.fireClose(code);
         });
+
+        if (this.deps.initialCommand) {
+            // Defer one tick: the shell may not be ready to accept
+            // input the instant the PTY is spawned. 50ms is empirical
+            // — long enough to clear the prompt echo, short enough
+            // to feel instant in the UI.
+            const cmd = this.deps.initialCommand;
+            setTimeout(() => {
+                try {
+                    this.proc?.write(`${cmd}\n`);
+                } catch (err) {
+                    log?.(`[pty] initialCommand write error: ${err}`);
+                }
+            }, 50);
+        }
     }
 
     /**

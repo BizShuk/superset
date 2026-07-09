@@ -152,6 +152,11 @@
                 "title": "Superset: Show Service Detail"
             },
             {
+                "command": "superset.mdnsConnect",
+                "title": "Superset: Connect",
+                "icon": "$(plug)"
+            },
+            {
                 "command": "superset.topologyScan",
                 "title": "Superset: Scan Network Topology",
                 "icon": "$(radio-tower)"
@@ -681,6 +686,11 @@
                 },
                 {
                     "command": "superset.mdnsShowDetail",
+                    "when": "viewItem == mdnsService",
+                    "group": "1_focus"
+                },
+                {
+                    "command": "superset.mdnsConnect",
                     "when": "viewItem == mdnsService",
                     "group": "1_focus"
                 },

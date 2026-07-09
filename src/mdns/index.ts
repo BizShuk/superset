@@ -5,6 +5,8 @@ import { MdnsRegistry } from "./mdnsRegistry";
 import { MulticastDnsTransport } from "./mdnsTransport";
 import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
 import { buildMdnsDetailFields } from "./mdnsTreeSpec";
+import { resolveConnectCommand } from "../mdnsConnect";
+import { getTerminalSpawner } from "../crossModuleState";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const registry = new MdnsRegistry(new MulticastDnsTransport());
@@ -86,11 +88,51 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
+    /**
+     * One-click Connect — resolves the service type to a connect
+     * command (ssh for `_ssh._tcp`, open for `_http(s)` / `_ipp(s)`)
+     * via `resolveConnectCommand`, then spawns a fresh PTY-backed
+     * terminal and writes the command into it. Falls back to a
+     * warning for unrecognised service types.
+     */
+    const connectCmd = vscode.commands.registerCommand(
+        "superset.mdnsConnect",
+        async (svc: MdnsService | undefined) => {
+            if (!svc) return;
+            const plan = resolveConnectCommand(svc);
+            if (!plan) {
+                vscode.window.showWarningMessage(
+                    `Superset: 未知 service type "${svc.type}",無法連線`
+                );
+                return;
+            }
+            const spawn = getTerminalSpawner();
+            if (!spawn) {
+                vscode.window.showErrorMessage(
+                    "Superset: Terminals 模組尚未啟用,請稍候再試"
+                );
+                return;
+            }
+            const cwd =
+                vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+                process.cwd();
+            const terminal = spawn(`Connect: ${svc.name}`, cwd);
+            terminal.show(true);
+            // Defer one tick so the shell prompt has time to mount
+            // before we type the command — empirically 200ms is
+            // enough for the PTY-backed host to open.
+            const initialCommand = [plan.cmd, ...plan.args].join(" ");
+            await new Promise((r) => setTimeout(r, 200));
+            terminal.sendText(initialCommand);
+        }
+    );
+
     ctx.subscriptions.push(
         refreshCmd,
         copyCmd,
         copyDetailCmd,
         showDetailCmd,
+        connectCmd,
         view,
         { dispose: () => provider.stop() },
         { dispose: () => registry.stop() }
@@ -104,6 +146,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             copyCmd.dispose();
             copyDetailCmd.dispose();
             showDetailCmd.dispose();
+            connectCmd.dispose();
             view.dispose();
         },
     };
