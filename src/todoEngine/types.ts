@@ -117,6 +117,9 @@ export interface TodoCommandTreeProvider {
     getViewType(): "section" | "priority" | "file";
     /** Hidden / completed counts for the badge title. */
     getHiddenCount?(): number;
+    /** Section names the user can move an item into. Used by the
+     *  ChangeSection command's QuickPick. */
+    getSectionList?(item: TodoEngineItem): string[];
 }
 
 export interface TodoCommandPlanActions {

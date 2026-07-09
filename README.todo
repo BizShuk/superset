@@ -8,11 +8,9 @@
 
 ### Architecture
 
-- [ ] [P1] [feature] business-scope-evaluation: 評估 `~/projects/` 統一介面下,superset 8 個模組的高槓桿演化方向 — [plans/2026-07-08-business-scope-evaluation.md](plans/2026-07-08-business-scope-evaluation.md)
 
 ### Terminals
 
-- [ ] [feature] Group metadata persistence — persist `cwd` / `gitRemote` keys in `context.workspaceState` so the auto-group heuristic survives VSCode restart. See scan note 2026-06-23#2A. — [plans/2026-06-24-feature-group-metadata-persistence.md](plans/2026-06-24-feature-group-metadata-persistence.md)
 
 ### mDNS
 

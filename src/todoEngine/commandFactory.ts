@@ -15,6 +15,42 @@ import {
     type TodoCommandSet,
     type TodoEngineItem,
 } from "./types";
+import { extractLink as planExtractLink } from "./linkUtils";
+
+interface ResolvedLink {
+    readonly type: "url" | "file";
+    readonly uriOrPath: string;
+}
+
+/** Resolve a todo link target to a full path or URL. Mirrors
+ *  `resolveTodoLink` in `src/todo/todoTreeProvider.ts`; kept local
+ *  here so the factory stays free of panel-specific imports. */
+function resolveTodoLinkFactory(
+    target: string,
+    workspaceFolder: string
+): ResolvedLink {
+    if (
+        target.startsWith("http://") ||
+        target.startsWith("https://") ||
+        target.startsWith("file:///")
+    ) {
+        return { type: "url", uriOrPath: target };
+    }
+
+    let cleanPath = target;
+    if (target.startsWith("file://")) {
+        cleanPath = target.slice("file://".length);
+    }
+
+    if (cleanPath.startsWith("/")) {
+        return { type: "file", uriOrPath: cleanPath };
+    }
+
+    return {
+        type: "file",
+        uriOrPath: path.join(workspaceFolder, cleanPath),
+    };
+}
 
 /** A single command registration returned by the factory. Stored as
  *  a tuple so the caller can dispose of them in the right order. */
@@ -221,7 +257,37 @@ export function createTodoCommands(
         // with their own OpenLink handler if they need panel-aware
         // link resolution. The factory registers the command id so
         // the menu wiring in `package.json` keeps matching.
-        ctx.log("todoEngine.OpenLink: panel should override");
+        // Non-plan rows: extract a link from the label text and
+        // open via markdown preview (for .md) or vscode.open.
+        const target = planExtractLink(item.text);
+        if (!target) return;
+        try {
+            const resolved = resolveTodoLinkFactory(
+                target,
+                ctx.workspaceFolder
+            );
+            const uri =
+                resolved.type === "url"
+                    ? vscode.Uri.parse(resolved.uriOrPath)
+                    : vscode.Uri.file(resolved.uriOrPath);
+            const isMarkdown =
+                uri.scheme === "file" &&
+                (uri.path.toLowerCase().endsWith(".md") ||
+                    uri.path.toLowerCase().endsWith(".markdown"));
+            if (isMarkdown) {
+                await vscode.commands.executeCommand(
+                    "markdown.showPreview",
+                    uri
+                );
+            } else {
+                await vscode.commands.executeCommand(
+                    "vscode.open",
+                    uri
+                );
+            }
+        } catch (err) {
+            ctx.showError(`Failed to open link: ${err}`);
+        }
     });
 
     // ── Plan lifecycle ──────────────────────────────────────────
@@ -258,14 +324,31 @@ export function createTodoCommands(
 
     // ── Item-level mutations ───────────────────────────────────
     add("Copy", "Copy", async (raw?: unknown) => {
-        // The factory doesn't know how to format per-row copy text
-        // (plans vs checkbox vs list) — the panel knows. So we
-        // register a thin command that the panel's own
-        // `superset.<prefix>.Copy` registration will shadow if
-        // necessary. For now, we just no-op; panels can override.
-        ctx.log(
-            "todoEngine.Copy: panel should override with formatPlanCopyText"
-        );
+        const item = raw as TodoEngineItem | undefined;
+        if (!item || !item.text) return;
+        try {
+            // Plan rows: render `[title](file://...)` for paste-friendly
+            // Markdown links. Falls back to plain text if the link
+            // can't be built (item.kind === "plan" but filePath
+            // missing is unusual but defensive).
+            let copyText: string;
+            if (item.kind === "plan" && item.filePath) {
+                const { formatPlanCopyText } = await import(
+                    "../todo/plansSource"
+                );
+                const formatted = formatPlanCopyText({
+                    text: item.text,
+                    filePath: item.filePath,
+                } as Parameters<typeof formatPlanCopyText>[0]);
+                copyText = formatted ?? item.text;
+            } else {
+                copyText = item.text;
+            }
+            await vscode.env.clipboard.writeText(copyText);
+            ctx.showInfo(`已複製 ${copyText}`);
+        } catch (err) {
+            ctx.showError(`Failed to copy: ${err}`);
+        }
     });
 
     add("Archive", "Archive", async (raw?: unknown) => {
@@ -293,14 +376,19 @@ export function createTodoCommands(
     });
 
     add("ChangeSection", "ChangeSection", async (raw?: unknown) => {
-        // The factory doesn't drive the QuickPick; the panel
-        // supplies the section list (because projectsTodo has many
-        // sections and needs a project picker first). We delegate
-        // through a marker so the panel can register its own
-        // superseding handler if needed. Default: ask the panel.
-        ctx.log(
-            "todoEngine.ChangeSection: panel should override with QuickPick"
+        const item = raw as TodoEngineItem | undefined;
+        if (!item || item.line < 0) return;
+        const sections: string[] =
+            ctx.treeProvider.getSectionList?.(item) ?? ["Default"];
+        if (sections.length === 0) return;
+        const pick = await vscode.window.showQuickPick(
+            sections.map((s: string) => ({ label: s })),
+            {
+                placeHolder: `Move "${item.text}" to section…`,
+            }
         );
+        if (!pick) return;
+        await ctx.store.moveTodo(item, pick.label);
     });
 
     add("DeleteSection", "DeleteSection", async (raw?: unknown) => {
