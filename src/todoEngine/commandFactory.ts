@@ -15,7 +15,7 @@ import {
     type TodoCommandSet,
     type TodoEngineItem,
 } from "./types";
-import { extractLink as planExtractLink } from "./linkUtils";
+import { extractLink as planExtractLink, formatLinkCopyText } from "./linkUtils";
 
 interface ResolvedLink {
     readonly type: "url" | "file";
@@ -327,22 +327,36 @@ export function createTodoCommands(
         const item = raw as TodoEngineItem | undefined;
         if (!item || !item.text) return;
         try {
-            // Plan rows: render the title on line 1 and the raw
-            // absolute path on line 2 so the path can be pasted
-            // straight into a terminal without URL-decoding. Falls
-            // back to plain text if no path is attached.
+            // Resolve the clipboard payload. The branches are ordered
+            // by specificity:
+            //   1. `plan` rows  → label + raw absolute path (post-84677b1).
+            //   2. `*WithLink` rows → label + extracted link target so
+            //      pasting into a terminal/chat hands the user the URL
+            //      without the Markdown wrapper.
+            //   3. anything else → plain label.
+            // The plan and link branches return `null` for inputs that
+            // don't match (e.g. plan with no filePath, or a row whose
+            // `WithLink` kind still has no `extractLink` hit), and the
+            // caller falls back to `item.text` in that case.
             let copyText: string;
             if (item.kind === "plan" && item.filePath) {
                 const { formatPlanCopyText } = await import(
                     "../todo/plansSource"
                 );
+                // `formatPlanCopyText` only reads `text` + `filePath`
+                // now (kind is gated by the `if` above) so no
+                // projection cast is needed.
                 const formatted = formatPlanCopyText({
                     text: item.text,
                     filePath: item.filePath,
-                } as Parameters<typeof formatPlanCopyText>[0]);
+                });
                 copyText = formatted ?? item.text;
             } else {
-                copyText = item.text;
+                const linkFormatted = formatLinkCopyText({
+                    kind: item.kind,
+                    text: item.text,
+                });
+                copyText = linkFormatted ?? item.text;
             }
             await vscode.env.clipboard.writeText(copyText);
             ctx.showInfo(`已複製 ${copyText}`);

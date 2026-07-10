@@ -17,6 +17,11 @@ vi.mock("vscode", () => ({
         }),
         executeCommand: () => Promise.resolve(),
     },
+    env: {
+        clipboard: {
+            writeText: vi.fn(async () => undefined),
+        },
+    },
     window: {
         showInputBox: () => Promise.resolve(undefined),
         showQuickPick: () => Promise.resolve(undefined),
@@ -291,5 +296,184 @@ describe("createTodoCommands", () => {
             "foo.md"
         );
         expect(ctx.store.reset).toHaveBeenCalled();
+    });
+
+    it("Copy handler writes plain label for checkbox rows", async () => {
+        const ctx = makeCtx();
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.todoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 1,
+            text: "fix bug",
+            checked: false,
+            kind: "checkbox",
+        });
+
+        expect(writeText).toHaveBeenCalledWith("fix bug");
+    });
+
+    it("Copy handler writes label + raw absolute path for plan rows", async () => {
+        // Regression: the `Copy` handler used to drop the path
+        // because `formatPlanCopyText` required a `kind` field and
+        // the handler narrowed the row down to `{ text, filePath }`
+        // before calling. The narrowing lost `kind` (undefined), the
+        // helper short-circuited to `null`, and the handler fell back
+        // to copying the bare title only. Fix: helper no longer reads
+        // `kind`; handler no longer projects. This test must exercise
+        // the real `formatPlanCopyText` (not a mock) so a future
+        // regression in either side is caught here.
+        const ctx = makeCtx();
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.todoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 0,
+            text: "架構計畫 — highlight-regex (Architecture Plan)",
+            checked: false,
+            kind: "plan",
+            filePath: "/ws/plans/2026-07-05-architecture-highlight-regex.md",
+        });
+
+        expect(writeText).toHaveBeenCalledWith(
+            "架構計畫 — highlight-regex (Architecture Plan)\n/ws/plans/2026-07-05-architecture-highlight-regex.md"
+        );
+    });
+
+    it("Copy handler falls back to title when plan row has no filePath", async () => {
+        const ctx = makeCtx();
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.todoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 0,
+            text: "orphan plan",
+            checked: false,
+            kind: "plan",
+            // filePath absent — handler should fall through to plain
+            // title copy (no `…null` line printed).
+        });
+
+        expect(writeText).toHaveBeenCalledWith("orphan plan");
+    });
+
+    it("Copy handler writes label + link target for checkboxWithLink rows", async () => {
+        const ctx = makeCtx();
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.todoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 1,
+            text: "[Open foo](https://foo.example/a%20b)",
+            checked: false,
+            kind: "checkboxWithLink",
+        });
+
+        expect(writeText).toHaveBeenCalledWith(
+            "[Open foo](https://foo.example/a%20b)\nhttps://foo.example/a%20b"
+        );
+    });
+
+    it("Copy handler writes label + link target for listWithLink rows", async () => {
+        const ctx = makeCtx();
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.todoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 1,
+            text: "[Doc](https://doc.example)",
+            checked: false,
+            kind: "listWithLink",
+        });
+
+        expect(writeText).toHaveBeenCalledWith(
+            "[Doc](https://doc.example)\nhttps://doc.example"
+        );
+    });
+
+    it("Copy handler treats `*WithLinkArchived` variants as link-bearing", async () => {
+        const ctx = makeCtx();
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.todoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 1,
+            text: "[archived](https://x.example)",
+            checked: true,
+            kind: "checkboxWithLinkArchived",
+        });
+
+        expect(writeText).toHaveBeenCalledWith(
+            "[archived](https://x.example)\nhttps://x.example"
+        );
+    });
+
+    it("Copy handler falls back to plain label for WithLink rows with no extractable link", async () => {
+        const ctx = makeCtx();
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.todoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 1,
+            text: "broken link row",
+            checked: false,
+            kind: "checkboxWithLink",
+        });
+
+        // The `*WithLink` row has no actual link to extract, so the
+        // helper returns "broken link row\nbroken link row" — the
+        // label repeated — rather than dropping the payload.
+        expect(writeText).toHaveBeenCalledWith(
+            "broken link row\nbroken link row"
+        );
+    });
+
+    it("projectsTodoCopy handler also writes label + link target", async () => {
+        const ctx = makeCtx("projectsTodo");
+        createTodoCommands(ctx);
+        const copy = registerSpy.mock.calls.find(
+            (c) => c[0] === "superset.projectsTodoCopy"
+        )?.[1] as (item: unknown) => Promise<void>;
+        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
+        writeText.mockClear();
+
+        await copy({
+            line: 1,
+            text: "[Open](https://p.example)",
+            checked: false,
+            kind: "checkboxWithLink",
+        });
+
+        expect(writeText).toHaveBeenCalledWith(
+            "[Open](https://p.example)\nhttps://p.example"
+        );
     });
 });

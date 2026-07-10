@@ -165,10 +165,18 @@ export function makePlansSection(items: TodoItem[]): TodoItem {
  * decoding URL escapes. Title is preserved on its own line so the
  * copy still reads as a meaningful label when viewed as a whole.
  *
- * Returns `null` when the input isn't a plan or has no `filePath`
- * — callers fall back to copying the plain label in that case.
+ * Returns `null` when `filePath` is missing. The `kind` field is
+ * intentionally NOT consulted here: callers gate on
+ * `kind === "plan" && filePath` themselves, and the previous
+ * signature (`TodoItem` with mandatory `kind`) tripped the
+ * `Copy` handler into a `null` fallback because it passed a
+ * `{ text, filePath }` projection whose `kind` was `undefined`,
+ * silently dropping the path on the floor.
  */
-export function formatPlanCopyText(item: TodoItem): string | null {
-    if (item.kind !== "plan" || !item.filePath) return null;
+export function formatPlanCopyText(item: {
+    readonly text: string;
+    readonly filePath?: string;
+}): string | null {
+    if (!item.filePath) return null;
     return `${item.text}\n${item.filePath}`;
 }

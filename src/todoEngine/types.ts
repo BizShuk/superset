@@ -23,8 +23,12 @@ export type PlanActionKind = "complete" | "backlog" | "archive" | "delete";
 export type ItemKind =
     | "checkbox"
     | "checkboxWithLink"
+    | "checkboxArchived"
+    | "checkboxWithLinkArchived"
     | "list"
     | "listWithLink"
+    | "listArchived"
+    | "listWithLinkArchived"
     | "section"
     | "sectionArchivable"
     | "sectionArchived"

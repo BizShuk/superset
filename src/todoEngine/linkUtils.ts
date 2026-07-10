@@ -26,3 +26,48 @@ export function extractLink(text: string): string | null {
     }
     return null;
 }
+
+/**
+ * Kinds whose rows carry a hyperlink in `text`. Used by the Copy
+ * command to decide whether the clipboard should receive the label
+ * alone (plain checkbox/list/section/plan) or the label + the link
+ * target on a second line.
+ *
+ * `*Archived` variants are included because the archive status is
+ * purely visual (it changes icon + viewItem) and does not strip the
+ * underlying link.
+ */
+const LINK_BEARING_KINDS = new Set<string>([
+    "checkboxWithLink",
+    "checkboxWithLinkArchived",
+    "listWithLink",
+    "listWithLinkArchived",
+]);
+
+/**
+ * Format a `*WithLink` row for the Copy command as two lines:
+ *   <label>
+ *   <link target>
+ *
+ * The label keeps the original `[text](url)` Markdown syntax on line
+ * 1 so the copy still reads as a meaningful description; the bare
+ * target sits on line 2 so users can paste it straight into a
+ * browser, terminal, or chat without unwrapping the Markdown. When
+ * `extractLink` fails to find a target inside the label (e.g. the
+ * text is a bare URL with no Markdown wrapping, or a label that
+ * pretends to be a link but contains no `(...)`), the function
+ * still returns two lines but the second line falls back to the
+ * raw `item.text` — better than silently dropping the link the
+ * user is reaching for.
+ *
+ * Returns `null` for non-link-bearing kinds so callers fall back to
+ * copying the plain label via `item.text`.
+ */
+export function formatLinkCopyText(item: {
+    readonly kind: string;
+    readonly text: string;
+}): string | null {
+    if (!LINK_BEARING_KINDS.has(item.kind)) return null;
+    const target = extractLink(item.text) ?? item.text;
+    return `${item.text}\n${target}`;
+}
