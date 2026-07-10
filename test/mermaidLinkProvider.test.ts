@@ -20,9 +20,9 @@ vi.mock("vscode", () => {
     };
 });
 
-import { MermaidTerminalLinkProvider } from "../src/terminals/mermaidLinkProvider";
-import { MermaidLineBuffer } from "../src/terminals/mermaidLineBuffer";
-import type { MermaidLinkClick } from "../src/terminals/mermaidLinkProvider";
+import { MermaidTerminalLinkProvider } from "../src/mermaid/mermaidLinkProvider";
+import { MermaidLineBuffer } from "../src/mermaid/mermaidLineBuffer";
+import type { MermaidLinkClick } from "../src/mermaid/mermaidLinkProvider";
 import type { TerminalHandle } from "../src/terminals/types";
 
 /** Minimal fake that satisfies the buffer key + TerminalHandle shape. */
@@ -61,7 +61,7 @@ describe("MermaidTerminalLinkProvider", () => {
         const link = links![0]!;
         expect(link.startIndex).toBe(0);
         expect(link.length).toBe(7);
-        expect(link.tooltip).toContain("graph TD");
+        expect(link.tooltip).toBe("Mermaid preview");
         expect((link as { body: string }).body).toBe(
             "graph TD\n  A --> B"
         );
@@ -190,6 +190,50 @@ describe("MermaidTerminalLinkProvider", () => {
         expect(captured).toBeDefined();
         expect(captured!.body).toBe("pie\n  A: 1\n  B: 2");
         expect(captured!.terminal).toBe(terminal);
+    });
+
+    it("tooltip is the concise 'Mermaid preview' label", async () => {
+        const buffer = new MermaidLineBuffer();
+        const terminal = fakeTerminal("zsh");
+        buffer.append(terminal, "mermaid\ngraph TD\n  A --> B\n");
+        const provider = new MermaidTerminalLinkProvider({
+            buffer,
+            onClick: () => {},
+        });
+
+        const links = (await provider.provideTerminalLinks({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            terminal: terminal as any,
+            line: "mermaid",
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            token: undefined as any,
+        })) as never;
+
+        expect(links).toHaveLength(1);
+        // The link label surfaces a clear `Mermaid preview` rather than
+        // the old verbose `Open Mermaid preview — <first body line>`.
+        expect(links![0]!.tooltip).toBe("Mermaid preview");
+    });
+
+    it("tooltip flags empty body when there's nothing to render", async () => {
+        const buffer = new MermaidLineBuffer();
+        const terminal = fakeTerminal("zsh");
+        buffer.append(terminal, "mermaid\n");
+        const provider = new MermaidTerminalLinkProvider({
+            buffer,
+            onClick: () => {},
+        });
+
+        const links = (await provider.provideTerminalLinks({
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            terminal: terminal as any,
+            line: "mermaid",
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            token: undefined as any,
+        })) as never;
+
+        expect(links).toHaveLength(1);
+        expect(links![0]!.tooltip).toBe("Mermaid preview (empty body)");
     });
 
     it("handleTerminalLink is a no-op when terminal wasn't attached", () => {

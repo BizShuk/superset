@@ -4,7 +4,7 @@ import type { FeatureContext, FeatureHandle } from "../shared";
 import { ProjectsTodoStore } from "./projectsTodoStore";
 import { ProjectsTodoTreeProvider } from "./projectsTodoTreeProvider";
 import { computeTodoBadgeTitle } from "../todo/badge";
-import { extractLink, resolveTodoLink } from "../todo/todoTreeProvider";
+import { extractLink, resolveTodoLink } from "../todoEngine/linkUtils";
 import {
     completePlan as completePlanFs,
     backlogPlan as backlogPlanFs,

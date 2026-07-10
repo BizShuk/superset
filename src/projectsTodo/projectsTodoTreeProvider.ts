@@ -3,12 +3,8 @@ import * as path from "path";
 import type { ProjectTodoItem } from "./types";
 import type { ProjectsTodoStore } from "./projectsTodoStore";
 import { isArchivedSubsection, cleanTags, isArchivedTask } from "../todo/parser";
-import {
-    filterCompleted,
-    applyPriorityFilter,
-    extractLink,
-    cleanLabelText
-} from "../todo/todoTreeProvider";
+import { filterCompleted, applyPriorityFilter } from "../todo/todoTreeProvider";
+import { extractLink, cleanLabelText } from "../todoEngine/linkUtils";
 import { makePlansSection, planInfoToTodoItem } from "../todo/plansSource";
 
 /**

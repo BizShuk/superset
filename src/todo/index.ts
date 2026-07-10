@@ -2,7 +2,8 @@ import * as vscode from "vscode";
 import * as path from "path";
 import type { FeatureContext, FeatureHandle } from "../shared";
 import { TodoStore } from "./todoStore";
-import { TodoTreeProvider, extractLink, resolveTodoLink } from "./todoTreeProvider";
+import { TodoTreeProvider } from "./todoTreeProvider";
+import { extractLink, resolveTodoLink } from "../todoEngine/linkUtils";
 import { computeTodoBadgeTitle } from "./badge";
 import {
     completePlan as completePlanFs,

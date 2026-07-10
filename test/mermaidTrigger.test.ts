@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     findFirstMermaidMatch,
     findAllMermaidMatches,
-} from "../src/terminals/mermaidTrigger";
+} from "../src/mermaid/mermaidTrigger";
 
 describe("findFirstMermaidMatch", () => {
     it("returns null when buffer has no trigger line", () => {

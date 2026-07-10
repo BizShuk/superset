@@ -1,4 +1,4 @@
-import type { TerminalHandle } from "./types";
+import type { TerminalHandle } from "../terminals/types";
 
 /**
  * Per-terminal ring buffer of recent render-lines, fed by:

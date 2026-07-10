@@ -3,7 +3,7 @@
 > 本檔為當前工作區 (`~/projects/tmp/superset`) 的待辦與歸檔索引。
 > 結構規範:`## Active` 內分 7 個 `###` 子標題對應 README/CLAUDE.md 的 feature 章節;`## Archive` 保留 @Archived 引用以便日後找回。
 > 完成項目集中於 [`docs/archive/todo-completed-2026-07.md`](docs/archive/todo-completed-2026-07.md)。
-- [ ] 當terminal 出現mermaid keyword 上面顯示 mermaid preview 文字開啟 mermaid preview
+- [ ] mermaid doesn't convert to link in claude tui
 - [x] add command to install License @2026-07-10_02:34:54 @Completed
 
 ## Active
@@ -26,7 +26,6 @@ _(無 active item)_
 
 ### Platform & UX
 
-- [ ] [P1] [chore] VSIX cross-platform packaging sanity — `.vscodeignore` exclude dev artifacts (test/, src/, scripts/) while intentionally keeping `@homebridge/node-pty-prebuilt-multiarch/prebuilds/` for all target platforms; add `scripts/verify-vsix.sh` that post-checks the .vsix; wire into `npm run build`. See scan note 2026-06-23#5A. ✓ Stage 3 完成,見 [plans/2026-07-05-architecture-vsix-cross-platform-sanity.md](plans/2026-07-05-architecture-vsix-cross-platform-sanity.md)
 
 ### Plans
 
@@ -36,6 +35,7 @@ _(無 active item)_
 
 下列項目已歸檔為 plans (未實作,保留 plan 以便日後重新啟用):
 
+- [x] 當terminal 出現mermaid keyword 上面顯示 mermaid preview 文字開啟 mermaid preview @2026-07-10_17:59:25 @Completed
 - [x] overview todo , all projects plans merge into single section, but the each project plans should attach to its proejct section @2026-07-10_03:32:43 @Completed
 - [x] data/pkg/stock 顯示在overview todo 上 @2026-07-10_02:29:12 @Completed
 - [ ] architecture-highlight-regex: 使用者透過設定自訂的規則運算式決定哪些終端機輸出內容才觸發未讀高亮提示 — [plans/2026-07-05-architecture-highlight-regex.md](plans/2026-07-05-architecture-highlight-regex.md) @2026-07-08_12:31:34 @Archived @Plans

@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, vi } from "vitest";
+import { assertPluginContract } from "./pluginContract.shared";
 
 vi.mock("vscode", () => ({}));
 
@@ -7,16 +8,12 @@ const { topologyPlugin, TOPOLOGY_PLUGIN_ID } = await import(
 );
 
 describe("topologyPlugin", () => {
-    it("exposes a stable id and name", () => {
-        expect(topologyPlugin.id).toBe(TOPOLOGY_PLUGIN_ID);
-        expect(topologyPlugin.name).toBe("Topology");
-    });
-
-    it("does not contribute a markdown-it hook", () => {
-        expect(topologyPlugin.contributeMarkdownIt).toBeUndefined();
-    });
-
-    it("defines an optional deactivate (lifecycle hint for the manager)", () => {
-        expect(typeof topologyPlugin.deactivate).toBe("function");
+    it("satisfies the ExtensionPlugin contract", () => {
+        assertPluginContract(topologyPlugin, {
+            id: TOPOLOGY_PLUGIN_ID,
+            name: "Topology",
+            markdownHook: "absent",
+            deactivate: "present",
+        });
     });
 });

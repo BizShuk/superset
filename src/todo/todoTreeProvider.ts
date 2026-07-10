@@ -1,9 +1,21 @@
 import * as vscode from "vscode";
-import * as path from "path";
 import type { TodoChange, TodoItem, TodoViewType } from "./types";
 import type { TodoStore } from "./todoStore";
 import { isArchivedSubsection, cleanTags, isArchivedTask } from "./parser";
 import { makePlansSection, planInfoToTodoItem } from "./plansSource";
+import {
+    extractLink,
+    cleanLabelText,
+    resolveTodoLink,
+    type ResolvedLink,
+} from "../todoEngine/linkUtils";
+
+// Re-export the link helpers so existing imports of
+// `extractLink` / `resolveTodoLink` / `cleanLabelText` /
+// `ResolvedLink` from this module keep working. The canonical
+// implementations live in `../todoEngine/linkUtils` — this file is
+// now a thin pass-through, not a second copy.
+export { extractLink, cleanLabelText, resolveTodoLink, type ResolvedLink };
 
 /**
  * vscode-bound TreeDataProvider for the TODO list.
@@ -638,62 +650,6 @@ function hasPendingCheckbox(item: TodoItem): boolean {
         return true;
     }
     return (item.children ?? []).some(hasPendingCheckbox);
-}
-
-/**
- * Extract the first hyperlink (Markdown link target or raw HTTP/HTTPS URL) from text.
- * Exported for testing.
- */
-export function extractLink(text: string): string | null {
-    // 1. Check for markdown link: [text](target)
-    const markdownMatch = text.match(/\[[^\]]*\]\(([^)]+)\)/);
-    if (markdownMatch) {
-        return markdownMatch[1].trim();
-    }
-    // 2. Check for HTTP/HTTPS URL
-    const urlMatch = text.match(/https?:\/\/[^\s]+/);
-    if (urlMatch) {
-        return urlMatch[0].trim();
-    }
-    return null;
-}
-
-/**
- * Replace markdown links [text](target) with just the link text.
- * Exported for testing.
- */
-export function cleanLabelText(text: string): string {
-    return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
-}
-
-export interface ResolvedLink {
-    readonly type: "url" | "file";
-    readonly uriOrPath: string;
-}
-
-/**
- * Resolves a todo link target to a full path or URL, taking into account workspace relative paths and file:// protocols.
- * Exported for testing.
- */
-export function resolveTodoLink(target: string, workspaceFolder: string): ResolvedLink {
-    if (
-        target.startsWith("http://") ||
-        target.startsWith("https://") ||
-        target.startsWith("file:///")
-    ) {
-        return { type: "url", uriOrPath: target };
-    }
-
-    let cleanPath = target;
-    if (target.startsWith("file://")) {
-        cleanPath = target.substring(7);
-    }
-
-    const resolvedPath = path.isAbsolute(cleanPath)
-        ? cleanPath
-        : path.join(workspaceFolder, cleanPath);
-
-    return { type: "file", uriOrPath: resolvedPath };
 }
 
 /**

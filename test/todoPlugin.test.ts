@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, vi } from "vitest";
+import { assertPluginContract } from "./pluginContract.shared";
 
 // Minimal vscode mock — needed because the todo plugin adapter
 // statically imports `./index.ts` which itself imports `vscode`. The
@@ -13,16 +14,12 @@ vi.mock("vscode", () => ({}));
 const { todoPlugin, TODO_PLUGIN_ID } = await import("../src/todo/plugin");
 
 describe("todoPlugin", () => {
-    it("exposes a stable id and name", () => {
-        expect(todoPlugin.id).toBe(TODO_PLUGIN_ID);
-        expect(todoPlugin.name).toBe("TODO");
-    });
-
-    it("does not contribute a markdown-it hook", () => {
-        expect(todoPlugin.contributeMarkdownIt).toBeUndefined();
-    });
-
-    it("defines an optional deactivate (lifecycle hint for the manager)", () => {
-        expect(typeof todoPlugin.deactivate).toBe("function");
+    it("satisfies the ExtensionPlugin contract", () => {
+        assertPluginContract(todoPlugin, {
+            id: TODO_PLUGIN_ID,
+            name: "TODO",
+            markdownHook: "absent",
+            deactivate: "present",
+        });
     });
 });

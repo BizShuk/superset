@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { MermaidLineBuffer } from "../src/terminals/mermaidLineBuffer";
+import { MermaidLineBuffer } from "../src/mermaid/mermaidLineBuffer";
 
 /** Anonymous stand-in for vscode.Terminal: any unique object satisfies
  *  the buffer's Map-key contract since identity is what matters. */

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { assertPluginContract } from "./pluginContract.shared";
 
 vi.mock("vscode", () => ({}));
 
@@ -7,13 +8,13 @@ const { todoPreviewPlugin, TODO_PREVIEW_PLUGIN_ID } = await import(
 );
 
 describe("todoPreviewPlugin", () => {
-    it("exposes a stable id and name", () => {
-        expect(todoPreviewPlugin.id).toBe(TODO_PREVIEW_PLUGIN_ID);
-        expect(todoPreviewPlugin.name).toBe("Todo Preview");
-    });
-
-    it("contributes a markdown-it hook", () => {
-        expect(typeof todoPreviewPlugin.contributeMarkdownIt).toBe("function");
+    it("satisfies the ExtensionPlugin contract (with a markdown-it hook)", () => {
+        assertPluginContract(todoPreviewPlugin, {
+            id: TODO_PREVIEW_PLUGIN_ID,
+            name: "Todo Preview",
+            markdownHook: "function",
+            deactivate: "absent",
+        });
     });
 
     it("contributeMarkdownIt pushes a 'todo_section_wrap' ruler onto md.core", () => {

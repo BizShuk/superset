@@ -24,9 +24,9 @@ import {
     installAutoPtyReplacer,
     installEditorFocusBridge,
 } from "./lifecycle";
-import { MermaidLineBuffer } from "./mermaidLineBuffer";
-import { MermaidTerminalLinkProvider } from "./mermaidLinkProvider";
-import { registerMermaidPreviewCommand } from "./mermaidPreviewCommand";
+import { MermaidLineBuffer } from "../mermaid/mermaidLineBuffer";
+import { MermaidTerminalLinkProvider } from "../mermaid/mermaidLinkProvider";
+import { registerMermaidPreviewCommand } from "../mermaid/mermaidPreviewCommand";
 import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import {
@@ -171,6 +171,17 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // (`outputWatcher.ts` covers those for mark-unseen).
     const mermaidBuffer = new MermaidLineBuffer();
     const offPtyData = ptyFactory.onData((terminal, data) => {
+        // TEMP DIAGNOSTIC: capture any PTY chunk containing "mermaid" so we
+        // can see claude's actual raw byte format (ANSI, box-drawing,
+        // alternate-screen redraw) and decide how to relax the trigger.
+        // Remove once detection works on claude's real output.
+        if (data.toLowerCase().includes("mermaid")) {
+            log(
+                `[mermaid-diag] terminal="${terminal.name}" ` +
+                    `len=${data.length} ` +
+                    `json=${JSON.stringify(data.slice(0, 400))}`
+            );
+        }
         mermaidBuffer.append(terminal, data);
     });
     const shellFanOut = createShellExecutionChunkFanOut(log);

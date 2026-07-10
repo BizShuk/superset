@@ -58,7 +58,7 @@ vi.mock("fs/promises", () => ({
 import {
     runMermaidPreview,
     __test_only__,
-} from "../src/terminals/mermaidPreviewCommand";
+} from "../src/mermaid/mermaidPreviewCommand";
 
 const { KNOWN_MERMAID_PACKAGES } = __test_only__;
 

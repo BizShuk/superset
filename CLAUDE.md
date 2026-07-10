@@ -105,6 +105,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | 模組                | 職責                                           | 主要元件                                                  |
 | ------------------- | ---------------------------------------------- | --------------------------------------------------------- |
 | `src/terminals/`    | 終端機面板 + 高亮 + PTY 自動替換               | TerminalRegistry, OutputWatcher, PtyTerminalHost, ...     |
+| `src/mermaid/`      | 終端機 Mermaid 區塊 link provider + 預覽命令   | MermaidLineBuffer, MermaidTerminalLinkProvider, mermaidTrigger |
 | `src/mdns/`         | mDNS 服務發現 TreeView                         | MdnsRegistry, MdnsTreeProvider                            |
 | `src/topology/`     | 網路拓撲掃描 TreeView                          | TopologyStore, TopologyTreeProvider                       |
 | `src/todo/`         | TODO 清單 TreeView + 過濾器 badge              | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
@@ -115,7 +116,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 > `treePreview` 與 `todoPreview` 同屬「Markdown 預覽貢獻」型 feature (不走 `register()`,只交出 `extendMarkdownIt`);`extension.ts` 用 `composeMarkdownExtensions()` 把兩者串到同一個 `md` 再回傳給 VSCode。`todoPreview` 純 CSS 互動 (`:has()` + checkbox hack,見 `styles/todo-preview.css`),無 preview JS;核心 `core` ruler 只在文件首個 heading 為 `# TODO` 時才重組 (`isTodoDoc` gate),其餘 markdown 預覽不受影響。「fold all + 單節獨立展開」共存為 CSS 天花板 (需 JS),刻意不做。
 
-> 跨 feature 共用的框架型別 (`FeatureContext`、`FeatureHandle`、`SharedDeps`) 放在 `src/shared.ts`;各 feature 自己的 domain 型別放在該資料夾的 `types.ts` (原本集中在單一 `src/types.ts` 的 grab-bag 已依 feature 拆分)。
+> 跨 feature 共用的框架型別 (`FeatureContext`、`FeatureHandle`、`SharedDeps`) 放在 `src/shared.ts`;各 feature 自己的 domain 型別放在該資料夾的 `types.ts` (原本集中在單一 `src/types.ts` 的 grab-bag 已依 feature 拆分)。todo 連結解析的純函式 (`extractLink` / `resolveTodoLink` / `cleanLabelText` / `ResolvedLink` / `formatLinkCopyText`) 統一收在 `src/todoEngine/linkUtils.ts` 為唯一 source of truth,供 `todo`、`projectsTodo` 兩面板與 `todoEngine` command factory 共用 — 不再有面板端或 factory 端的第二份副本。
 
 ### `src/terminals/` 內部拆檔 (SRP)
 
@@ -128,6 +129,8 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | `ptyTerminalFactory.ts`     | 建 PTY-backed terminal (node-pty spawner + Pseudoterminal 接線) | 部分         |
 | `shellExecutionSource.ts`   | `onDidStartTerminalShellExecution` → OutputWatcher 事件 adapter | vscode-bound |
 | `commands.ts`               | `registerTerminalCommands` / `registerGroupCommands`            | vscode-bound |
+
+> Mermaid 偵測四件 (`mermaidLineBuffer` / `mermaidLinkProvider` / `mermaidPreviewCommand` / `mermaidTrigger`) 原散落於 `src/terminals/`,已抽出到獨立 `src/mermaid/` 資料夾對齊 feature-as-folder 慣例,並建 barrel `index.ts`。它仍由 `terminals/index.ts` 直接接線(無自己的 `register()` / plugin shim),且 `TerminalHandle` 型別反向依賴 `../terminals/types` — 因 mermaid 本質是 terminal 面板的子功能。`plans/architecture-terminals.md` 記載的深層拆分 (`PtyProcessController` 等) 不在此範圍。
 
 ### Tree Preview (從 md-tree-highlight 合併)
 
@@ -146,13 +149,14 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `plugin/types.ts`       | `ExtensionPlugin` / `PluginContext` / `MarkdownIt` 介面                                                               |
 | `plugin/context.ts`     | `createPluginContext` 工廠,封裝 `registerDisposable` / `registerResetHandler`                                         |
+| `plugin/featureContext.ts` | `createFeatureContext` 工廠,把 `PluginContext` 適配成 legacy `register()` 期待的 `FeatureContext`;6 個 panel shim 共用,取代各自逐字重複的 `buildFeatureContext` |
 | `plugin/manager.ts`     | `PluginManager`:依序 `activate`、錯誤邊界、disposable 託管、`resetAll` / `deactivateAll`、合併 `contributeMarkdownIt` |
 | `plugin/index.ts`       | barrel — 外部統一 `import { PluginManager, ... } from "./plugin"`                                                     |
 | `treePreview/plugin.ts` | `treePreviewPlugin: ExtensionPlugin`,把 `createTreePreviewExtension` 的 hook 包成 `contributeMarkdownIt`              |
 
 **錯誤邊界**:`PluginManager.activateAll` 對每個 plugin 各自 `try-catch`,失敗僅 log + 在 `workspaceState` 標 `plugin.failed.<id>`,**不會**中斷其他 plugin。這解決 master plan §1 列的「單一模組掛掉導致整個 extension 啟用失敗」。
 
-**驗證**:`test/pluginManager.test.ts` (7 case) + `test/treePreviewPlugin.test.ts` (3 case) 涵蓋:順序 activate / 錯誤隔離 / workspaceState 標記 / disposable 託管 / reset handler 容錯 / `contributeMarkdownIt` 鏈式組合 / 無貢獻時 `getMarkdownExtension()` 回 `undefined`。
+**驗證**:`test/pluginManager.test.ts` (7 case) + `test/treePreviewPlugin.test.ts` (3 case) 涵蓋:順序 activate / 錯誤隔離 / workspaceState 標記 / disposable 託管 / reset handler 容錯 / `contributeMarkdownIt` 鏈式組合 / 無貢獻時 `getMarkdownExtension()` 回 `undefined`。六個 panel shim 的介面契約 (id / name / markdown hook / deactivate) 收在共用 `test/pluginContract.shared.ts` 的 `assertPluginContract`,取代各自逐字重複的三案例。
 
 ### Todo Feature 拆檔 (Stage 2)
 

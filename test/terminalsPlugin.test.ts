@@ -1,4 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, vi } from "vitest";
+import { assertPluginContract } from "./pluginContract.shared";
 
 // Minimal vscode mock — the terminals plugin chain imports `./index.ts`
 // which reaches for vscode surface. We only check interface-level
@@ -10,16 +11,12 @@ const { terminalsPlugin, TERMINALS_PLUGIN_ID } = await import(
 );
 
 describe("terminalsPlugin", () => {
-    it("exposes a stable id and name", () => {
-        expect(terminalsPlugin.id).toBe(TERMINALS_PLUGIN_ID);
-        expect(terminalsPlugin.name).toBe("Terminals");
-    });
-
-    it("does not contribute a markdown-it hook", () => {
-        expect(terminalsPlugin.contributeMarkdownIt).toBeUndefined();
-    });
-
-    it("defines an optional deactivate (lifecycle hint for the manager)", () => {
-        expect(typeof terminalsPlugin.deactivate).toBe("function");
+    it("satisfies the ExtensionPlugin contract", () => {
+        assertPluginContract(terminalsPlugin, {
+            id: TERMINALS_PLUGIN_ID,
+            name: "Terminals",
+            markdownHook: "absent",
+            deactivate: "present",
+        });
     });
 });

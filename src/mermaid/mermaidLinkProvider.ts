@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { findFirstMermaidMatch } from "./mermaidTrigger";
 import type { MermaidLineBuffer } from "./mermaidLineBuffer";
 import type { MermaidMatch } from "./mermaidTrigger";
-import type { TerminalHandle } from "./types";
+import type { TerminalHandle } from "../terminals/types";
 
 /**
  * Clickable link provider that scans a terminal's recent lines for a
@@ -157,16 +157,19 @@ function rangeFromTrigger(
     };
 }
 
-/** Hover text shown by VSCode when the cursor is over the link. Keeps
- *  the body's first line so users can tell at a glance which diagram
- *  the link opens without committing to a click. */
+/**
+ * Hover text shown by VSCode when the cursor is over the link.
+ *
+ * The user's directive: the link should surface a clear `Mermaid preview`
+ * label so it's obvious at a glance that clicking opens the preview —
+ * not the verbose `Open Mermaid preview — <first line>` we used to emit,
+ * which buried the action behind the diagram's first body line. We keep
+ * an `(empty body)` marker only when there is nothing to render, since
+ * that case is genuinely ambiguous (click would open an empty preview).
+ */
 function makeTooltip(match: MermaidMatch): string {
-    const firstLine =
-        match.bodyLines.length > 0
-            ? match.bodyText.split("\n", 1)[0] ?? ""
-            : "";
-    if (firstLine.length === 0) {
-        return "Open Mermaid preview (empty body)";
+    if (match.bodyLines.length === 0) {
+        return "Mermaid preview (empty body)";
     }
-    return `Open Mermaid preview — ${firstLine}`;
+    return "Mermaid preview";
 }

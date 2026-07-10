@@ -1,13 +1,21 @@
-// linkUtils — pure helpers used by the todoEngine factory for the
-// openLink command. Kept separate so the factory can stay focused
-// on command-id assembly and panel-neutral logic, and so these
-// helpers can be unit-tested in isolation.
+// linkUtils — the single source of truth for todo-link parsing/resolution
+// helpers shared by the `todo` and `projectsTodo` panels (and the
+// `todoEngine` command factory that serves both).
 //
-// `extractLink` mirrors the version in `src/todo/todoTreeProvider.ts`;
-// the duplicate is intentional: the factory must not import from a
-// panel module to keep the dependency direction one-way. When the
-// refactor is fully landed, the panel-side copies can be removed
-// and these become the single source of truth.
+// History: `extractLink` / `resolveTodoLink` / `cleanLabelText` previously
+// lived in `src/todo/todoTreeProvider.ts`, with a mirror-copy of
+// `extractLink` here and a third copy (`resolveTodoLinkFactory`) in
+// `commandFactory.ts`. The duplication existed because the factory must
+// not import from a panel module (one-way dependency direction). Now
+// that this module is the canonical home, the panel-side copies are
+// removed and the factory's local copy is deleted — one implementation,
+// imported from here by all three consumers.
+//
+// All functions are pure (no I/O, no `vscode`), so they are unit-tested
+// in isolation in `test/todoEngine/linkUtils.test.ts` and
+// `test/todoTreeProvider.test.ts`.
+
+import * as path from "node:path";
 
 /**
  * Extract the first hyperlink (Markdown link target or raw HTTP/HTTPS
@@ -25,6 +33,54 @@ export function extractLink(text: string): string | null {
         return urlMatch[0].trim();
     }
     return null;
+}
+
+/**
+ * Replace markdown links `[text](target)` with just the link text, so
+ * a row label renders without the trailing URL.
+ */
+export function cleanLabelText(text: string): string {
+    return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+}
+
+export interface ResolvedLink {
+    readonly type: "url" | "file";
+    readonly uriOrPath: string;
+}
+
+/**
+ * Resolve a todo link target to a full path or URL, taking into
+ * account workspace-relative paths and `file://` protocols.
+ *
+ * - `http(s)://...` and `file:///...` (three slashes) are treated as
+ *   absolute URLs and returned verbatim.
+ * - `file://<path>` (two slashes) is stripped of the `file://` prefix
+ *   and then treated as a path.
+ * - Absolute paths (`/...`) are returned as-is.
+ * - Everything else is joined onto `workspaceFolder`.
+ */
+export function resolveTodoLink(
+    target: string,
+    workspaceFolder: string
+): ResolvedLink {
+    if (
+        target.startsWith("http://") ||
+        target.startsWith("https://") ||
+        target.startsWith("file:///")
+    ) {
+        return { type: "url", uriOrPath: target };
+    }
+
+    let cleanPath = target;
+    if (target.startsWith("file://")) {
+        cleanPath = target.substring("file://".length);
+    }
+
+    const resolvedPath = path.isAbsolute(cleanPath)
+        ? cleanPath
+        : path.join(workspaceFolder, cleanPath);
+
+    return { type: "file", uriOrPath: resolvedPath };
 }
 
 /**

@@ -15,42 +15,11 @@ import {
     type TodoCommandSet,
     type TodoEngineItem,
 } from "./types";
-import { extractLink as planExtractLink, formatLinkCopyText } from "./linkUtils";
-
-interface ResolvedLink {
-    readonly type: "url" | "file";
-    readonly uriOrPath: string;
-}
-
-/** Resolve a todo link target to a full path or URL. Mirrors
- *  `resolveTodoLink` in `src/todo/todoTreeProvider.ts`; kept local
- *  here so the factory stays free of panel-specific imports. */
-function resolveTodoLinkFactory(
-    target: string,
-    workspaceFolder: string
-): ResolvedLink {
-    if (
-        target.startsWith("http://") ||
-        target.startsWith("https://") ||
-        target.startsWith("file:///")
-    ) {
-        return { type: "url", uriOrPath: target };
-    }
-
-    let cleanPath = target;
-    if (target.startsWith("file://")) {
-        cleanPath = target.slice("file://".length);
-    }
-
-    if (cleanPath.startsWith("/")) {
-        return { type: "file", uriOrPath: cleanPath };
-    }
-
-    return {
-        type: "file",
-        uriOrPath: path.join(workspaceFolder, cleanPath),
-    };
-}
+import {
+    extractLink as planExtractLink,
+    formatLinkCopyText,
+    resolveTodoLink,
+} from "./linkUtils";
 
 /** A single command registration returned by the factory. Stored as
  *  a tuple so the caller can dispose of them in the right order. */
@@ -262,7 +231,7 @@ export function createTodoCommands(
         const target = planExtractLink(item.text);
         if (!target) return;
         try {
-            const resolved = resolveTodoLinkFactory(
+            const resolved = resolveTodoLink(
                 target,
                 ctx.workspaceFolder
             );
