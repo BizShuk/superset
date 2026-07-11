@@ -29,6 +29,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         debounceMs,
         spawn: spawnExecFile,
         clock: () => Date.now(),
+        log: ctx.shared.log,
     });
 
     const provider = new ModifiedFilesTreeProvider(store, repoRoot);

@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
+import {
+    type ModifiedFilesState,
+    type ModifiedFilesStore,
+} from "./modifiedFilesStore";
 import * as treeSpec from "./treeSpec";
-import type { ModifiedFilesStore } from "./modifiedFilesStore";
 import type { TreeNode } from "./types";
 
 const COLLAPSIBLE_MAP = {
@@ -9,21 +12,72 @@ const COLLAPSIBLE_MAP = {
     expanded: vscode.TreeItemCollapsibleState.Expanded,
 } as const;
 
-export class ModifiedFilesTreeProvider implements vscode.TreeDataProvider<TreeNode> {
-    private readonly emitter = new vscode.EventEmitter<TreeNode | undefined>();
-    readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined> = this.emitter.event;
+/**
+ * Sentinel element representing a status / error / empty message shown
+ * inline in the tree. Distinct from `TreeNode` so the data layer can stay
+ * focused on file/folder structure.
+ */
+export interface MessageElement {
+    readonly kind: "__message";
+    readonly text: string;
+    readonly icon: string;
+}
+
+export type ProviderElement = TreeNode | MessageElement;
+
+/**
+ * Pure function: compute the root-level elements to display based on the
+ * current store state. Extracted from `getChildren` so it can be unit-tested
+ * without `vscode` mocks.
+ *
+ * Behaviour:
+ * - error state  → single warning row showing the error message
+ * - loading      → empty (no rows yet)
+ * - ready + 0    → single check row showing "No modified files (scanning <repoRoot>)"
+ * - ready + N    → the actual tree nodes
+ */
+export function computeRootChildren(
+    state: ModifiedFilesState,
+    repoRoot: string,
+): ProviderElement[] {
+    if (state.kind === "error") {
+        return [{ kind: "__message", text: `⚠ ${state.message}`, icon: "warning" }];
+    }
+    if (state.kind !== "ready") return [];
+    if (state.nodes.length === 0) {
+        return [{
+            kind: "__message",
+            text: `No modified files (scanning ${repoRoot})`,
+            icon: "check",
+        }];
+    }
+    return [...state.nodes];
+}
+
+export class ModifiedFilesTreeProvider implements vscode.TreeDataProvider<ProviderElement> {
+    private readonly emitter = new vscode.EventEmitter<ProviderElement | undefined>();
+    readonly onDidChangeTreeData: vscode.Event<ProviderElement | undefined> = this.emitter.event;
     private storeListener: vscode.Disposable | undefined;
 
     constructor(
         private readonly store: ModifiedFilesStore,
         private readonly repoRoot: string,
     ) {
-        this.storeListener = store.onDidChange(state => {
-            if (state.kind === "ready") this.emitter.fire(undefined);
+        this.storeListener = store.onDidChange(() => {
+            // Re-render on every state transition (loading / ready / error),
+            // not just `ready` — error & empty-state messages should appear too.
+            this.emitter.fire(undefined);
         });
     }
 
-    getTreeItem(element: TreeNode): vscode.TreeItem {
+    getTreeItem(element: ProviderElement): vscode.TreeItem {
+        if (element.kind === "__message") {
+            const item = new vscode.TreeItem(element.text);
+            item.iconPath = new vscode.ThemeIcon(element.icon);
+            item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+            item.contextValue = "modifiedMessage";
+            return item;
+        }
         const spec = treeSpec.buildTreeItem(element);
         const item = new vscode.TreeItem(spec.label);
         item.iconPath = new vscode.ThemeIcon(spec.iconId);
@@ -44,10 +98,11 @@ export class ModifiedFilesTreeProvider implements vscode.TreeDataProvider<TreeNo
         return item;
     }
 
-    getChildren(element?: TreeNode): vscode.ProviderResult<TreeNode[]> {
+    getChildren(element?: ProviderElement): vscode.ProviderResult<ProviderElement[]> {
+        if (element && element.kind === "__message") return [];
         const state = this.store.getState();
-        if (state.kind !== "ready") return [];
-        if (!element) return [...state.nodes];
+        if (!element) return computeRootChildren(state, this.repoRoot);
+        // element is a TreeNode here (folder or file)
         if (element.kind === "folder") return [...element.children];
         return [];
     }

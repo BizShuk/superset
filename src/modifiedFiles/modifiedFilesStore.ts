@@ -30,6 +30,13 @@ export interface ModifiedFilesStoreOptions {
     readonly spawn: (cmd: string, args: readonly string[]) => Promise<SpawnResult>;
     /** Injectable clock for testing; production passes `() => Date.now()`. */
     readonly clock: () => number;
+    /**
+     * Optional diagnostic logger. When provided, every refresh emits a line
+     * (start / parse-count / error) so users can correlate panel state with
+     * what's in `Superset: Show Diagnostic Logs`. Production wires this to
+     * `ctx.shared.log`; tests omit it.
+     */
+    readonly log?: (msg: string) => void;
 }
 
 export type ModifiedFilesListener = (state: ModifiedFilesState) => void;
@@ -67,9 +74,10 @@ export class ModifiedFilesStore {
      * Idempotent — safe to call multiple times. Failures land in error state.
      */
     async refresh(): Promise<void> {
+        this.options.log?.(`[modifiedFiles] refresh start cwd=${this.options.workspaceRoot}`);
         try {
-            const stdout = await Promise.race([
-                this.options.spawn("git", ["status", "--porcelain"]).then(r => r.stdout),
+            const result = await Promise.race([
+                this.options.spawn("git", ["status", "--porcelain"]),
                 new Promise<never>((_, reject) =>
                     setTimeout(
                         () => reject(new Error(`git status timed out after ${SCAN_TIMEOUT_MS}ms`)),
@@ -77,14 +85,17 @@ export class ModifiedFilesStore {
                     ),
                 ),
             ]);
-            const files = gitStatusParser.parse(stdout);
+            this.options.log?.(
+                `[modifiedFiles] git status: stdout=${result.stdout.length}B stderr=${result.stderr.length}B`,
+            );
+            const files = gitStatusParser.parse(result.stdout);
+            this.options.log?.(`[modifiedFiles] parsed ${files.length} files`);
             const nodes = treeBuilder.build(files, { showUntracked: this.showUntracked });
             this.state = { kind: "ready", nodes, files, refreshedAt: this.options.clock() };
         } catch (err) {
-            this.state = {
-                kind: "error",
-                message: err instanceof Error ? err.message : String(err),
-            };
+            const msg = err instanceof Error ? err.message : String(err);
+            this.options.log?.(`[modifiedFiles] refresh failed: ${msg}`);
+            this.state = { kind: "error", message: msg };
         }
         this.emit();
     }
