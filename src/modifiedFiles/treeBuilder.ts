@@ -29,7 +29,7 @@ export function build(
     }
 
     const folderIndex = new Map<string, MutableFolder>();
-    const roots: TreeNode[] = [];
+    const roots: MutableFolder[] = [];
     const topLevelFiles: TreeNode[] = [];
 
     const pathSep = (s: string) => s.replace(/\\/g, "/");
@@ -102,14 +102,17 @@ export function build(
     // Sort children (alphabetical, no folder/file separation)
     const sortRecursive = (node: TreeNode): void => {
         if (node.kind !== "folder") return;
-        node.children.sort((a, b) => a.label.localeCompare(b.label));
-        node.children.forEach(sortRecursive);
+        // Safe cast: we built these arrays ourselves and only return them after
+        // sorting. The readonly type is for downstream consumers.
+        const children = node.children as TreeNode[];
+        children.sort((a, b) => a.label.localeCompare(b.label));
+        children.forEach(sortRecursive);
     };
     roots.forEach(sortRecursive);
     topLevelFiles.sort((a, b) => a.label.localeCompare(b.label));
 
     // Merge roots + top-level files, sort
-    const forest: TreeNode[] = [...roots, ...topLevelFiles];
+    const forest: TreeNode[] = [...(roots as readonly TreeNode[]), ...topLevelFiles];
     forest.sort((a, b) => a.label.localeCompare(b.label));
     return forest;
 }
