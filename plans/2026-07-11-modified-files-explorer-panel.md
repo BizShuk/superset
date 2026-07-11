@@ -1329,20 +1329,23 @@ git commit -m "feat(modifiedFiles): add ExtensionPlugin shim"
 
 ```typescript
 // test/modifiedFilesPlugin.test.ts
-import { describe, it, expect } from "vitest";
+import { describe, it } from "vitest";
 import { modifiedFilesPlugin } from "../src/modifiedFiles/plugin";
 import { assertPluginContract } from "./pluginContract.shared";
 
 describe("modifiedFilesPlugin", () => {
-    assertPluginContract({
-        plugin: modifiedFilesPlugin,
-        expectedId: "modified-files",
-        expectedName: "Modified Files",
+    it("satisfies the ExtensionPlugin interface contract", () => {
+        assertPluginContract(modifiedFilesPlugin, {
+            id: "modified-files",
+            name: "Modified Files",
+            markdownHook: "absent",
+            deactivate: "present",
+        });
     });
 });
 ```
 
-Note: `assertPluginContract` already exists in `test/pluginContract.shared.ts` and validates: `id` matches, `name` matches, `activate` returns without error, `deactivate` returns without error, plugin has no markdown contribution. The 3 cases from spec §10 collapse into the shared helper's checks.
+Note: `assertPluginContract(plugin, expected)` already exists in `test/pluginContract.shared.ts` and validates: `plugin.id === expected.id`, `plugin.name === expected.name`, `plugin.contributeMarkdownIt` matches `expected.markdownHook` shape, `plugin.deactivate` matches `expected.deactivate` shape. The 3 cases from spec §10 collapse into the shared helper's assertions. `markdownHook: "absent"` is correct because `modifiedFilesPlugin` only contributes a TreeView, not a markdown-it hook. `deactivate: "present"` because the plugin shim defines `deactivate()` even though it's a no-op body.
 
 - [ ] **Step 2: Run test, verify it fails**
 
