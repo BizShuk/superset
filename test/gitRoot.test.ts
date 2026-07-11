@@ -55,4 +55,13 @@ describe("detectGitRoot", () => {
         expect(() => detectGitRoot("/")).not.toThrow();
         expect(detectGitRoot("/")).toBeNull();
     });
+
+    it("accepts optional log function and records every walked dir", () => {
+        const lines: string[] = [];
+        const result = detectGitRoot(tmpRoot, (msg) => lines.push(msg));
+        expect(result).toBeNull();
+        // Should have at least start + a few misses logged
+        expect(lines.length).toBeGreaterThan(2);
+        expect(lines[0]).toMatch(/detectGitRoot start=/);
+    });
 });

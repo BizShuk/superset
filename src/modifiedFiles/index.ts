@@ -16,7 +16,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // Case 2: validate git repo (synchronous — fail fast on activation).
     // Pure filesystem walk; see gitRoot.ts for rationale vs `git rev-parse`.
-    const repoRoot = detectGitRoot(fsPath);
+    const repoRoot = detectGitRoot(fsPath, ctx.shared.log);
     ctx.shared.log(`[modifiedFiles] detectGitRoot cwd=${fsPath} repoRoot=${repoRoot ?? "(none)"}`);
     if (!repoRoot) {
         return makeMessageOnlyView(ctx, `Not a git repository (${fsPath}). Run 'git init' or open a folder inside an existing git repo.`);
