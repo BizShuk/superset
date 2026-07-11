@@ -5,6 +5,32 @@ import type { ModifiedFile, TreeNode } from "./types";
 
 const SCAN_TIMEOUT_MS = 10_000;
 
+/**
+ * Map raw spawn / git error messages to user-friendly strings. Strips the
+ * Node.js `Command failed: <cmd>` prefix and the trailing git stderr dump;
+ * surfaces only the most actionable line(s). Falls back to the raw message
+ * if no known pattern matches.
+ */
+function friendlyGitError(raw: string, cwd: string): string {
+    // Strip "Command failed: <cmd> <args>" wrapper added by child_process.
+    const stripped = raw.replace(/^Command failed:[^\n]*\n?/, "").trim();
+    if (/not a git repository/i.test(stripped)) {
+        return `Not a git repository at ${cwd}. Run 'git init' or open a folder inside an existing git repo.`;
+    }
+    if (/dubious ownership/i.test(stripped)) {
+        return `git reports dubious ownership of ${cwd}. Run 'git config --global --add safe.directory ${cwd}' to fix.`;
+    }
+    if (/timeout/i.test(stripped) || /timed out/i.test(stripped)) {
+        return `git status timed out after ${SCAN_TIMEOUT_MS}ms — repo may be very large.`;
+    }
+    if (/Permission denied/i.test(stripped)) {
+        return `Permission denied running git at ${cwd}. Check file/directory permissions.`;
+    }
+    // Default: first non-empty line of the cleaned message
+    const firstLine = stripped.split("\n").find(l => l.trim()) ?? stripped;
+    return firstLine;
+}
+
 export type ModifiedFilesState =
     | { readonly kind: "loading" }
     | {
@@ -93,9 +119,9 @@ export class ModifiedFilesStore {
             const nodes = treeBuilder.build(files, { showUntracked: this.showUntracked });
             this.state = { kind: "ready", nodes, files, refreshedAt: this.options.clock() };
         } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            this.options.log?.(`[modifiedFiles] refresh failed: ${msg}`);
-            this.state = { kind: "error", message: msg };
+            const rawMsg = err instanceof Error ? err.message : String(err);
+            this.options.log?.(`[modifiedFiles] refresh failed: ${rawMsg}`);
+            this.state = { kind: "error", message: friendlyGitError(rawMsg, this.options.workspaceRoot) };
         }
         this.emit();
     }

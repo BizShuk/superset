@@ -1,7 +1,8 @@
-import { execFile, spawnSync } from "child_process";
+import { execFile } from "child_process";
 import * as vscode from "vscode";
 import type { FeatureContext, FeatureHandle } from "../shared";
 import { registerModifiedFilesCommands } from "./commands";
+import { detectGitRoot } from "./gitRoot";
 import { ModifiedFilesStore } from "./modifiedFilesStore";
 import { ModifiedFilesTreeProvider } from "./treeProvider";
 
@@ -13,10 +14,12 @@ export function register(ctx: FeatureContext): FeatureHandle {
         return makeMessageOnlyView(ctx, "Open a folder to use Modified Files");
     }
 
-    // Case 2: validate git repo (synchronous — fail fast on activation)
+    // Case 2: validate git repo (synchronous — fail fast on activation).
+    // Pure filesystem walk; see gitRoot.ts for rationale vs `git rev-parse`.
     const repoRoot = detectGitRoot(fsPath);
+    ctx.shared.log(`[modifiedFiles] detectGitRoot cwd=${fsPath} repoRoot=${repoRoot ?? "(none)"}`);
     if (!repoRoot) {
-        return makeMessageOnlyView(ctx, "Not a git repository");
+        return makeMessageOnlyView(ctx, `Not a git repository (${fsPath}). Run 'git init' or open a folder inside an existing git repo.`);
     }
 
     // Case 3: normal path
@@ -56,20 +59,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-
-function detectGitRoot(fsPath: string): string | null {
-    try {
-        const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-            cwd: fsPath,
-            encoding: "utf-8",
-        });
-        const stdout = (result.stdout ?? "").trim();
-        if (stdout && result.status === 0) return stdout;
-    } catch {
-        // fallthrough
-    }
-    return null;
-}
 
 function makeMessageOnlyView(ctx: FeatureContext, message: string): FeatureHandle {
     const provider = new MessageOnlyProvider(message);
