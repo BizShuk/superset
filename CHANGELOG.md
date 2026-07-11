@@ -2,6 +2,20 @@
 
 本檔案記錄 Superset 擴充功能各版本變更,格式參考 [Keep a Changelog](https://keepachangelog.com/),版本號依 [Semantic Versioning](https://semver.org/)。
 
+## [0.10.5] - 2026-07-11
+
+### Fixed
+
+- **Modified Files panel — non-git-repo detection**: `detectGitRoot` now uses filesystem walk (looking for `.git` directory or file) instead of `git rev-parse --show-toplevel`. Previously git could walk up to a stale `.git` in a parent directory and silently switch context; now the panel reliably reports "Not a git repository" when the workspace folder is outside any git repo.
+- **Refresh errors now show actionable messages**: raw `Command failed: git status --porcelain\nfatal: not a git repository` is mapped to `Not a git repository at <cwd>. Run 'git init' or open a folder inside an existing git repo.` via the new `friendlyGitError()` helper. Also handles `dubious ownership` → `safe.directory` advice, timeout, and permission errors.
+- **Per-directory debug log**: `detectGitRoot` now emits a line per walked directory to `Superset: Show Diagnostic Logs` — useful when the panel and Node-level CLI give different answers about the same path.
+
+### Tests
+
+- `test/gitRoot.test.ts`: 8 cases (was 7) covering empty input, no `.git` anywhere, `.git` in startDir, `.git` in parent, `.git` as file (submodule), sibling isolation, fs-root safety, optional log param.
+- `test/friendlyGitError.test.ts`: 4 cases covering each error pattern + fallback.
+- Total: 626 tests passing (68 files).
+
 ## [0.10.4] - 2026-07-11
 
 ### Added
