@@ -2,6 +2,23 @@
 
 本檔案記錄 Superset 擴充功能各版本變更,格式參考 [Keep a Changelog](https://keepachangelog.com/),版本號依 [Semantic Versioning](https://semver.org/)。
 
+## [0.10.4] - 2026-07-11
+
+### Added
+
+- 新 `Modified Files` panel 註冊於 VSCode 內建 Explorer 視圖(`views.explorer`):列出 modified / staged / deleted / renamed / untracked 檔案,資料夾階層樹狀,gitignore 由 `git status --porcelain` 自動處理 (含 nested `.gitignore` / `.git/info/exclude` / global ignore)。folder node 顯示 `M N · A N` 摘要,file row 顯示對應 ThemeIcon (M→`$(edit)`, A→`$(add)`, D→`$(trash)`, R→`$(diff)`, ?→`$(question)`)。
+- FSW debounce 500ms 自動 refresh;10s `Promise.race` 熔斷避免 git status 卡死。
+- 工具列按鈕 toggle Untracked 顯示/隱藏 (預設 ON)。
+- 5 個新 commands: `refresh`, `toggleUntracked`, `revealInExplorer` (走 `revealFileInOS` 跨平台), `copyPath` (絕對), `copyRelativePath` (repo-relative)。
+
+### Internal
+
+- 新 `src/modifiedFiles/` feature-as-folder:`types.ts` / `gitStatusParser.ts` (純函式 porcelain 解析) / `treeBuilder.ts` (純函式 folder 樹狀化 + `statusSummary` 預計算) / `treeSpec.ts` (純函式 `TreeNode → TreeItemSpec`) / `modifiedFilesStore.ts` (FSW debouncer + git spawn orchestration) / `treeProvider.ts` (vscode.TreeDataProvider) / `commands.ts` / `index.ts` (composition root + `MessageOnlyProvider` fallback + `spawnExecFile` helper) / `plugin.ts` (ExtensionPlugin shim 對齊 `todoPlugin` 範式)。
+- 新 30 個 vitest case:`gitStatusParser` 12、`treeBuilder` 10、`treeSpec` 8,加 1 個 plugin contract case。總計 610/610 tests passing (65 test files)。
+- `extension.ts` plugin 陣列加 `modifiedFilesPlugin`(在 `projectsTodoPlugin` 之後、`globalCommandsPlugin` 之前)。
+- `package.json` 加 `views.explorer`、`5 commands`、`view/title` 與 `view/item/context` menu 條目;version 0.10.3 → 0.10.4。
+- 規格與計畫: `docs/specs/2026-07-11-modified-files-explorer-panel.md`、`plans/2026-07-11-modified-files-explorer-panel.md`。
+
 ## [0.10.0] - 2026-07-10
 
 ### Added

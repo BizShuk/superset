@@ -111,6 +111,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | `src/todo/`         | TODO 清單 TreeView + 過濾器 badge              | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
 | `src/projects/`     | 專案分組 TreeView 面板                         | ProjectStore, ProjectsTreeProvider                        |
 | `src/projectsTodo/` | 跨專案 TODO 總覽 (Overview,`superset-overall`) | ProjectsTodoStore, ProjectsTodoTreeProvider               |
+| `src/modifiedFiles/` | Explorer sub-panel: git status tree (folder 階層,gitignore 自動排除) | gitStatusParser, treeBuilder, treeSpec, ModifiedFilesStore, MessageOnlyProvider |
 | `src/treePreview/`  | Markdown `tree` 區塊語法高亮 + 預覽渲染        | createTreePreviewExtension, renderLine                    |
 | `src/todoPreview/`  | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕         | createTodoPreviewExtension, wrapSections                  |
 
