@@ -384,8 +384,14 @@ export class ModifiedFilesStore {
     }
 
     async refresh(): Promise<void> {
+        const SCAN_TIMEOUT_MS = 10_000;
         try {
-            const { stdout } = await this.options.spawn("git", ["status", "--porcelain"]);
+            const stdout = await Promise.race([
+                this.options.spawn("git", ["status", "--porcelain"]).then(r => r.stdout),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error(`git status timed out after ${SCAN_TIMEOUT_MS}ms`)), SCAN_TIMEOUT_MS)
+                ),
+            ]);
             const files = gitStatusParser.parse(stdout);
             const nodes = treeBuilder.build(files, { showUntracked: this.showUntracked });
             this.state = { kind: "ready", nodes, files, refreshedAt: this.options.clock() };
@@ -439,7 +445,11 @@ export class ModifiedFilesTreeProvider implements vscode.TreeDataProvider<TreeNo
         item.iconPath = new vscode.ThemeIcon(spec.iconId);
         if (spec.description) item.description = spec.description;
         item.tooltip = spec.tooltip;
-        item.collapsibleState = COLLAPSIBLE_MAP[spec.collapsibleState];
+        item.collapsibleState = spec.collapsibleState === "none"
+            ? vscode.TreeItemCollapsibleState.None
+            : spec.collapsibleState === "expanded"
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed;
         item.contextValue = spec.contextValue;
         if (spec.command) {
             // spec.command.args 帶的是 repo-relative path,在此注入絕對 prefix
@@ -532,7 +542,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const { workspaceFolder } = ctx;
     if (!workspaceFolder) {
         // no workspace → 空 panel + "Open a folder to use Modified Files"
-        const provider = new EmptyMessageProvider("Open a folder to use Modified Files");
+        const provider = new MessageOnlyProvider("Open a folder to use Modified Files");
         const view = vscode.window.createTreeView("superset.modifiedFiles", { treeDataProvider: provider });
         ctx.subscriptions.push(view);
         return { dispose: () => view.dispose() };
@@ -555,7 +565,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     }
 
     if (!isGit) {
-        const provider = new EmptyMessageProvider("Not a git repository");
+        const provider = new MessageOnlyProvider("Not a git repository");
         const view = vscode.window.createTreeView("superset.modifiedFiles", { treeDataProvider: provider });
         ctx.subscriptions.push(view);
         return { dispose: () => view.dispose() };
@@ -565,7 +575,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const store = new ModifiedFilesStore({
         workspaceRoot: repoRoot,
         debounceMs: ctx.shared.config.get<number>("superset.modifiedFiles.debounceMs") ?? 500,
-        spawn: (cmd, args) => execFilePromise(cmd, [...args], { cwd: repoRoot }),
+        spawn: spawnExecFile,
         clock: () => Date.now(),
     });
 
@@ -589,6 +599,39 @@ export function register(ctx: FeatureContext): FeatureHandle {
             cmds.forEach(d => d.dispose());
         },
     };
+}
+
+/**
+ * Minimal TreeDataProvider that displays a single message (used when
+ * the panel can't usefully render — no workspace, or not a git repo).
+ * VSCode renders `getChildren()[0]` as the empty-state message.
+ */
+class MessageOnlyProvider implements vscode.TreeDataProvider<{ readonly message: string }> {
+    constructor(private readonly message: string) {}
+    private readonly emitter = new vscode.EventEmitter<{ message: string } | undefined>();
+    readonly onDidChangeTreeData = this.emitter.event;
+    getTreeItem(element: { message: string }): vscode.TreeItem {
+        const item = new vscode.TreeItem(element.message);
+        item.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        return item;
+    }
+    getChildren(): { message: string }[] {
+        return [{ message: this.message }];
+    }
+}
+
+/**
+ * Thin Promise wrapper around child_process.execFile. Resolves with
+ * `{ stdout, stderr }` like `execFile`'s callback, rejects on non-zero exit.
+ * Lives at module scope (not in store) so unit tests can inject a fake.
+ */
+function spawnExecFile(cmd: string, args: readonly string[]): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+        execFile(cmd, [...args], { maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+            if (err) reject(err);
+            else resolve({ stdout: String(stdout), stderr: String(stderr) });
+        });
+    });
 }
 ```
 
