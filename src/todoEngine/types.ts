@@ -98,7 +98,25 @@ export interface TodoCommandStore {
         item: TodoEngineItem,
         priority: "P0" | "P1" | "P2" | "None"
     ): Promise<void>;
-    addTodo(text: string, sectionName: string): Promise<void>;
+    /**
+     * Add a new todo row. `item` is the row that triggered the
+     * command (a section row from the inline "+" button, or undefined
+     * when invoked from the top-level nav). The single-workspace
+     * panel ignores `item`; the multi-project panel uses
+     * `item.projectPath` to skip the project picker.
+     */
+    addTodo(
+        item: TodoEngineItem | undefined,
+        text: string,
+        sectionName: string,
+    ): Promise<void>;
+    /**
+     * Open a `README.todo` in the markdown preview. The
+     * single-workspace panel opens `<workspaceFolder>/README.todo`
+     * unconditionally; the multi-project panel resolves
+     * `item.projectPath` or prompts the user to pick one.
+     */
+    openTodoFile(item: TodoEngineItem | undefined): Promise<void>;
     moveTodo(item: TodoEngineItem, sectionName: string): Promise<void>;
     archiveTodo(item: TodoEngineItem): Promise<void>;
     rollbackTodo(item: TodoEngineItem): Promise<void>;

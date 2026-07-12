@@ -158,28 +158,12 @@ export function createTodoCommands(
             placeHolder: "輸入待辦事項內容...",
         });
         if (!text || text.trim() === "") return;
-        await ctx.store.addTodo(text.trim(), sectionName);
+        await ctx.store.addTodo(item, text.trim(), sectionName);
     });
 
-    add("Open", "Open", async () => {
-        const uri = vscode.Uri.file(
-            path.join(ctx.workspaceFolder, "README.todo")
-        );
-        try {
-            const doc = await vscode.workspace.openTextDocument(uri);
-            if (doc.languageId !== "markdown") {
-                await vscode.languages.setTextDocumentLanguage(
-                    doc,
-                    "markdown"
-                );
-            }
-            await vscode.commands.executeCommand(
-                "markdown.showPreview",
-                uri
-            );
-        } catch (err) {
-            ctx.showError(`Failed to open README.todo: ${err}`);
-        }
+    add("Open", "Open", async (raw?: unknown) => {
+        const item = raw as TodoEngineItem | undefined;
+        await ctx.store.openTodoFile(item);
     });
 
     add("OpenLink", "OpenLink", async (raw?: unknown) => {
@@ -231,10 +215,13 @@ export function createTodoCommands(
         const target = planExtractLink(item.text);
         if (!target) return;
         try {
-            const resolved = resolveTodoLink(
-                target,
-                ctx.workspaceFolder
-            );
+            // The multi-project panel passes `item.projectPath` so
+            // workspace-relative links resolve against the owning
+            // project, not the current VSCode workspace. The
+            // single-workspace panel leaves `projectPath` unset, so
+            // we fall back to `ctx.workspaceFolder`.
+            const baseFolder = item.projectPath ?? ctx.workspaceFolder;
+            const resolved = resolveTodoLink(target, baseFolder);
             const uri =
                 resolved.type === "url"
                     ? vscode.Uri.parse(resolved.uriOrPath)
