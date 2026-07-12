@@ -21,3 +21,4 @@ export type {
     TodoCommandSet,
 } from "./types";
 export { createTodoCommands, planBasename } from "./commandFactory";
+export { reportPlanActionError } from "./reportPlanActionError";

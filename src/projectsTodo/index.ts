@@ -10,12 +10,12 @@ import {
     backlogPlan as backlogPlanFs,
     archivePlan as archivePlanFs,
     deletePlan as deletePlanFs,
-    PlanActionError,
 } from "../todo/planActions";
 import { formatPlanCopyText } from "../todo/plansSource";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import {
     createTodoCommands,
+    reportPlanActionError,
     type TodoCommandContext,
     type TodoCommandStore,
     type TodoCommandTreeProvider,
@@ -25,30 +25,6 @@ import {
 import type { ProjectTodoItem } from "./types";
 
 const PROJECTS_TODO_VIEW_TITLE = "Projects TODO";
-
-/** Map a `PlanActionError` to a contextual user-visible message. */
-function reportPlanActionError(
-    action: "complete" | "backlog" | "archive" | "delete",
-    basename: string,
-    err: unknown,
-): void {
-    if (err instanceof PlanActionError) {
-        const verb = action === "delete" ? "delete" : `move (${action})`;
-        if (err.code === "exists") {
-            vscode.window.showErrorMessage(
-                `Cannot ${verb} "${basename}": a file already exists at the destination. Resolve manually and retry.`,
-            );
-        } else if (err.code === "missing") {
-            vscode.window.showErrorMessage(
-                `Cannot ${verb} "${basename}": source plan no longer exists (was it moved already?).`,
-            );
-        } else {
-            vscode.window.showErrorMessage(`Failed to ${verb} "${basename}": ${err.message}`);
-        }
-    } else {
-        vscode.window.showErrorMessage(`Failed to ${action} plan "${basename}": ${err}`);
-    }
-}
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const store = new ProjectsTodoStore();
