@@ -103,6 +103,22 @@ describe("applyPriorityFilter", () => {
         expect(out).toHaveLength(3);
     });
 
+    it("returns a fresh array on the empty-set path so callers can mutate without aliasing the input", () => {
+        // Regression: the empty-set short-circuit previously returned
+        // `items` by reference, so `filtered.push(makePlansSection(...))`
+        // in the tree providers aliased and mutated the store's items
+        // array. The next `filterCompleted` pass then saw the stale
+        // Plans as a real section, duplicating it on every filter toggle.
+        const input: TodoItem[] = [
+            { line: 0, text: "a", kind: "checkbox", checked: false },
+        ];
+        const out = applyPriorityFilter(input, new Set());
+        expect(out).not.toBe(input);
+        out.push({ line: 1, text: "appended", kind: "checkbox", checked: false });
+        expect(input).toHaveLength(1);
+        expect(input[0].text).toBe("a");
+    });
+
     it("keeps only matching priorities", () => {
         const input: TodoItem[] = [
             { line: 0, text: "[P0] a", kind: "checkbox", checked: false },

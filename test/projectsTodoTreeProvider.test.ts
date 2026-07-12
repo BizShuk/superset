@@ -569,4 +569,42 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
         expect(alpha.children!.find((c) => c.text === "Plans")!.children).toHaveLength(1);
         expect(gamma.children!.find((c) => c.text === "Plans")!.children).toHaveLength(1);
     });
+
+    it("does NOT duplicate the per-project Plans sub-section after toggling showCompleted on/off", async () => {
+        // Regression for the showCompleted ? raw : filterCompleted(raw)
+        // aliasing bug: when showCompleted === true, completedFiltered
+        // shared the store's items reference, and applyPriorityFilter's
+        // empty-set short-circuit returned the same reference. The
+        // downstream `filtered.push(makePlansSection(...))` then
+        // mutated the store's items array, so the next filterCompleted
+        // pass saw the stale Plans as a real section and pushed another
+        // one — duplicating the section on every toggle.
+        const provider = new ProjectsTodoTreeProvider(store);
+
+        const collectPlansCounts = async () => {
+            const roots = await provider.getChildren();
+            return roots!
+                .filter((p) => p.children!.some((c) => c.text === "Plans"))
+                .map((p) => ({
+                    name: p.text,
+                    plans: p.children!.filter((c) => c.text === "Plans"),
+                }));
+        };
+
+        const before = await collectPlansCounts();
+        expect(before).toHaveLength(2); // alpha + gamma have plans, delta does not
+        for (const { name, plans } of before) {
+            expect(plans, `${name} initial`).toHaveLength(1);
+        }
+
+        provider.toggleShowCompleted();
+        provider.toggleShowCompleted();
+        provider.toggleShowCompleted();
+        provider.toggleShowCompleted();
+
+        const after = await collectPlansCounts();
+        for (const { name, plans } of after) {
+            expect(plans, `${name} after 4 toggles`).toHaveLength(1);
+        }
+    });
 });

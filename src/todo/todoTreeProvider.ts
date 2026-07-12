@@ -539,7 +539,19 @@ export function applyPriorityFilter(
     items: TodoItem[],
     enabledPriorities: Set<"P0" | "P1" | "P2">
 ): TodoItem[] {
-    if (enabledPriorities.size === 0) return items;
+    if (enabledPriorities.size === 0) {
+        // Always return a fresh array (even on the no-op path) so
+        // callers can safely mutate the result — typically
+        // `filtered.push(makePlansSection(...))` in the tree
+        // providers' `getChildren()`. Without this copy, the
+        // `showCompleted === true` branch in the providers aliases
+        // the store's `items` reference, and a downstream `push`
+        // appends the synthetic Plans section directly into the
+        // store. The next `filterCompleted` pass then sees the
+        // stale Plans as a real section, and pushing again
+        // duplicates it on every filter toggle.
+        return items.slice();
+    }
     return items
         .map((item) => {
             if (item.kind === "section") {
