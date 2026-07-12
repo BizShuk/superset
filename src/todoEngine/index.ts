@@ -22,3 +22,16 @@ export type {
 } from "./types";
 export { createTodoCommands, planBasename } from "./commandFactory";
 export { reportPlanActionError } from "./reportPlanActionError";
+export { countPending } from "./countPending";
+export { sortSiblings } from "./sortSiblings";
+export {
+    extractPriorityTag,
+    stripMarkdownLink,
+    priorityIconPath,
+    type PriorityTag,
+} from "./labelRenderer";
+export {
+    dispatchContextValue,
+    type DispatchContextValueInput,
+    type ContextValueAxis,
+} from "./contextValue";

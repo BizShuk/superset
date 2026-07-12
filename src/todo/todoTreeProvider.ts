@@ -9,6 +9,14 @@ import {
     resolveTodoLink,
     type ResolvedLink,
 } from "../todoEngine/linkUtils";
+import {
+    countPending,
+    sortSiblings,
+    extractPriorityTag,
+    stripMarkdownLink,
+    priorityIconPath,
+    dispatchContextValue,
+} from "../todoEngine";
 
 // Re-export the link helpers so existing imports of
 // `extractLink` / `resolveTodoLink` / `cleanLabelText` /
@@ -153,23 +161,14 @@ export class TodoTreeProvider
         let labelText = element.text;
         labelText = cleanTags(labelText);
 
-        const priorityMatch = labelText.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
-        let labelTextCleaned = priorityMatch
-            ? labelText.substring(priorityMatch[0].length).trim()
-            : labelText;
-
-        const hasLink = extractLink(labelTextCleaned) !== null;
-        if (hasLink) {
-            labelTextCleaned = cleanLabelText(labelTextCleaned);
-        }
+        const { text: priorityStripped, priority } = extractPriorityTag(labelText);
+        const { text: labelTextCleaned, hasLink } = stripMarkdownLink(priorityStripped);
 
         const item = new vscode.TreeItem(labelTextCleaned);
 
-        if (priorityMatch && !element.checked && this.extensionUri) {
-            const p = priorityMatch[2].toUpperCase();
-            // VSCode loads SVG files referenced via Uri directly — no need
-            // to read the file content and wrap as data URI.
-            item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${p.toLowerCase()}.svg`);
+        const priorityIcon = priorityIconPath(this.extensionUri, priority);
+        if (priorityIcon && !element.checked) {
+            item.iconPath = priorityIcon;
         } else {
             item.iconPath = new vscode.ThemeIcon(
                 element.checked ? "pass" : "circle-large-outline",
@@ -195,12 +194,15 @@ export class TodoTreeProvider
             ? vscode.TreeItemCheckboxState.Checked
             : vscode.TreeItemCheckboxState.Unchecked;
 
-        const isArchived = isArchivedTask(element.text) || element.parentSection?.toLowerCase() === "archive";
-        if (isArchived) {
-            item.contextValue = hasLink ? "todoCheckboxWithLinkArchived" : "todoCheckboxArchived";
-        } else {
-            item.contextValue = hasLink ? "todoCheckboxWithLink" : "todoCheckbox";
-        }
+        const isArchived =
+            isArchivedTask(element.text) ||
+            element.parentSection?.toLowerCase() === "archive";
+        item.contextValue = dispatchContextValue({
+            prefix: "todo",
+            kind: "checkbox",
+            isArchived,
+            hasLink,
+        });
         return item;
     }
 
@@ -215,21 +217,14 @@ export class TodoTreeProvider
         let labelText = element.text;
         labelText = cleanTags(labelText);
 
-        const priorityMatch = labelText.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
-        let labelTextCleaned = priorityMatch
-            ? labelText.substring(priorityMatch[0].length).trim()
-            : labelText;
-
-        const hasLink = extractLink(labelTextCleaned) !== null;
-        if (hasLink) {
-            labelTextCleaned = cleanLabelText(labelTextCleaned);
-        }
+        const { text: priorityStripped, priority } = extractPriorityTag(labelText);
+        const { text: labelTextCleaned, hasLink } = stripMarkdownLink(priorityStripped);
 
         const item = new vscode.TreeItem(labelTextCleaned);
 
-        if (priorityMatch && this.extensionUri) {
-            const p = priorityMatch[2].toUpperCase();
-            item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${p.toLowerCase()}.svg`);
+        const priorityIcon = priorityIconPath(this.extensionUri, priority);
+        if (priorityIcon) {
+            item.iconPath = priorityIcon;
         } else {
             item.iconPath = new vscode.ThemeIcon(
                 "dash",
@@ -243,12 +238,15 @@ export class TodoTreeProvider
                 ? vscode.TreeItemCollapsibleState.Expanded
                 : vscode.TreeItemCollapsibleState.None;
         // No command → click does nothing for list items.
-        const isArchived = isArchivedTask(element.text) || element.parentSection?.toLowerCase() === "archive";
-        if (isArchived) {
-            item.contextValue = hasLink ? "todoListWithLinkArchived" : "todoListArchived";
-        } else {
-            item.contextValue = hasLink ? "todoListWithLink" : "todoList";
-        }
+        const isArchived =
+            isArchivedTask(element.text) ||
+            element.parentSection?.toLowerCase() === "archive";
+        item.contextValue = dispatchContextValue({
+            prefix: "todo",
+            kind: "list",
+            isArchived,
+            hasLink,
+        });
         return item;
     }
 
@@ -508,23 +506,6 @@ export class TodoTreeProvider
 }
 
 /**
- * Sort siblings for display. The "pending first, completed last"
- * heuristic only makes sense when every sibling is a checkbox; once
- * a `list` node is mixed in (a free-form note interleaved with
- * tasks) we preserve the original document order — list items have
- * no completion status so the sort has no meaning for them.
- */
-function sortSiblings(items: TodoItem[]): TodoItem[] {
-    if (items.length === 0) return items;
-    const allCheckboxes = items.every((t) => t.kind === "checkbox");
-    if (!allCheckboxes) return items;
-    return [
-        ...items.filter((t) => !t.checked),
-        ...items.filter((t) => t.checked),
-    ];
-}
-
-/**
  * Filter items by active priority set. When `enabledPriorities` is empty,
  * returns items unchanged. Otherwise keeps only items whose leading
  * `[Px]`/`(Px)` tag is in the set. Items without a priority prefix are
@@ -662,27 +643,5 @@ function hasPendingCheckbox(item: TodoItem): boolean {
         return true;
     }
     return (item.children ?? []).some(hasPendingCheckbox);
-}
-
-/**
- * Recursively count unchecked checkbox items. Since the children
- * arriving at section rows have already been filtered by
- * {@link filterCompleted} and {@link applyPriorityFilter} (see
- * `getChildren`), the count naturally excludes archived / completed
- * items when the hide-completed filter is active and respects the
- * active priority filter.
- */
-function countPending(items?: TodoItem[]): number {
-    if (!items || items.length === 0) return 0;
-    let count = 0;
-    for (const item of items) {
-        if (item.kind === "checkbox" && !item.checked) {
-            count++;
-        }
-        if (item.children) {
-            count += countPending(item.children);
-        }
-    }
-    return count;
 }
 

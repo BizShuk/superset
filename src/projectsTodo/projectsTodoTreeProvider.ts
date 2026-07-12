@@ -4,8 +4,15 @@ import type { ProjectTodoItem } from "./types";
 import type { ProjectsTodoStore } from "./projectsTodoStore";
 import { isArchivedSubsection, cleanTags, isArchivedTask } from "../todo/parser";
 import { filterCompleted, applyPriorityFilter } from "../todo/todoTreeProvider";
-import { extractLink, cleanLabelText } from "../todoEngine/linkUtils";
 import { makePlansSection, planInfoToTodoItem } from "../todo/plansSource";
+import {
+    countPending,
+    sortSiblings,
+    extractPriorityTag,
+    stripMarkdownLink,
+    priorityIconPath,
+    dispatchContextValue,
+} from "../todoEngine";
 
 /**
  * vscode-bound TreeDataProvider for the Projects TODO list.
@@ -159,22 +166,15 @@ export class ProjectsTodoTreeProvider
         let labelText = element.text;
         labelText = cleanTags(labelText);
 
-        const priorityMatch = labelText.match(/^(\[|\()?(P[0-2])(\]|\))?[\s-:]*/i);
-        let labelTextCleaned = priorityMatch
-            ? labelText.substring(priorityMatch[0].length).trim()
-            : labelText;
-
-        const hasLink = extractLink(labelTextCleaned) !== null;
-        if (hasLink) {
-            labelTextCleaned = cleanLabelText(labelTextCleaned);
-        }
+        const { text: priorityStripped, priority } = extractPriorityTag(labelText);
+        const { text: labelTextCleaned, hasLink } = stripMarkdownLink(priorityStripped);
 
         const item = new vscode.TreeItem(labelTextCleaned);
 
         if (element.kind === "list") {
-            if (priorityMatch && this.extensionUri) {
-                const p = priorityMatch[2]!.toUpperCase();
-                item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${p.toLowerCase()}.svg`);
+            const priorityIcon = priorityIconPath(this.extensionUri, priority);
+            if (priorityIcon) {
+                item.iconPath = priorityIcon;
             } else {
                 item.iconPath = new vscode.ThemeIcon(
                     "dash",
@@ -187,19 +187,22 @@ export class ProjectsTodoTreeProvider
                     ? vscode.TreeItemCollapsibleState.Expanded
                     : vscode.TreeItemCollapsibleState.None;
 
-            const isArchived = isArchivedTask(element.text) || element.parentSection?.toLowerCase() === "archive";
-            if (isArchived) {
-                item.contextValue = hasLink ? "projectsTodoListWithLinkArchived" : "projectsTodoListArchived";
-            } else {
-                item.contextValue = hasLink ? "projectsTodoListWithLink" : "projectsTodoList";
-            }
+            const isArchived =
+                isArchivedTask(element.text) ||
+                element.parentSection?.toLowerCase() === "archive";
+            item.contextValue = dispatchContextValue({
+                prefix: "projectsTodo",
+                kind: "list",
+                isArchived,
+                hasLink,
+            });
             return item;
         }
 
         // Else: checkbox
-        if (priorityMatch && !element.checked && this.extensionUri) {
-            const p = priorityMatch[2]!.toUpperCase();
-            item.iconPath = vscode.Uri.joinPath(this.extensionUri, "resources", `${p.toLowerCase()}.svg`);
+        const priorityIcon = priorityIconPath(this.extensionUri, priority);
+        if (priorityIcon && !element.checked) {
+            item.iconPath = priorityIcon;
         } else {
             item.iconPath = new vscode.ThemeIcon(
                 element.checked ? "pass" : "circle-large-outline",
@@ -217,17 +220,20 @@ export class ProjectsTodoTreeProvider
             element.children && element.children.length > 0
                 ? vscode.TreeItemCollapsibleState.Expanded
                 : vscode.TreeItemCollapsibleState.None;
-        
+
         item.checkboxState = element.checked
             ? vscode.TreeItemCheckboxState.Checked
             : vscode.TreeItemCheckboxState.Unchecked;
 
-        const isArchived = isArchivedTask(element.text) || element.parentSection?.toLowerCase() === "archive";
-        if (isArchived) {
-            item.contextValue = hasLink ? "projectsTodoCheckboxWithLinkArchived" : "projectsTodoCheckboxArchived";
-        } else {
-            item.contextValue = hasLink ? "projectsTodoCheckboxWithLink" : "projectsTodoCheckbox";
-        }
+        const isArchived =
+            isArchivedTask(element.text) ||
+            element.parentSection?.toLowerCase() === "archive";
+        item.contextValue = dispatchContextValue({
+            prefix: "projectsTodo",
+            kind: "checkbox",
+            isArchived,
+            hasLink,
+        });
         return item;
     }
 
@@ -335,35 +341,4 @@ function decorateItems(items: any[], projectName: string, projectPath: string): 
         }
         return decorated;
     });
-}
-
-function sortSiblings(items: ProjectTodoItem[]): ProjectTodoItem[] {
-    if (items.length === 0) return items;
-    const allCheckboxes = items.every((t) => t.kind === "checkbox");
-    if (!allCheckboxes) return items;
-    return [
-        ...items.filter((t) => !t.checked),
-        ...items.filter((t) => t.checked),
-    ];
-}
-
-/**
- * Recursively count unchecked checkbox items.
- * Since children passed to project nodes are already filtered by
- * {@link filterCompleted} and {@link applyPriorityFilter}, the count
- * naturally excludes archived/completed items when the hide-completed
- * filter is active, and respects the active priority filter.
- */
-function countPending(items?: ProjectTodoItem[]): number {
-    if (!items || items.length === 0) return 0;
-    let count = 0;
-    for (const item of items) {
-        if (item.kind === "checkbox" && !item.checked) {
-            count++;
-        }
-        if (item.children) {
-            count += countPending(item.children);
-        }
-    }
-    return count;
 }
