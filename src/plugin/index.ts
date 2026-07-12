@@ -11,3 +11,9 @@ export type {
 export { PluginManager } from "./manager";
 export { createPluginContext, type BaseContext } from "./context";
 export { createFeatureContext, type CreateFeatureContextOptions } from "./featureContext";
+export {
+    legacyPlugin,
+    legacyPluginWithStatusBar,
+    type LegacyPluginOptions,
+    type LegacyPluginWithStatusBarOptions,
+} from "./legacyAdapter";
