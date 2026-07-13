@@ -176,7 +176,7 @@ async function installIgnoreTemplate(
     await spawnRunTerminal(
         "Superset: Install Ignore Template",
         argv.map(quoteShellArg).join(" "),
-        { closeOnSuccess: true }
+        { closeOnSuccess: true, cwd: ctx.workspaceFolder }
     );
     ctx.log(
         `globalCommands: installIgnoreTemplate ${argv.join(" ")}`

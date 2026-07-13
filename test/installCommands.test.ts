@@ -431,6 +431,109 @@ describe("terminalSpawner bridge", () => {
         // User dismissed the dialog → no terminal was spawned.
         expect(spawn).not.toHaveBeenCalled();
     });
+
+    it("installIgnoreTemplate spawns the terminal in ctx.workspaceFolder (NOT home) so .gitignore lands in the workspace", async () => {
+        // Regression: install-ignore.sh writes `.gitignore` /
+        // `.geminiignore` / `.claudeignore` relative to CWD.
+        // Before the fix, spawnRunTerminal always used
+        // `os.homedir()` — so the files silently landed in `~/`
+        // instead of the workspace, AND the overwrite-confirmation
+        // modal was checking the wrong location entirely.
+
+        // fs.existsSync is mocked at file scope to always return
+        // false (no files exist in the fake workspace), so the
+        // overwrite-warning branch is skipped.
+
+        const t = {
+            name: "ignore",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+        const spawn = vi.fn().mockReturnValue(t);
+        setTerminalSpawner(spawn);
+        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+        setPluginManager(undefined);
+        const pCtx = fakePluginContext(); // workspaceFolder = "/ws"
+        globalCommandsPlugin.activate(pCtx as never);
+
+        const cb = (
+            vscode as unknown as { __commands: Map<string, Function> }
+        ).__commands.get("superset.installIgnoreTemplate")!;
+        // Programmatic call — bypasses command palette, but still
+        // hits the same handler.
+        await cb();
+
+        expect(spawn).toHaveBeenCalledTimes(1);
+        const [name, cwd] = spawn.mock.calls[0] as [string, string];
+        expect(name).toMatch(
+            /^Superset: Install Ignore Template \(\d{2}:\d{2}:\d{2}\)$/
+        );
+        // Critical assertion: cwd MUST be the workspace folder,
+        // never the user's home. This is the bug we're guarding.
+        expect(cwd).toBe("/ws");
+        expect(cwd).not.toBe(os.homedir());
+
+        // The command line should quote the absolute script path
+        // (resolved from the extension's install root) and pass all
+        // three default targets, plus `&& exit` from
+        // `closeOnSuccess: true`. No `--force` because nothing
+        // existed when we checked. Every argv element (including
+        // `bash`) goes through `quoteShellArg`, hence the `'...'` wrapping.
+        const sent = (
+            t as { sendText: ReturnType<typeof vi.fn> }
+        ).sendText.mock.calls[0][0] as string;
+        expect(sent).toBe(
+            "'bash' '/fake/resources/config/install-ignore.sh' 'git' 'gemini' 'claude' && exit\r"
+        );
+
+        // Manual dispose must not happen — auto-PTY close is
+        // driven by the `&& exit` self-termination.
+        expect(
+            (t as { dispose: ReturnType<typeof vi.fn> }).dispose
+        ).not.toHaveBeenCalled();
+    });
+
+    it("installIgnoreTemplate forwards `args.targets` to the script verbatim", async () => {
+        // Verify a partial-target invocation (e.g. wired from a
+        // future TreeView menu) hits the bash script with only
+        // those targets.
+        const t = {
+            name: "ignore",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+        const spawn = vi.fn().mockReturnValue(t);
+        setTerminalSpawner(spawn);
+        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+        setPluginManager(undefined);
+        const pCtx = fakePluginContext();
+        globalCommandsPlugin.activate(pCtx as never);
+
+        const cb = (
+            vscode as unknown as { __commands: Map<string, Function> }
+        ).__commands.get("superset.installIgnoreTemplate")!;
+        await cb({ targets: ["git"] });
+
+        expect(spawn).toHaveBeenCalledTimes(1);
+        const [, cwd] = spawn.mock.calls[0] as [string, string];
+        expect(cwd).toBe("/ws");
+        const sent = (
+            t as { sendText: ReturnType<typeof vi.fn> }
+        ).sendText.mock.calls[0][0] as string;
+        // Only `git` target — no `gemini` / `claude`. `args.targets`
+        // is forwarded verbatim to the bash script (the script
+        // itself handles per-target iteration).
+        expect(sent).toBe(
+            "'bash' '/fake/resources/config/install-ignore.sh' 'git' && exit\r"
+        );
+        expect(sent).not.toMatch(/gemini/);
+        expect(sent).not.toMatch(/claude/);
+        // No `--force` flag — fs.existsSync returns false in the
+        // shared mock, so the confirmation modal is not triggered.
+        expect(sent).not.toMatch(/--force/);
+    });
 });
 
 // ---------------------------------------------------------------------------
