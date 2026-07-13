@@ -170,7 +170,7 @@ describe("Todo Archiving & Tagging", () => {
 
             await store.rollbackTodo(task!);
 
-            expect(writtenContent).toContain("## Architecture\n\n- [x] task 1");
+            expect(writtenContent).toContain("## Architecture\n\n- [ ] task 1");
             expect(writtenContent).not.toContain("## Archive\n- [x] task 1");
             expect(writtenContent).not.toContain("@Completed");
         });
@@ -197,7 +197,7 @@ describe("Todo Archiving & Tagging", () => {
 
             await store.rollbackTodo(task!);
 
-            expect(writtenContent).toContain("# TODO\n\n- [x] task 1\n");
+            expect(writtenContent).toContain("# TODO\n\n- [ ] task 1\n");
             expect(writtenContent).not.toContain("## Archive\n- [x] task 1");
             expect(writtenContent).not.toContain("@Completed");
         });
@@ -225,8 +225,43 @@ describe("Todo Archiving & Tagging", () => {
 
             await store.rollbackTodo(task!);
 
-            expect(writtenContent).toContain("# TODO\n\n- [x] task 1\n");
+            expect(writtenContent).toContain("# TODO\n\n- [ ] task 1\n");
             expect(writtenContent).not.toContain("## Archive\n- [x] task 1");
+        });
+
+        it("unchecks an already-completed item when rolling back from archive", async () => {
+            // Spec change: rolling back means "not actually done",
+            // so a `[x]` archived item must land in its target section
+            // as `[ ]`. Otherwise users would have to uncheck it
+            // manually after every rollback, defeating the purpose.
+            const fileContent = `# TODO
+
+## Architecture
+- [x] (placeholder)
+
+## Archive
+- [x] finished-but-revived task @2026-07-05_00:00:00 @Completed @Architecture
+`;
+            vi.mocked(readFile).mockResolvedValue(fileContent);
+            let writtenContent = "";
+            vi.mocked(writeFile).mockImplementation(async (path, content) => {
+                writtenContent = content as string;
+            });
+
+            const store = new TodoStore(workspaceRoot);
+            await store.load();
+
+            const items = store.getItems();
+            const archiveSection = items.find(i => i.text === "Archive");
+            const task = archiveSection?.children?.[0];
+            expect(task).toBeDefined();
+            expect(task?.checked).toBe(true);
+
+            await store.rollbackTodo(task!);
+
+            expect(writtenContent).toContain("- [ ] finished-but-revived task");
+            expect(writtenContent).not.toMatch(/- \[x\] finished-but-revived task/);
+            expect(writtenContent).not.toContain("@Completed");
         });
 
         it("ensures Archive is always the last section", async () => {

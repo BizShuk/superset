@@ -466,7 +466,11 @@ export async function archiveTodo(
  * Reverse of `archiveTodo` — pull an item out of `## Archive` and
  * restore it to its original section (read from the
  * `@OriginalSection` tag). Strips the date / state tags from the
- * main line as part of the move.
+ * main line and unchecks the `[x]` checkbox: "rolling back" means
+ * "this isn't actually done, bring it back to the working list", so
+ * the item lands in its target section as pending regardless of
+ * whether it was completed (`@Completed`) or just archived
+ * (`@Archived`) when it left.
  */
 export async function rollbackTodo(
     store: TodoStoreContext,
@@ -482,6 +486,10 @@ export async function rollbackTodo(
     const targetSection = parsed?.sectionName || "Default";
 
     let mainLine = line.replace(TAGS_RE, "");
+    mainLine = mainLine.replace(
+        /^(\s*[-*+]\s+)\[(\s|x|X)\]/,
+        "$1[ ]"
+    );
     lines[item.line] = mainLine;
 
     const { blockLines } = extractBlock(lines, item);
