@@ -3,6 +3,8 @@
 > 本檔為當前工作區 (`~/projects/tmp/superset`) 的待辦與歸檔索引。
 > 結構規範:`## Active` 內分 7 個 `###` 子標題對應 README/CLAUDE.md 的 feature 章節;`## Archive` 保留 @Archived 引用以便日後找回。
 > 完成項目集中於 [`docs/archive/todo-completed-2026-07.md`](docs/archive/todo-completed-2026-07.md)。
+- [ ] rollback should uncheck complete
+- [ ] check branch "feat/mdns-dedup-expiration"
 - [ ] mermaid doesn't convert to link in claude tui
 - [x] add command to install License @2026-07-10_02:34:54 @Completed
 
