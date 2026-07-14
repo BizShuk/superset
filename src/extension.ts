@@ -11,6 +11,7 @@ import { mdnsPlugin } from "./mdns/plugin";
 import { topologyPlugin } from "./topology/plugin";
 import { todoPlugin } from "./todo/plugin";
 import { projectsTodoPlugin } from "./projectsTodo/plugin";
+import { gitPlugin } from "./git/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
 import { panelLayoutPlugin } from "./panelLayout/plugin";
 import {
@@ -89,6 +90,7 @@ export function activate(
         topologyPlugin,
         todoPlugin,
         projectsTodoPlugin,
+        gitPlugin,
         globalCommandsPlugin,
         panelLayoutPlugin,
     ];
