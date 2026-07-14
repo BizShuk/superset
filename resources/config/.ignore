@@ -59,23 +59,23 @@ _~
 !.vscode/launch.json
 !.vscode/extensions.json
 .idea/
-_.iml
-_.swp
-_.swo
-_.swn
-_.sublime-project
-_.sublime-workspace
+*.iml
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
 .fleet/
 .cursor/
 .codium/
-\*.code-workspace
+*.code-workspace
 .project
 .classpath
 .settings/
 
 # ── C. Node / JavaScript / TypeScript ────────────────────────────────────────
 
-node*modules/
+node_modules/
 jspm_packages/
 .npm/
 .yarn/
@@ -100,7 +100,7 @@ npm-debug.log\*
 
 # TypeScript build info
 
-\*.tsbuildinfo
+*.tsbuildinfo
 
 # Compiled output
 
@@ -108,27 +108,27 @@ out/
 dist/
 build/
 lib/
-_.js.map
-_.mjs.map
-_.cjs.map
-_.d.ts.map
-\*.d.ts
+*.js.map
+*.mjs.map
+*.cjs.map
+*.d.ts.map
+*.d.ts
 
 # Bundle / minified
 
-_.min.js
-_.min.mjs
-_.min.css
-_.bundle.js
-_.chunk.js
-_.hot-update.js
-\*.hot-update.json
+*.min.js
+*.min.mjs
+*.min.css
+*.bundle.js
+*.chunk.js
+*.hot-update.js
+*.hot-update.json
 
 # Coverage
 
 coverage/
 .nyc_output/
-\*.lcov
+*.lcov
 
 # Jest / Vitest
 
@@ -144,13 +144,13 @@ coverage/
 
 # Binaries
 
-_.exe
-_.exe~
-_.dll
-_.so
-_.dylib
-_.test
-\*.out
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
 
 # Go workspace
 
@@ -179,7 +179,7 @@ vendor/
 # Python
 
 **pycache**/
-_.py[cod]
+*.py[cod]
 _$py.class
 _.egg
 _.egg-info/
@@ -233,7 +233,7 @@ cypress/screenshots/
 junit.xml
 _.trx
 _.coverage
-\*.lcov
+*.lcov
 
 # ── H. Logs / Runtime dumps ──────────────────────────────────────────────────
 
