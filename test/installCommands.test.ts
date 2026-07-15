@@ -432,8 +432,8 @@ describe("terminalSpawner bridge", () => {
         expect(spawn).not.toHaveBeenCalled();
     });
 
-    it("installIgnoreTemplate spawns the terminal in ctx.workspaceFolder (NOT home) so .gitignore lands in the workspace", async () => {
-        // Regression: install-ignore.sh writes `.gitignore` /
+    it("installDefaultProject spawns the terminal in ctx.workspaceFolder (NOT home) so .gitignore lands in the workspace", async () => {
+        // Regression: install-default-project.sh writes `.gitignore` /
         // `.geminiignore` / `.claudeignore` relative to CWD.
         // Before the fix, spawnRunTerminal always used
         // `os.homedir()` — so the files silently landed in `~/`
@@ -459,7 +459,7 @@ describe("terminalSpawner bridge", () => {
 
         const cb = (
             vscode as unknown as { __commands: Map<string, Function> }
-        ).__commands.get("superset.installIgnoreTemplate")!;
+        ).__commands.get("superset.installDefaultProject")!;
         // Programmatic call — bypasses command palette, but still
         // hits the same handler.
         await cb();
@@ -467,7 +467,7 @@ describe("terminalSpawner bridge", () => {
         expect(spawn).toHaveBeenCalledTimes(1);
         const [name, cwd] = spawn.mock.calls[0] as [string, string];
         expect(name).toMatch(
-            /^Superset: Install Ignore Template \(\d{2}:\d{2}:\d{2}\)$/
+            /^Superset: Install Default Project \(\d{2}:\d{2}:\d{2}\)$/
         );
         // Critical assertion: cwd MUST be the workspace folder,
         // never the user's home. This is the bug we're guarding.
@@ -484,7 +484,7 @@ describe("terminalSpawner bridge", () => {
             t as { sendText: ReturnType<typeof vi.fn> }
         ).sendText.mock.calls[0][0] as string;
         expect(sent).toBe(
-            "'bash' '/fake/resources/config/install-ignore.sh' 'git' 'gemini' 'claude' && exit\r"
+            "'bash' '/fake/resources/config/install-default-project.sh' 'git' 'gemini' 'claude' && exit\r"
         );
 
         // Manual dispose must not happen — auto-PTY close is
@@ -494,7 +494,7 @@ describe("terminalSpawner bridge", () => {
         ).not.toHaveBeenCalled();
     });
 
-    it("installIgnoreTemplate forwards `args.targets` to the script verbatim", async () => {
+    it("installDefaultProject forwards `args.targets` to the script verbatim", async () => {
         // Verify a partial-target invocation (e.g. wired from a
         // future TreeView menu) hits the bash script with only
         // those targets.
@@ -513,7 +513,7 @@ describe("terminalSpawner bridge", () => {
 
         const cb = (
             vscode as unknown as { __commands: Map<string, Function> }
-        ).__commands.get("superset.installIgnoreTemplate")!;
+        ).__commands.get("superset.installDefaultProject")!;
         await cb({ targets: ["git"] });
 
         expect(spawn).toHaveBeenCalledTimes(1);
@@ -526,7 +526,7 @@ describe("terminalSpawner bridge", () => {
         // is forwarded verbatim to the bash script (the script
         // itself handles per-target iteration).
         expect(sent).toBe(
-            "'bash' '/fake/resources/config/install-ignore.sh' 'git' && exit\r"
+            "'bash' '/fake/resources/config/install-default-project.sh' 'git' && exit\r"
         );
         expect(sent).not.toMatch(/gemini/);
         expect(sent).not.toMatch(/claude/);

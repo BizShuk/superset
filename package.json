@@ -121,8 +121,8 @@
                 "title": "Superset: Mermaid Preview"
             },
             {
-                "command": "superset.installIgnoreTemplate",
-                "title": "Superset: Install Ignore Template"
+                "command": "superset.installDefaultProject",
+                "title": "Superset: Install Default Project"
             },
             {
                 "command": "superset.gitResetHard",

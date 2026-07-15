@@ -75,7 +75,7 @@ function groupFromCommandId(id: string): string {
             revealInTree: "Chrome",
             installDefaultTools: "Install",
             skillInstall: "Install",
-            installIgnoreTemplate: "Install",
+            installDefaultProject: "Install",
             openProject: "Projects",
             projectsTodo: "Projects TODO",
             terminalActivitySummary: "Terminals",

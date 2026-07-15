@@ -1,6 +1,6 @@
 // spawnRunTerminal — opens a fresh PTY-backed terminal and runs a
 // command in it. Used by the install commands (installDefaultTools,
-// skillInstall, installIgnoreTemplate) and anything else that needs
+// skillInstall, installDefaultProject) and anything else that needs
 // to dispatch work to a user-visible terminal without blocking the
 // command caller.
 //
@@ -18,7 +18,7 @@ export interface SpawnRunTerminalOptions {
     closeOnSuccess?: boolean;
     /** Working directory for the spawned terminal. Defaults to the
      *  user's home directory. Callers that need to write files
-     *  relative to CWD (e.g. install-ignore.sh writing
+     *  relative to CWD (e.g. install-default-project.sh writing
      *  `.gitignore`) MUST pass the target directory explicitly —
      *  otherwise the files land in `~/`. */
     cwd?: string;

@@ -119,12 +119,11 @@ async function skillInstall(
 }
 
 /**
- * Install the ignore template (`resources/config/install-ignore.sh`)
- * into the workspace as `.gitignore` / `.geminiignore` /
- * `.claudeignore`. Resolves the script relative to the extension's
- * install root (not the workspace) so it works regardless of cwd.
+ * Install the default project template (`resources/config/install-default-project.sh`)
+ * into the workspace, initializing directories, standard ignore files, and the AGENTS.md
+ * symbolic link.
  */
-async function installIgnoreTemplate(
+async function installDefaultProject(
     ctx: PluginContext,
     args?: { targets?: string[]; force?: boolean }
 ): Promise<void> {
@@ -132,7 +131,7 @@ async function installIgnoreTemplate(
         ctx.extensionUri.fsPath,
         "resources",
         "config",
-        "install-ignore.sh"
+        "install-default-project.sh"
     );
 
     // Decide which targets to act on. When the user invokes from the
@@ -150,6 +149,7 @@ async function installIgnoreTemplate(
             .filter((n) =>
                 fs.existsSync(path.join(ctx.workspaceFolder, n))
             );
+
         if (existing.length > 0) {
             const choice = await vscode.window.showWarningMessage(
                 `Superset: 以下檔案已存在,將被模板覆蓋:\n  ${existing.join(
@@ -161,7 +161,7 @@ async function installIgnoreTemplate(
             );
             if (choice !== "Overwrite") {
                 ctx.log(
-                    "globalCommands: installIgnoreTemplate cancelled by user"
+                    "globalCommands: installDefaultProject cancelled by user"
                 );
                 return;
             }
@@ -174,12 +174,12 @@ async function installIgnoreTemplate(
     if (force) argv.push("--force");
 
     await spawnRunTerminal(
-        "Superset: Install Ignore Template",
+        "Superset: Install Default Project",
         argv.map(quoteShellArg).join(" "),
         { closeOnSuccess: true, cwd: ctx.workspaceFolder }
     );
     ctx.log(
-        `globalCommands: installIgnoreTemplate ${argv.join(" ")}`
+        `globalCommands: installDefaultProject ${argv.join(" ")}`
     );
 }
 
@@ -290,9 +290,9 @@ export function registerInstallCommands(ctx: PluginContext): void {
     );
     ctx.registerDisposable(
         vscode.commands.registerCommand(
-            "superset.installIgnoreTemplate",
+            "superset.installDefaultProject",
             (args?: { targets?: string[]; force?: boolean }) =>
-                installIgnoreTemplate(ctx, args)
+                installDefaultProject(ctx, args)
         )
     );
     ctx.registerDisposable(
