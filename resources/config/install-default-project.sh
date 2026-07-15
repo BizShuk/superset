@@ -85,6 +85,17 @@ done
 echo "[mkdir] creating default folders..."
 mkdir -p docs/tutorials docs/backlog docs/specs plans pkg config cmd .vscode
 
+# ── create .agents folder and link .claude -> .agents ───────────────────────
+echo "[mkdir] creating .agents folder..."
+mkdir -p .agents
+
+if [[ ( -L .claude || -e .claude ) && $FORCE -eq 0 ]]; then
+  echo "[skip]  .claude  (already exists; use --force to overwrite)"
+else
+  ln -sf .agents .claude
+  echo "[write] symlink .claude -> .agents"
+fi
+
 # ── create default symbolic link AGENTS.md -> CLAUDE.md ──────────────────────
 if [[ ! -e CLAUDE.md ]]; then
   echo "[info] CLAUDE.md does not exist, creating a default one..."
@@ -104,4 +115,4 @@ cat <<'NOTE'
 
 ✓ Done. Default project initialized.
 NOTE
-ls -la .gitignore .geminiignore .claudeignore AGENTS.md 2>/dev/null || true
+ls -la .gitignore .geminiignore .claudeignore AGENTS.md .claude 2>/dev/null || true
