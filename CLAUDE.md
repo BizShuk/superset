@@ -92,7 +92,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 
 - 建立 `OutputChannel` + diagnostic logger
 - 建立 `PluginManager` 並把 `workspaceFolder` / `extensionUri` / `Memento` 注入
-- 依序 `activateAll([treePreview, todoPreview, terminals, mdns, topology, todo, globalCommands])` — 每個 plugin 自己負責 register commands / TreeView / disposable
+- 依序 `activateAll([treePreview, todoPreview, terminals, mdns, topology, todo, projectsTodo, git, globalCommands, panelLayout])` — 每個 plugin 自己負責 register commands / TreeView / disposable
 - 透過 `manager.getMarkdownExtension()` 收集 `treePreview` + `todoPreview` 的 `contributeMarkdownIt`,回傳給 VSCode 觸發 Markdown 預覽
 - 加新 feature 不再需要改 `extension.ts`:在 plugin 陣列加一行即可
 
@@ -111,6 +111,7 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 | `src/todo/`         | TODO 清單 TreeView + 過濾器 badge              | TodoStore, TodoTreeProvider, computeTodoBadgeTitle(badge) |
 | `src/projects/`     | 專案分組 TreeView 面板                         | ProjectStore, ProjectsTreeProvider                        |
 | `src/projectsTodo/` | 跨專案 TODO 總覽 (Overview,`superset-overall`) | ProjectsTodoStore, ProjectsTodoTreeProvider               |
+| `src/git/`          | SCM reset + Explorer GitHub URL commands       | gitReset helpers, githubUrl helpers, command registration  |
 | `src/modifiedFiles/` | Explorer sub-panel: git status tree (folder 階層,gitignore 自動排除) | gitStatusParser, treeBuilder, treeSpec, ModifiedFilesStore, MessageOnlyProvider |
 | `src/treePreview/`  | Markdown `tree` 區塊語法高亮 + 預覽渲染        | createTreePreviewExtension, renderLine                    |
 | `src/todoPreview/`  | `README.todo` 預覽:CSS 摺疊 + 過濾按鈕         | createTodoPreviewExtension, wrapSections                  |
@@ -118,6 +119,36 @@ OSC 633 ; E ; <cmdline>   → 設定命令文字
 > `treePreview` 與 `todoPreview` 同屬「Markdown 預覽貢獻」型 feature (不走 `register()`,只交出 `extendMarkdownIt`);`extension.ts` 用 `composeMarkdownExtensions()` 把兩者串到同一個 `md` 再回傳給 VSCode。`todoPreview` 純 CSS 互動 (`:has()` + checkbox hack,見 `styles/todo-preview.css`),無 preview JS;核心 `core` ruler 只在文件首個 heading 為 `# TODO` 時才重組 (`isTodoDoc` gate),其餘 markdown 預覽不受影響。「fold all + 單節獨立展開」共存為 CSS 天花板 (需 JS),刻意不做。
 
 > 跨 feature 共用的框架型別 (`FeatureContext`、`FeatureHandle`、`SharedDeps`) 放在 `src/shared.ts`;各 feature 自己的 domain 型別放在該資料夾的 `types.ts` (原本集中在單一 `src/types.ts` 的 grab-bag 已依 feature 拆分)。todo 連結解析的純函式 (`extractLink` / `resolveTodoLink` / `cleanLabelText` / `ResolvedLink` / `formatLinkCopyText`) 統一收在 `src/todoEngine/linkUtils.ts` 為唯一 source of truth,供 `todo`、`projectsTodo` 兩面板與 `todoEngine` command factory 共用 — 不再有面板端或 factory 端的第二份副本。
+
+### SCM Graph reset proposed API
+
+`Reset Soft` / `Reset Hard` 的 handler 位於 `src/git/`;選單 contribution 必須位於 `package.json#contributes.menus.scm/historyItem/context`。`scm/graph/context` 不是有效 menu id,不得加入。
+
+`scm/historyItem/context` 在目前 VS Code / Antigravity 仍是 proposed contribution point:
+
+- manifest 必須宣告 `enabledApiProposals: ["contribSourceControlHistoryItemMenu"]`
+- installed extension 必須由 host startup flag `--enable-proposed-api shuk.superset` 授權
+- 開發測試使用 ignored `.vscode/launch.json` 的 `Run Superset with Proposed SCM Menu`,按 `F5` 啟動 Extension Development Host
+- menu 僅顯示於單一 Git history item (`scmProvider == git && !listMultiSelection`)
+- 一般從 Dock 啟動不會帶 startup flag;這項限制不能由 extension runtime 自行解除
+
+Graph context command 參數為 repository provider + history item;`src/git/gitReset.ts#parseScmArgs` 只接受這組 shape。`Reset Hard` 維持 destructive modal confirmation;`Reset Soft` 不修改 index / working tree。
+
+### Explorer Copy GitHub URL
+
+`superset.copyGitHubUrl` 使用 stable `explorer/context`,與 SCM Graph proposed API reset contribution 相互獨立。選單位於 `6_copypath@100`,只接受 Explorer 傳入的本機檔案 `Uri`。
+
+```tree
+Explorer Uri
+└── vscode.git API repository/remotes
+    └── GitHub origin preferred
+        └── src/git/githubUrl.ts pure URL builder
+            └── clipboard
+```
+
+`src/git/githubUrl.ts` 是唯一 URL source of truth,負責 SSH/HTTPS remote normalization、`origin` 優先選擇、repository-relative path 邊界檢查與逐 segment encoding。輸出固定為 `https://github.com/<owner>/<repo>/blob/master/<relative-path>`。
+
+這項 command 只從本機 metadata 組字串:不呼叫 GitHub API、不檢查 `master` branch、不檢查遠端檔案是否存在,也不使用目前 checkout branch、commit SHA 或 editor selection range。
 
 ### `src/terminals/` 內部拆檔 (SRP)
 
@@ -385,7 +416,7 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 
 ## 測試 (Testing)
 
-`npm test` 跑 Vitest,目前 444 個 case 全綠 (46 個 test file):
+`npm test` 跑 Vitest,目前 621 個 case 全綠 (66 個 test file):
 
 | 測試檔                             | 對象                                                                   | 案例數 |
 | ---------------------------------- | ---------------------------------------------------------------------- | ------ |
@@ -430,7 +461,10 @@ VSIX 大小影響:vsce 只打包當前 platform 的 prebuild (例如 macOS arm64
 | `projectsTodoStore.test.ts`        | ProjectsTodoStore 跨專案掃描                                           | 8      |
 | `projectsTodoTreeProvider.test.ts` | ProjectsTodoTreeProvider 渲染 + 過濾                                   | 22     |
 | `installCommands.test.ts`          | installDefaultTools / skillInstall 走 PTY spawner + `&& exit` 自動關閉 + installLicense QuickPick / detail 摘要 / 寫入 / 覆蓋確認 | 12     |
+| `githubUrl.test.ts`                | GitHub remote normalization + 固定 master URL builder                  | 10     |
+| `gitCopyGithubUrlCommand.test.ts`  | Explorer Copy GitHub URL command orchestration                         | 3      |
 | `smoke.test.ts`                    | 整體 smoke                                                             | 1      |
+| `packageManifest.test.ts`          | SCM Graph + Explorer GitHub URL menu manifest contracts                  | 4      |
 
 `TerminalTreeProvider` class 本體 (vscode-bound) 不做單元測試,渲染邏輯已抽到 `src/terminals/treeSpec.ts` 純函式。
 
