@@ -452,6 +452,23 @@ describe("ProjectsTodoStore — workspace scan (recursive from current workspace
         expect(stores.has(nested)).toBe(true);
     });
 
+    it("finds README.todo at depth 5 but not depth 6 with maxDepth=5", async () => {
+        const d5 = join(workspaceFolder, "a", "b", "c", "d", "e");
+        mkdirSync(d5, { recursive: true });
+        writeFileSync(join(d5, "README.todo"), "# TODO\n- [ ] d5\n");
+
+        const d6 = join(d5, "f");
+        mkdirSync(d6);
+        writeFileSync(join(d6, "README.todo"), "# TODO\n- [ ] d6\n");
+
+        const store = new ProjectsTodoStore();
+        await store.loadWorkspaceTodos(workspaceFolder, 5);
+
+        const stores = store.getWorkspaceStores();
+        expect(stores.has(d5)).toBe(true);
+        expect(stores.has(d6)).toBe(false);
+    });
+
     it("does not contaminate ~/projects scan when workspace scan runs", async () => {
         // ~/projects projects still drive `getStores()` separately.
         const projectsDir = join(tempDir, "projects");

@@ -29,7 +29,7 @@ function makeFake(initial: Record<string, unknown> = {}): FakeState {
 }
 
 describe("TRACKED_VIEW_IDS", () => {
-    it("covers the five registered panels", () => {
+    it("covers the six registered panels", () => {
         // Mirrors `views` entries in package.json — both view
         // containers (`superset` and `superset-overall`) covered.
         expect(TRACKED_VIEW_IDS).toEqual([
@@ -37,6 +37,7 @@ describe("TRACKED_VIEW_IDS", () => {
             "superset.mdns",
             "superset.topology",
             "superset.todo",
+            "superset.workspaceTodo",
             "superset.projectsTodo",
         ]);
     });

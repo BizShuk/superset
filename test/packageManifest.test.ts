@@ -14,11 +14,19 @@ interface ManifestCommand {
     readonly icon?: string;
 }
 
+interface ManifestView {
+    readonly id: string;
+    readonly name: string;
+    readonly contextualTitle?: string;
+    readonly visibility?: string;
+}
+
 interface SupersetManifest {
     readonly enabledApiProposals?: string[];
     readonly contributes: {
         readonly commands: ManifestCommand[];
         readonly menus: Record<string, ManifestMenuItem[]>;
+        readonly views: Record<string, ManifestView[]>;
         readonly [key: string]: unknown;
     };
 }
@@ -61,6 +69,25 @@ describe("SCM Graph manifest contributions", () => {
         expect(
             manifest.contributes["scm/graph/context"]
         ).toBeUndefined();
+    });
+});
+
+describe("Overall TODO manifest contributions", () => {
+    it("registers Workspace TODO before Projects TODO", () => {
+        expect(manifest.contributes.views["superset-overall"]).toEqual([
+            {
+                id: "superset.workspaceTodo",
+                name: "Workspace TODO",
+                contextualTitle: "Overall",
+                visibility: "visible",
+            },
+            {
+                id: "superset.projectsTodo",
+                name: "Projects TODO",
+                contextualTitle: "Overall",
+                visibility: "visible",
+            },
+        ]);
     });
 });
 

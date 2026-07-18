@@ -42,7 +42,7 @@ vi.mock("vscode", () => {
                 hide: noop,
                 dispose: noop,
             }),
-            createTreeView: () => ({
+            createTreeView: vi.fn(() => ({
                 onDidChangeCheckboxState: undefined,
                 // panelLayout feature (0.9.0) wires each panel's
                 // `onDidChangeVisibility` to `superset.reportViewVisible`;
@@ -53,7 +53,7 @@ vi.mock("vscode", () => {
                 }),
                 title: "",
                 dispose: noop,
-            }),
+            })),
             showInformationMessage: async () => undefined,
             showWarningMessage: async () => "Reset", // auto-confirm reset
             showErrorMessage: async () => undefined,
@@ -187,6 +187,18 @@ describe("extension activation via PluginManager", () => {
         // still landed in the registry.
         const cmds = (vscode as unknown as { __commands: Map<string, unknown> }).__commands;
         expect(cmds.has("superset.topologyScan")).toBe(true);
+    });
+
+    it("registers both Overall TODO TreeViews", async () => {
+        const ext = fakeExtCtx();
+        const createTreeView = vi.mocked(vscode.window.createTreeView);
+        createTreeView.mockClear();
+
+        await activate(ext);
+
+        const viewIds = createTreeView.mock.calls.map((call) => call[0]);
+        expect(viewIds).toContain("superset.workspaceTodo");
+        expect(viewIds).toContain("superset.projectsTodo");
     });
 
     it("deactivate() is a no-op (no throw)", () => {

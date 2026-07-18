@@ -15,7 +15,7 @@ export const ACTIVE_VIEW_KEY = "superset.activeViewId";
  * Whitelist of TreeView IDs that participate in the panel layout.
  * Mirrors the registered `views` entries in `package.json`:
  *  - `superset`: terminals / mdns / topology / todo
- *  - `superset-overall`: projectsTodo
+ *  - `superset-overall`: workspaceTodo / projectsTodo
  *
  * Anything outside this set is treated as stale (e.g. a view that was
  * renamed or removed) and silently discarded by `sanitizeViewId`.
@@ -25,6 +25,7 @@ export const TRACKED_VIEW_IDS: readonly string[] = [
     "superset.mdns",
     "superset.topology",
     "superset.todo",
+    "superset.workspaceTodo",
     "superset.projectsTodo",
 ];
 

@@ -381,7 +381,7 @@ Overview (`superset-overall` viewContainer) 內有兩個可各自折疊的 VSCod
 - **三層 skip 規則,任一命中即跳過整個子樹**:
   1. dot-prefix 目錄(`.git` / `.vscode` / `.idea` / `.next` …)
   2. 固定黑名單 `WORKSPACE_SCAN_SKIP_DIRS = ["node_modules", "out", "dist", "build", "coverage"]`(`projectsTodoStore.ts` 模組常數)
-  3. 超過 `maxDepth`(預設 3,可由 `superset.projectsTodo.maxDepth` 設定調整,範圍 1–10)
+  3. 超過 `maxDepth`(預設 5,可由 `superset.projectsTodo.maxDepth` 設定調整,範圍 1–10)
 - **命中**不**停止遞迴** — 一個目錄含 `README.todo` 就收為 sub-project,**同時繼續往子孫層走**。Monorepo 場景下 `services/auth/` 與 `services/auth/v2/` 各自有 `README.todo` 時,兩筆 sub-project 都會出現在 overview,以相對路徑區隔 (`services/auth` vs `services/auth/v2`)。改用 readdir 精確比對 `README.todo`(避免 macOS APFS case-insensitive 預設把 `readme.todo` 對到 `README.todo`)。
 - **depth 0 (workspace 根目錄) 也收** — 即使整個 workspace 只有 root 自己含 `README.todo`,Workspace TODO sub-panel 也會呈現這筆 root project(最常見的 single-project workspace 情境)。路徑若同時被 `~/projects` scan 收(例如 `~/projects/tmp/superset`),由 `TreeProvider.getChildren` 在 `~/projects` 迴圈 suppress 重複,Workspace TODO 為單一來源。
 - **兩條 store map 互不污染** — `stores`(`~/projects` projects)與 `workspaceStores`(當前 workspace 內部 sub-projects)是兩個獨立的 `Map<string, TodoStore>`,渲染端依上下文決定顯示哪一邊。即使 workspace 落在 `~/projects` 底下(例如 `~/projects/tmp/superset`),也不會因為 key 重疊而互相覆蓋。
@@ -397,7 +397,7 @@ Overview (`superset-overall` viewContainer) 內有兩個可各自折疊的 VSCod
 - **為什麼 `RelativePattern(ctx.workspaceFolder, "**/README.todo")` watcher 與既有 `~/projects` watcher 重疊沒問題**:兩個 watcher 觸發各自的 `store.load*` 方法,完全不同的 store map;即使 workspace 落在 `~/projects` 底下,同一份 `README.todo` 變動會跑兩次掃描但不互相污染。若日後需要節流,在 store 層加 mutation 去抖即可。
   `─────────────────────────────────────────────`
 
-測試覆蓋:`projectsTodoStore.test.ts` 加了 9 個 case (depth 0/1/2/3 命中、`maxDepth=3` 不收 depth 4、跳過 `node_modules`/`out`/`dist`/dot-prefix、刪除後重掃縮減、空 workspace 回空 map、只認 `README.todo` 不認 `todo.md` / `TODO.md` / `tasks.md` / `readme.todo`、巢狀 sub-project 不被外層遮蔽、與 `~/projects` 一覽互不污染);`projectsTodoTreeProvider.test.ts` 加了 8 個 case (section 出現、`N sub-projects` 描述、相對路徑命名、無 sub-project 仍渲染空殼 (`0 sub-projects` + 空狀態 tooltip)、`workspaceRoot` 未設定時不渲染、sub-project row 渲染為 folder + `N pending`、與 `~/projects` 重複路徑時 suppress `~/projects` row、depth-0-only workspace 也渲染 section)。
+測試覆蓋:`projectsTodoStore.test.ts` 加了 10 個 case (depth 0/1/2/3 命中、`maxDepth=3` 不收 depth 4、`maxDepth=5` 收 depth 5 但不收 depth 6、跳過 `node_modules`/`out`/`dist`/dot-prefix、刪除後重掃縮減、空 workspace 回空 map、只認 `README.todo` 不認 `todo.md` / `TODO.md` / `tasks.md` / `readme.todo`、巢狀 sub-project 不被外層遮蔽、與 `~/projects` 一覽互不污染);`projectsTodoTreeProvider.test.ts` 加了 8 個 case (section 出現、`N sub-projects` 描述、相對路徑命名、無 sub-project 仍渲染空殼 (`0 sub-projects` + 空狀態 tooltip)、`workspaceRoot` 未設定時不渲染、sub-project row 渲染為 folder + `N pending`、與 `~/projects` 重複路徑時 suppress `~/projects` row、depth-0-only workspace 也渲染 section)。
 
 ---
 

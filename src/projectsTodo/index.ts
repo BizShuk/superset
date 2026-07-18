@@ -118,14 +118,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // ── Workspace scan (遞迴掃描當前 VSCode workspace 內的 README.todo)
     //
-    // 讀取 `superset.projectsTodo.maxDepth` 設定(預設 3),把 workspace
+    // 讀取 `superset.projectsTodo.maxDepth` 設定(預設 5),把 workspace
     // 根目錄下符合條件的子目錄收成「Current Workspace」section。
     // 與 `~/projects` 一覽是兩條獨立 store map,互不污染。
     const configSection = "superset.projectsTodo";
     const readMaxDepth = (): number =>
         vscode.workspace
             .getConfiguration(configSection)
-            .get<number>("maxDepth", 3);
+            .get<number>("maxDepth", 5);
     let maxDepth = readMaxDepth();
 
     const loadWorkspaceTodos = () =>
