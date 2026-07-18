@@ -54,6 +54,7 @@ _~
 # ── B. Editor / IDE ─────────────────────────────────────────────────────────
 
 .vscode/
+!.vscode/
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
@@ -274,10 +275,10 @@ id*ecdsa
 id_ecdsa.*
 id*ed25519
 id_ed25519.*
-id_xmss
+id*xmss
 id_xmss.\*
-_.pub
-!_.ignore.pub
+*.pub
+!\_.ignore.pub
 known_hosts
 authorized_keys
 ssh_config

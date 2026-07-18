@@ -27,8 +27,26 @@ const PROJECTS_TODO_VIEW_TITLE = "Projects TODO";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const store = new ProjectsTodoStore();
-    const provider = new ProjectsTodoTreeProvider(store, ctx.context.extensionUri);
+    const provider = new ProjectsTodoTreeProvider(
+        store,
+        ctx.workspaceFolder,
+        ctx.context.extensionUri,
+        "projects",
+    );
+    const workspaceProvider = new ProjectsTodoTreeProvider(
+        store,
+        ctx.workspaceFolder,
+        ctx.context.extensionUri,
+        "workspace",
+    );
     provider.start();
+    workspaceProvider.start();
+
+    const workspaceView = vscode.window.createTreeView("superset.workspaceTodo", {
+        treeDataProvider: workspaceProvider,
+        showCollapseAll: true,
+        manageCheckboxStateManually: true,
+    });
 
     const view = vscode.window.createTreeView("superset.projectsTodo", {
         treeDataProvider: provider,
@@ -46,9 +64,25 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     });
 
+    const workspaceVisibilitySub = workspaceView.onDidChangeVisibility((visible) => {
+        if (visible) {
+            void vscode.commands.executeCommand(
+                "superset.reportViewVisible",
+                "superset.workspaceTodo"
+            );
+        }
+    });
+
     // Cross-panel reveal-in-tree wiring: a future TreeView click
     // e.g. from mDNS can focus a projectsTodo row via
     // `superset.revealInTree({ viewId: "superset.projectsTodo" })`.
+    const workspaceTreeViewEntry = getTreeViewRegistry()?.register(
+        "superset.workspaceTodo",
+        workspaceView as unknown as vscode.TreeView<unknown>,
+        workspaceProvider as unknown as vscode.TreeDataProvider<unknown>,
+        ctx.shared.log
+    );
+
     const treeViewEntry = getTreeViewRegistry()?.register(
         "superset.projectsTodo",
         view as unknown as vscode.TreeView<unknown>,
@@ -81,6 +115,32 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // Initial load
     store.load().then(() => refreshProjectsTodoFilterBadge());
+
+    // ── Workspace scan (遞迴掃描當前 VSCode workspace 內的 README.todo)
+    //
+    // 讀取 `superset.projectsTodo.maxDepth` 設定(預設 3),把 workspace
+    // 根目錄下符合條件的子目錄收成「Current Workspace」section。
+    // 與 `~/projects` 一覽是兩條獨立 store map,互不污染。
+    const configSection = "superset.projectsTodo";
+    const readMaxDepth = (): number =>
+        vscode.workspace
+            .getConfiguration(configSection)
+            .get<number>("maxDepth", 3);
+    let maxDepth = readMaxDepth();
+
+    const loadWorkspaceTodos = () =>
+        store
+            .loadWorkspaceTodos(ctx.workspaceFolder, maxDepth)
+            .then(() => refreshProjectsTodoFilterBadge());
+
+    loadWorkspaceTodos();
+
+    const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration(`${configSection}.maxDepth`)) {
+            maxDepth = readMaxDepth();
+            void loadWorkspaceTodos();
+        }
+    });
 
     ctx.resetHandlers.push(async () => {
         await store.reset();
@@ -130,6 +190,23 @@ export function register(ctx: FeatureContext): FeatureHandle {
     plansWatcher.onDidCreate(onPlansFileChanged);
     plansWatcher.onDidDelete(onPlansFileChanged);
 
+    // ── Workspace-relative README.todo watcher
+    //
+    // 只負責 workspace 內部的 README.todo 變動;命中後只觸發
+    // `loadWorkspaceTodos`,不會去碰 `~/projects` 一覽。兩條
+    // watcher 路徑各自走各自的 store map,即使 workspace 落在
+    // `~/projects` 底下(`~/projects/tmp/superset` 之類)也只會
+    // 各掃各的,頂多重複觸發兩次 — 不會污染彼此的資料。
+    const workspaceTodoWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(ctx.workspaceFolder, "**/README.todo")
+    );
+    const onWorkspaceTodoChanged = () => {
+        void loadWorkspaceTodos();
+    };
+    workspaceTodoWatcher.onDidChange(onWorkspaceTodoChanged);
+    workspaceTodoWatcher.onDidCreate(onWorkspaceTodoChanged);
+    workspaceTodoWatcher.onDidDelete(onWorkspaceTodoChanged);
+
     // ── Emit the superset.projectsTodo* commands via the shared
     //    todoEngine factory. Placed AFTER the file-watcher setup
     //    so failure modes (e.g. lightweight `vscode` mock missing
@@ -140,7 +217,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
     //    `openTodoFile` additionally pick a project via QuickPick
     //    when invoked without row context.
 
-    const getSubStore = (projectPath: string) => store.getStore(projectPath);
+    const getSubStore = (projectPath: string) =>
+        store.getStore(projectPath) ?? store.getWorkspaceStore(projectPath);
     const dispatchItem = async (
         kind:
             | "toggle"
@@ -310,11 +388,12 @@ export function register(ctx: FeatureContext): FeatureHandle {
     //     store reload. The plan row disappears (the moved file is
     //     no longer in `plans/`), so the checkbox is never seen in
     //     a "checked" state.
-    view.onDidChangeCheckboxState?.(async (e) => {
+    const handleCheckboxChange = async (e: { items: readonly [unknown, unknown][] }) => {
         for (const [item] of e.items) {
             const pItem = item as ProjectTodoItem;
             if (pItem.kind === "checkbox") {
-                const subStore = store.getStore(pItem.projectPath);
+                const subStore = store.getStore(pItem.projectPath) ??
+                    store.getWorkspaceStore(pItem.projectPath);
                 if (subStore) {
                     await subStore.toggle(pItem);
                 }
@@ -325,7 +404,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
                 );
             }
         }
-    });
+    };
+    view.onDidChangeCheckboxState?.(handleCheckboxChange);
+    workspaceView.onDidChangeCheckboxState?.(handleCheckboxChange);
 
     // Open the project folder for a `kind: "project"` row (or any
     // row that carries a `projectPath`). Wired to the inline
@@ -353,29 +434,39 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     ctx.subscriptions.push(
         openProjectCmd,
+        workspaceView,
         view,
+        workspaceVisibilitySub,
         visibilitySub,
         projectsWatcher,
         plansWatcher,
+        workspaceTodoWatcher,
+        configSub,
         // All `superset.projectsTodo*` commands are emitted by the
         // todoEngine factory. Each handler delegates back to the
         // per-project sub-store; the factory's disposables are added
         // to the panel's pool so deactivate tears them down.
         ...projectsFactorySet.disposables,
-        // TreeViewRegistry entry — see TODO/mDNS wiring notes.
+        // TreeViewRegistry entries — see TODO/mDNS wiring notes.
+        workspaceTreeViewEntry ?? { dispose: () => undefined },
         treeViewEntry ?? { dispose: () => undefined },
-        { dispose: () => provider.stop() }
+        { dispose: () => provider.stop() },
+        { dispose: () => workspaceProvider.stop() }
     );
 
     return {
         dispose() {
             provider.stop();
+            workspaceProvider.stop();
             openProjectCmd.dispose();
             // Factory disposes its own registered commands via
             // `projectsFactorySet.disposables` above.
+            workspaceView.dispose();
             view.dispose();
             projectsWatcher.dispose();
             plansWatcher.dispose();
+            workspaceTodoWatcher.dispose();
+            configSub.dispose();
         },
     };
 }

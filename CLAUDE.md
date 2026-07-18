@@ -364,6 +364,41 @@ Overview 同時在兩個地方呈現 `plans/*.md`:
 
 測試覆蓋:`projectsTodoTreeProvider.test.ts` 加了 4 個 case — all-completed、empty file、priority filter 全排除、collapsed 預設 (即使 children 存在也保持 Collapsed)。
 
+### Recursive Current Workspace Sub-Panel (0.13.5+,真正分離 view 於 0.13.10)
+
+Overview (`superset-overall` viewContainer) 內有兩個可各自折疊的 VSCode sub-panel:
+
+- **Workspace TODO** (`superset.workspaceTodo`):從**當前開啟的 VSCode workspace** 根目錄向下遞迴掃描所有含 `README.todo` 的子目錄,範圍限定在使用者當前的工作區。
+- **Projects TODO** (`superset.projectsTodo`):既有 `~/projects` / `~/projects/tmp` 第一層 project 一覽。
+
+兩者是 sibling views,不是同一棵 tree 裡的 top-level row。這是刻意設計:使用者可以在 Workbench 直接折疊 `Workspace TODO` 或 `Projects TODO`,兩個 panel 互不影響。`Workspace TODO` 排在 `Projects TODO` 之上 — 使用者想看的第一件事是「我正在哪個 workspace,裡面有什麼 todo」。
+
+**Workspace TODO sub-panel 永遠存在**(只要 `workspaceRoot` 已設定)。即使整個 workspace 完全沒有任何 `README.todo`,panel 仍顯示一個 placeholder 子節點 `No README.todo files in this workspace`,避免使用者誤以為 extension 沒註冊或沒掃描。
+
+`★ 設計 ─────────────────────────────────────`
+
+- **只認 `README.todo`** — 嚴格比對完整檔名(`path.basename === "README.todo"`,大小寫敏感),不接受 `todo.md` / `TODO.md` / `tasks.md` 等其他變體,也不開放 glob pattern / 設定開關。
+- **三層 skip 規則,任一命中即跳過整個子樹**:
+  1. dot-prefix 目錄(`.git` / `.vscode` / `.idea` / `.next` …)
+  2. 固定黑名單 `WORKSPACE_SCAN_SKIP_DIRS = ["node_modules", "out", "dist", "build", "coverage"]`(`projectsTodoStore.ts` 模組常數)
+  3. 超過 `maxDepth`(預設 3,可由 `superset.projectsTodo.maxDepth` 設定調整,範圍 1–10)
+- **命中**不**停止遞迴** — 一個目錄含 `README.todo` 就收為 sub-project,**同時繼續往子孫層走**。Monorepo 場景下 `services/auth/` 與 `services/auth/v2/` 各自有 `README.todo` 時,兩筆 sub-project 都會出現在 overview,以相對路徑區隔 (`services/auth` vs `services/auth/v2`)。改用 readdir 精確比對 `README.todo`(避免 macOS APFS case-insensitive 預設把 `readme.todo` 對到 `README.todo`)。
+- **depth 0 (workspace 根目錄) 也收** — 即使整個 workspace 只有 root 自己含 `README.todo`,Workspace TODO sub-panel 也會呈現這筆 root project(最常見的 single-project workspace 情境)。路徑若同時被 `~/projects` scan 收(例如 `~/projects/tmp/superset`),由 `TreeProvider.getChildren` 在 `~/projects` 迴圈 suppress 重複,Workspace TODO 為單一來源。
+- **兩條 store map 互不污染** — `stores`(`~/projects` projects)與 `workspaceStores`(當前 workspace 內部 sub-projects)是兩個獨立的 `Map<string, TodoStore>`,渲染端依上下文決定顯示哪一邊。即使 workspace 落在 `~/projects` 底下(例如 `~/projects/tmp/superset`),也不會因為 key 重疊而互相覆蓋。
+- **sub-project 用相對路徑命名** — `path.relative(workspaceRoot, projectPath)`,所以巢狀結構一眼可見(`src/todo` 而不是只有 `todo`)。未提供 `workspaceRoot` 時退用 `basename` 行為對齊既有 project row。
+- **View-level 區隔** — `package.json#contributes.views.superset-overall` 註冊兩個 sibling views:`superset.workspaceTodo` 在上、`superset.projectsTodo` 在下。Workspace view 的 root rows 直接是 workspace sub-projects(或空狀態 placeholder),不再包一層 tree row wrapper。
+- **maxDepth 變更即時生效** — 透過 `vscode.workspace.onDidChangeConfiguration` 偵聽 `superset.projectsTodo.maxDepth`,使用者改設定後下次重掃立即套用新深度。
+  `─────────────────────────────────────────────`
+
+`★ 取捨 ─────────────────────────────────────`
+
+- **為什麼不在 `~/projects` 一覽直接遞迴**:一覽是「live project 全覽」的設計語意,深層 `~/projects/data/pkg/stock/` 屬於它所屬專案的內部子目錄,若全部浮上來會把一覽變成 100+ 條的扁平清單,淹沒 project 總覽的價值。Workspace scan 是不同語意 —「我在這個 workspace 內還有哪些 nested todo」,兩條路徑刻意分開。
+- **為什麼不用 gitignore**:遞迴是已知深度上限,黑名單已涵蓋常見的 `node_modules` / `build` / `out` / `.git`,解析 gitignore 規則的實作成本與本次需求不成比例。
+- **為什麼 `RelativePattern(ctx.workspaceFolder, "**/README.todo")` watcher 與既有 `~/projects` watcher 重疊沒問題**:兩個 watcher 觸發各自的 `store.load*` 方法,完全不同的 store map;即使 workspace 落在 `~/projects` 底下,同一份 `README.todo` 變動會跑兩次掃描但不互相污染。若日後需要節流,在 store 層加 mutation 去抖即可。
+  `─────────────────────────────────────────────`
+
+測試覆蓋:`projectsTodoStore.test.ts` 加了 9 個 case (depth 0/1/2/3 命中、`maxDepth=3` 不收 depth 4、跳過 `node_modules`/`out`/`dist`/dot-prefix、刪除後重掃縮減、空 workspace 回空 map、只認 `README.todo` 不認 `todo.md` / `TODO.md` / `tasks.md` / `readme.todo`、巢狀 sub-project 不被外層遮蔽、與 `~/projects` 一覽互不污染);`projectsTodoTreeProvider.test.ts` 加了 8 個 case (section 出現、`N sub-projects` 描述、相對路徑命名、無 sub-project 仍渲染空殼 (`0 sub-projects` + 空狀態 tooltip)、`workspaceRoot` 未設定時不渲染、sub-project row 渲染為 folder + `N pending`、與 `~/projects` 重複路徑時 suppress `~/projects` row、depth-0-only workspace 也渲染 section)。
+
 ---
 
 ## `node-pty` 整合

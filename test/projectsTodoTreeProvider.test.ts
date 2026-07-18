@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ProjectsTodoTreeProvider } from "../src/projectsTodo/projectsTodoTreeProvider";
 import { ProjectsTodoStore } from "../src/projectsTodo/projectsTodoStore";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { join, basename } from "path";
 import { tmpdir } from "os";
 import * as os from "os";
 
@@ -606,5 +606,116 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
         for (const { name, plans } of after) {
             expect(plans, `${name} after 4 toggles`).toHaveLength(1);
         }
+    });
+});
+
+describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
+    let tempDir: string;
+    let store: ProjectsTodoStore;
+    let workspaceFolder: string;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        tempDir = mkdtempSync(join(tmpdir(), "superset-prov-ws-"));
+        vi.mocked(os.homedir).mockReturnValue(tempDir);
+
+        // ~/projects stub so the existing ~/projects scan path
+        // doesn't blow up if some test happens to trigger it.
+        const projectsDir = join(tempDir, "projects");
+        mkdirSync(projectsDir);
+
+        workspaceFolder = join(tempDir, "ws");
+        mkdirSync(workspaceFolder);
+
+        store = new ProjectsTodoStore();
+    });
+
+    afterEach(() => {
+        rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    it("renders workspace sub-projects directly in the Workspace TODO sub-panel", async () => {
+        const nested = join(workspaceFolder, "src", "todo");
+        mkdirSync(nested, { recursive: true });
+        writeFileSync(join(nested, "README.todo"), "# TODO\n- [ ] nested\n");
+
+        await store.loadWorkspaceTodos(workspaceFolder, 3);
+
+        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const roots = await provider.getChildren();
+
+        expect(roots).toHaveLength(1);
+        expect(roots![0].text).toBe(join("src", "todo"));
+        expect(roots![0].projectPath).toBe(nested);
+    });
+
+    it("renders an empty-state placeholder when workspace scan is empty", async () => {
+        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const roots = await provider.getChildren();
+
+        expect(roots).toHaveLength(1);
+        const placeholder = roots![0];
+        expect(placeholder.kind).toBe("list");
+        expect(placeholder.text).toMatch(/No README\.todo/);
+    });
+
+    it("does NOT render workspace rows when workspaceRoot is unset", async () => {
+        const provider = new ProjectsTodoTreeProvider(store, undefined, undefined, "workspace");
+        const roots = await provider.getChildren();
+        expect(roots).toEqual([]);
+    });
+
+    it("renders workspace sub-project rows as folder items with 'N pending' description", async () => {
+        const nested = join(workspaceFolder, "src");
+        mkdirSync(nested);
+        writeFileSync(
+            join(nested, "README.todo"),
+            "## Active\n- [ ] a\n- [ ] b\n- [x] c\n",
+        );
+        await store.loadWorkspaceTodos(workspaceFolder, 3);
+
+        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const roots = await provider.getChildren();
+        const subProject = roots!.find((c) => c.text === "src")!;
+
+        const item = provider.getTreeItem(subProject);
+        expect(item.contextValue).toBe("projectsTodoProject");
+        expect(item.description).toBe("2 pending");
+        expect(item.collapsibleState).toBe(1); // Collapsed
+    });
+
+    it("suppresses the ~/projects duplicate when the same path is also a workspace sub-project", async () => {
+        const projectsDir = join(tempDir, "projects", "tmp");
+        mkdirSync(projectsDir, { recursive: true });
+
+        workspaceFolder = join(projectsDir, "superset");
+        mkdirSync(workspaceFolder);
+        writeFileSync(join(workspaceFolder, "README.todo"), "# TODO\n- [ ] dual\n");
+
+        await store.load();
+        await store.loadWorkspaceTodos(workspaceFolder, 3);
+
+        const workspaceProvider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const workspaceRoots = await workspaceProvider.getChildren();
+        expect(workspaceRoots!.find((c) => c.projectPath === workspaceFolder)).toBeDefined();
+
+        const projectsProvider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "projects");
+        const projectRoots = await projectsProvider.getChildren();
+        const duplicate = projectRoots!.find(
+            (r) => r.text === "superset" && r.projectPath === workspaceFolder,
+        );
+        expect(duplicate).toBeUndefined();
+    });
+
+    it("renders the workspace root in the Workspace TODO sub-panel when only root has README.todo", async () => {
+        writeFileSync(join(workspaceFolder, "README.todo"), "# TODO\n- [ ] single\n");
+
+        await store.loadWorkspaceTodos(workspaceFolder, 3);
+
+        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const roots = await provider.getChildren();
+
+        expect(roots).toHaveLength(1);
+        expect(roots![0].text).toBe(basename(workspaceFolder));
     });
 });
