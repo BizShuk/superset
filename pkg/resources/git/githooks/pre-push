@@ -1,0 +1,91 @@
+#!/bin/bash
+#
+# pre-push: 自動建立 release tag。
+#
+# 當 push 的 commit range 內任一筆修改了 .claude-plugin/plugin.json 的
+# version 欄位，本 hook 把對應的 v<version> tag 直接打在即將送出的
+# local commit 上；user 之後跑 `git push --follow-tags` 就會把 tag 一併
+# 帶上去。第一次 push 沒有任何 tag 也能這樣起步。
+#
+# 與 scripts/sync-plugin-version.sh 的分工：
+#   sync-plugin-version.sh  寫 plugin.json 版本（commit 前用）
+#   pre-push (本檔)         讀 plugin.json 版本並補 tag（commit 後、push 時用）
+#
+# 契約：git 會從 stdin 餵 <local_ref> <local_sha> <remote_ref> <remote_sha>
+#       一行一個 ref；exit 0 才放行，永遠不 reject push。
+
+set -euo pipefail
+
+readonly PLUGIN_FILE=".claude-plugin/plugin.json"
+readonly TAG_PREFIX="v"
+
+die() {
+	echo "pre-push: $1" >&2
+}
+
+# 從 commit 取 plugin.json 版本；檔案不存在或讀不到回空字串。
+read_version() {
+	local sha="$1"
+	if ! git cat-file -e "${sha}^{tree}" 2>/dev/null; then
+		return 0
+	fi
+	if ! git show "${sha}:${PLUGIN_FILE}" >/dev/null 2>&1; then
+		return 0
+	fi
+	git show "${sha}:${PLUGIN_FILE}" |
+		sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+		head -1
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+	# 只處理 branch push；tag push 各自有對象。
+	case "$local_ref" in
+	refs/heads/*) ;;
+	*) continue ;;
+	esac
+
+	# 全 0 的 SHA：
+	#   remote 為 0 → 新 branch（首次 push），HEAD 起算
+	#   local 為 0  → force-push 刪除 ref，沒有 commit 可讀版本
+	if [[ "$local_sha" =~ ^0+$ ]]; then
+		continue
+	fi
+
+	if [[ "$remote_sha" =~ ^0+$ ]]; then
+		# 新 branch：以 HEAD plugin.json 為準，只要版本有效就補 tag。
+		version="$(read_version "$local_sha")"
+		if [[ -z "$version" ]]; then
+			continue
+		fi
+		tag="${TAG_PREFIX}${version}"
+		if git rev-parse "$tag" >/dev/null 2>&1; then
+			echo "pre-push: tag ${tag} 已存在，跳過 auto-tag" >&2
+			continue
+		fi
+		echo "pre-push: 自動建立 tag ${tag} 於 ${local_sha}（新 branch）" >&2
+		git tag "$tag" "$local_sha"
+		continue
+	fi
+
+	# push range 內沒有任何 commit 動到 plugin.json → 不是 release，跳過。
+	if ! git rev-list "${remote_sha}..${local_sha}" -- "$PLUGIN_FILE" | grep -q .; then
+		continue
+	fi
+
+	version="$(read_version "$local_sha")"
+	if [[ -z "$version" ]]; then
+		die "${PLUGIN_FILE} 在 ${local_sha} 讀不到 version，跳過 auto-tag"
+		continue
+	fi
+
+	tag="${TAG_PREFIX}${version}"
+	if git rev-parse "$tag" >/dev/null 2>&1; then
+		echo "pre-push: tag ${tag} 已存在，跳過 auto-tag" >&2
+		continue
+	fi
+
+	echo "pre-push: 自動建立 tag ${tag} 於 ${local_sha}" >&2
+	git tag "$tag" "$local_sha"
+done
+
+exit 0
