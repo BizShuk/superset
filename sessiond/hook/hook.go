@@ -24,12 +24,12 @@ import (
 
 	gosdkcfg "github.com/bizshuk/gosdk/config"
 
-	sessiondcfg "github.com/bizshuk/sessiond/internal/config"
-	"github.com/bizshuk/sessiond/internal/hookpayload"
-	"github.com/bizshuk/sessiond/internal/ingest"
-	"github.com/bizshuk/sessiond/internal/model"
-	"github.com/bizshuk/sessiond/internal/store"
-	"github.com/bizshuk/sessiond/internal/summarize"
+	sessiondcfg "github.com/bizshuk/sessiond/config"
+	"github.com/bizshuk/sessiond/hookpayload"
+	"github.com/bizshuk/sessiond/ingest"
+	"github.com/bizshuk/sessiond/model"
+	"github.com/bizshuk/sessiond/store"
+	"github.com/bizshuk/sessiond/summarize"
 )
 
 // RunOptions configures one invocation. Fields are plumbing for the cobra

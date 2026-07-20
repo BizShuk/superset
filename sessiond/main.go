@@ -10,7 +10,7 @@ import (
 	gosdkcfg "github.com/bizshuk/gosdk/config"
 
 	"github.com/bizshuk/sessiond/cmd"
-	sessiondcfg "github.com/bizshuk/sessiond/internal/config"
+	sessiondcfg "github.com/bizshuk/sessiond/config"
 )
 
 func main() {

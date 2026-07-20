@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bizshuk/sessiond/internal/model"
+	"github.com/bizshuk/sessiond/model"
 )
 
 // EncodeWorkspace maps an absolute path to a single reversible directory

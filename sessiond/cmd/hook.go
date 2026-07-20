@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bizshuk/sessiond/internal/hook"
+	"github.com/bizshuk/sessiond/hook"
 )
 
 // newHookCmd builds `sessiond hook <agent>`. It is invoked by an agent's

@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/bizshuk/sessiond/internal/install"
+	"github.com/bizshuk/sessiond/install"
 )
 
 // newInstallCmd builds `sessiond install`. Renamed from the old `install-hooks`
