@@ -161,7 +161,7 @@ func installCodex(stdout, stderr io.Writer, path, bin string, apply bool) Target
 		status.Skipped = "backup failed: " + err.Error()
 		return status
 	}
-	f, err := os.OpenFile(real, os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(real, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		fmt.Fprintf(stderr, "codex open: %v\n", err)
 		status.Skipped = "open failed: " + err.Error()
