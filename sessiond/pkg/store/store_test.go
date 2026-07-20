@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bizshuk/sessiond/model"
+	"github.com/bizshuk/sessiond/pkg/model"
 )
 
 func meta() model.Meta {
