@@ -27,6 +27,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | 跑單元測試 | `npm test` |
 | 持續跑測試 | `npm run test:watch` |
 | 單獨打包 `.vsix` | `npx @vscode/vsce package` |
+| 產生 Sessions 面板假資料 | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
 
 執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。VS Code baseline 與 API 相容性決策見 [`docs/specs/2026-06-23-chore-vscode-baseline-alignment.md`](docs/specs/2026-06-23-chore-vscode-baseline-alignment.md)。
 
@@ -41,6 +42,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | `src/mermaid/` | 終端機 Mermaid link 與預覽 | 由 terminals 接線 |
 | `src/mdns/` | mDNS 服務發現與細節 | `mdnsPlugin` |
 | `src/topology/` | 網路拓撲掃描與 tree 轉換 | `topologyPlugin` |
+| `src/sessions/` | Agent session 清單與 summary markdown(讀 `sessiond` JSONL) | `sessionsPlugin` |
 | `src/todo/` | 當前 workspace 的 `README.todo` 與 plans | `todoPlugin` |
 | `src/projects/` | 專案資料與 TreeView 元件 | `projectsPlugin`（目前未列入 composition root） |
 | `src/projectsTodo/` | Workspace TODO 與跨專案 TODO sibling views | `projectsTodoPlugin` |
@@ -61,6 +63,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - `src/projects/` 只負責專案清單；`src/projectsTodo/` 才負責 TODO 內容。Projects TODO 掃 `~/projects` 邊界，Workspace TODO 只遞迴當前 workspace，兩者使用獨立 store map。
 - Workspace TODO 只認大小寫完全相符的 `README.todo`；root 為 depth 0，預設最大 depth 5（設定 `superset.projectsTodo.maxDepth`，範圍 1–10），命中後仍繼續掃描子孫。
 - Plan item 是 read-only domain kind，不納入 pending task 計數。Overview 不再有 top-level merged Plans row；plans 只出現在對應 local/per-project scope。
+- `src/sessions/` 對 `sessiond` JSONL store 只讀，唯一寫入路徑是 `sample-*.jsonl` 假資料指令；清除也只認該 prefix，不得動到 ingest 產生的檔案。Summary markdown 的 heading 契約固定為 `#` session /`##` round /`###` tool，由 `markdown.ts` 單點決定。
 - mDNS service、network-key secondary index 與 expiration cleanup 必須同步更新，避免 stale index 或錯誤合併。
 - 純 domain logic 優先抽成無 `vscode` import 的函式或 store；VS Code-bound provider 以 pure renderer、contract test 或 activation test 覆蓋。
 

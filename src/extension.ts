@@ -10,6 +10,7 @@ import { terminalsPlugin } from "./terminals/plugin";
 import { mdnsPlugin } from "./mdns/plugin";
 import { topologyPlugin } from "./topology/plugin";
 import { todoPlugin } from "./todo/plugin";
+import { sessionsPlugin } from "./sessions/plugin";
 import { projectsTodoPlugin } from "./projectsTodo/plugin";
 import { gitPlugin } from "./git/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
@@ -88,6 +89,7 @@ export function activate(
         terminalsPlugin,
         mdnsPlugin,
         topologyPlugin,
+        sessionsPlugin,
         todoPlugin,
         projectsTodoPlugin,
         gitPlugin,
