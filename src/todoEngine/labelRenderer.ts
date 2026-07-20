@@ -49,7 +49,7 @@ export function stripMarkdownLink(rawText: string): {
 
 /**
  * Resolve the priority-tag SVG iconPath under the extension's
- * `resources/` folder. Returns undefined when no priority is set or
+ * `pkg/resources/` folder. Returns undefined when no priority is set or
  * when `extensionUri` is unavailable, so callers can fall back to a
  * ThemeIcon.
  */
@@ -60,6 +60,7 @@ export function priorityIconPath(
     if (!priority || !extensionUri) return undefined;
     return vscode.Uri.joinPath(
         extensionUri,
+        "pkg",
         "resources",
         `${priority.toLowerCase()}.svg`,
     );

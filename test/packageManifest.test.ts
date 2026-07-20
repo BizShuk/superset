@@ -22,6 +22,7 @@ interface ManifestView {
 }
 
 interface SupersetManifest {
+    readonly icon?: string;
     readonly enabledApiProposals?: string[];
     readonly contributes: {
         readonly commands: ManifestCommand[];
@@ -37,6 +38,29 @@ const manifestPath = fileURLToPath(
 const manifest = JSON.parse(
     readFileSync(manifestPath, "utf8")
 ) as SupersetManifest;
+
+describe("Git hooks manifest contributions", () => {
+    it("publishes separate install and link commands", () => {
+        expect(manifest.contributes.commands).toContainEqual({
+            command: "superset.installGitHooks",
+            title: "Superset: Install Git Hooks",
+        });
+        expect(manifest.contributes.commands).toContainEqual({
+            command: "superset.linkGitHooks",
+            title: "Superset: Link Git Hooks",
+        });
+    });
+
+    it("uses only pkg/resources manifest assets", () => {
+        expect(manifest.icon).toBe("pkg/resources/icon.png");
+        for (const command of manifest.contributes.commands) {
+            if (command.icon && !command.icon.startsWith("$(")) {
+                expect(command.icon).toMatch(/^pkg\/resources\//);
+            }
+        }
+    });
+});
+
 
 describe("SCM Graph manifest contributions", () => {
     it("declares the proposed Source Control history-item menu API", () => {
@@ -88,6 +112,27 @@ describe("Overall TODO manifest contributions", () => {
                 visibility: "visible",
             },
         ]);
+    });
+});
+
+describe("Sessions manifest contributions", () => {
+    it("exposes Open Session Source File inline and in the open group", () => {
+        expect(manifest.contributes.commands).toContainEqual({
+            command: "superset.sessionsOpenSource",
+            title: "Open Session Source File",
+            icon: "$(edit)",
+        });
+
+        const items = manifest.contributes.menus["view/item/context"].filter(
+            (m) => m.command === "superset.sessionsOpenSource"
+        );
+        // Inline gives the hover button; the named group gives the
+        // right-click entry. Both are needed — inline alone is invisible to
+        // keyboard-only navigation of the context menu.
+        expect(items.map((m) => m.group).sort()).toEqual(["1_open", "inline"]);
+        for (const item of items) {
+            expect(item.when).toBe("viewItem == supersetSession");
+        }
     });
 });
 

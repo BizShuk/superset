@@ -634,15 +634,15 @@ describe("TodoTreeProvider priority icons", () => {
 
         const tiP0 = provider.getTreeItem(items[0]);
         expect(tiP0.label).toBe("fix core bug");
-        expect((tiP0.iconPath as any).path).toBe("/extension/resources/p0.svg");
+        expect((tiP0.iconPath as any).path).toBe("/extension/pkg/resources/p0.svg");
 
         const tiP1 = provider.getTreeItem(items[1]);
         expect(tiP1.label).toBe("investigate lag");
-        expect((tiP1.iconPath as any).path).toBe("/extension/resources/p1.svg");
+        expect((tiP1.iconPath as any).path).toBe("/extension/pkg/resources/p1.svg");
 
         const tiP2 = provider.getTreeItem(items[2]);
         expect(tiP2.label).toBe("documentation update");
-        expect((tiP2.iconPath as any).path).toBe("/extension/resources/p2.svg");
+        expect((tiP2.iconPath as any).path).toBe("/extension/pkg/resources/p2.svg");
 
         const tiNormal = provider.getTreeItem(items[3]);
         expect(tiNormal.label).toBe("Normal task");
@@ -668,7 +668,7 @@ describe("TodoTreeProvider priority icons", () => {
         const ti = provider.getTreeItem(store.getItems()[0]);
 
         expect(ti.label).toBe("important note");
-        expect((ti.iconPath as any).path).toBe("/extension/resources/p0.svg");
+        expect((ti.iconPath as any).path).toBe("/extension/pkg/resources/p0.svg");
     });
 
     it("handles links in checkbox and list items by cleaning label and updating contextValue", () => {

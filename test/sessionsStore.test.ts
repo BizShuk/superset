@@ -30,9 +30,6 @@ const foreignUri = (scheme: string, path: string, query = ""): SessionDocUri => 
     scheme,
     path,
     query,
-    with(opts) {
-        return { ...this, ...opts };
-    },
 });
 
 const META = {
@@ -348,9 +345,30 @@ describe("session document URI", () => {
         expect(uri.scheme).toBe(SESSION_DOC_SCHEME);
         // path is now deterministic (just the session id), so the parser can
         // never go wrong on it — the real file path rides in `query`.
-        expect(uri.path).toBe("/sample-claude-70471642.md");
+        expect(uri.path).toBe("/sample-claude-70471642.jsonl");
         expect(uri.query).toBe(REAL_FILE);
         expect(sessionPathFromDocUri(uri)).toBe(REAL_FILE);
+    });
+
+    // Regression: the parts were once cast straight to `vscode.Uri` and
+    // passed to `openTextDocument`, which is overloaded on
+    // `Uri | {language, content}`. VS Code discriminates with this exact
+    // structural check — the parts fail it, so the call fell through to the
+    // options overload and opened an empty untitled document. Callers must
+    // revive with `vscode.Uri.from(...)`; this test pins why.
+    it("is a plain parts record, not something `URI.isUri` accepts", () => {
+        const parts = sessionDocUri(REAL_FILE) as Record<string, unknown>;
+        const isUri =
+            typeof parts.authority === "string" &&
+            typeof parts.fragment === "string" &&
+            typeof parts.path === "string" &&
+            typeof parts.query === "string" &&
+            typeof parts.scheme === "string" &&
+            typeof parts.fsPath === "string" &&
+            typeof parts.with === "function";
+        expect(isUri).toBe(false);
+        // `Uri.from` only reads these three — nothing else may be required.
+        expect(Object.keys(parts).sort()).toEqual(["path", "query", "scheme"]);
     });
 
     it("refuses to claim a non-session URI", () => {

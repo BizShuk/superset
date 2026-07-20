@@ -6,6 +6,7 @@
 #   1. Exactly one node-pty prebuild (the current host's) is bundled.
 #   2. No dev-only paths (test/, src/, plans/, docs/) leaked into the VSIX.
 #   3. extension/package.json exists at the root of the extension folder.
+#   4. Required pkg/resources payload exists and no legacy resources path leaks.
 set -euo pipefail
 
 VSIX="${1:-superset-*.vsix}"
@@ -58,6 +59,26 @@ done
 # 3. extension/package.json must exist.
 if ! grep -qE "extension/package\.json$" "$VSIX_LISTING"; then
     echo "✗ extension/package.json missing in $VSIX" >&2
+    exit 1
+fi
+
+# 4. Runtime templates and icons must be packaged from pkg/resources.
+required_resources=(
+    "extension/pkg/resources/icon.png"
+    "extension/pkg/resources/config/.ignore"
+    "extension/pkg/resources/config/install-default-project.sh"
+    "extension/pkg/resources/git/githooks/scripts/sync-plugin-version.sh"
+)
+
+for required in "${required_resources[@]}"; do
+    if ! grep -qF "$required" "$VSIX_LISTING"; then
+        echo "✗ Required resource $required missing in $VSIX" >&2
+        exit 1
+    fi
+done
+
+if grep -qE "extension/resources/" "$VSIX_LISTING"; then
+    echo "✗ Legacy extension/resources/ path leaked into $VSIX" >&2
     exit 1
 fi
 

@@ -1,0 +1,11 @@
+
+# >>> superset sessiond hooks >>>
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = "/Users/shuk/.local/go/bin/sessiond hook codex"
+[[hooks.SubagentStop]]
+[[hooks.SubagentStop.hooks]]
+type = "command"
+command = "/Users/shuk/.local/go/bin/sessiond hook codex"
+# <<< superset sessiond hooks <<<

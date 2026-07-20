@@ -16,32 +16,39 @@
 //
 // Putting the real path in the `query` parameter avoids that round-trip —
 // `Uri.query` is left alone by normalisation. The path component stays
-// deterministic (`/<session_id>.md`) so the document still parses as
-// Markdown and shows up under a meaningful tab title.
+// deterministic (`/<session_file>.jsonl`) so the editor tab shows the
+// full backing file name; the command explicitly sets the document language
+// to Markdown.
+//
+// These are URI *parts*, not a `vscode.Uri`
+// ─────────────────────────────────────────
+// `sessionDocUri` deliberately returns a plain record. It must NOT be cast
+// to `vscode.Uri` and handed to `openTextDocument` — that call is
+// overloaded on `Uri | {language, content}` and discriminates with
+// `URI.isUri()`, a structural check that also demands `authority`,
+// `fragment`, `fsPath` and a real `toString`. A hand-rolled literal fails
+// it silently and falls through to the options overload, which opens an
+// empty untitled document instead. Callers must revive these parts with
+// `vscode.Uri.from(...)` at the boundary.
 
 /** The subset of `vscode.Uri` that the helpers here touch. */
 export interface SessionDocUri {
     readonly scheme: string;
     readonly path: string;
     readonly query: string;
-    with(opts: { query?: string }): SessionDocUri;
 }
 
 /** Scheme registered for the session markdown documents. */
 export const SESSION_DOC_SCHEME = "superset-session";
 
-/** Build the virtual-document URI for a session. */
+/** Build the virtual-document URI parts for a session. */
 export function sessionDocUri(filePath: string): SessionDocUri {
-    const id = filePath.replace(/.*\//, "").replace(/\.jsonl$/, "");
-    const base: SessionDocUri = {
+    const fileName = filePath.replace(/.*\//, "");
+    return {
         scheme: SESSION_DOC_SCHEME,
-        path: `/${id}.md`,
-        query: "",
-        with(opts) {
-            return { ...this, ...opts };
-        },
+        path: `/${fileName}`,
+        query: filePath,
     };
-    return base.with({ query: filePath });
 }
 
 /**

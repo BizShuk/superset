@@ -11,6 +11,8 @@
 // requires a modal confirmation because it's destructive;
 // `reset --soft` does not, since it only moves the HEAD pointer.
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import * as vscode from "vscode";
 import type { FeatureContext, FeatureHandle } from "../shared";
 import { getTerminalSpawner } from "../crossModuleState";
@@ -24,6 +26,12 @@ import {
     parseScmArgs,
     shortSha,
 } from "./gitReset";
+import {
+    copyMissingTree,
+    hasLocalHooksPath,
+    isGitRepository,
+    linkGitHooks,
+} from "./gitHooks";
 import {
     buildGitHubFileUrl,
     selectGitHubRemote,
@@ -57,6 +65,116 @@ interface GitExtensionExports {
  * manual refresh then wins the race instead of being a no-op.
  */
 const GIT_REFRESH_DELAY_MS = 1_000;
+const INSTALL_GIT_HOOKS_COMMAND = "superset.installGitHooks";
+const LINK_GIT_HOOKS_COMMAND = "superset.linkGitHooks";
+
+function firstOpenedFolder(): vscode.WorkspaceFolder | undefined {
+    return vscode.workspace.workspaceFolders?.[0];
+}
+
+async function requireOpenedGitFolder(): Promise<vscode.WorkspaceFolder | null> {
+    const folder = firstOpenedFolder();
+    if (!folder) {
+        await vscode.window.showErrorMessage(
+            "Superset: No opened folder in this VS Code window"
+        );
+        return null;
+    }
+    if (folder.uri.scheme !== "file") {
+        await vscode.window.showErrorMessage(
+            "Superset: Git hooks require a local opened folder"
+        );
+        return null;
+    }
+    if (!(await isGitRepository(folder.uri.fsPath))) {
+        await vscode.window.showErrorMessage(
+            "Superset: Opened folder is not a Git repository"
+        );
+        return null;
+    }
+    return folder;
+}
+
+async function refreshGitHooksStatus(
+    statusBar: vscode.StatusBarItem,
+    ctx: FeatureContext
+): Promise<void> {
+    const folder = firstOpenedFolder();
+    if (!folder || folder.uri.scheme !== "file") {
+        statusBar.hide();
+        return;
+    }
+
+    const root = folder.uri.fsPath;
+    if (
+        !fs.existsSync(path.join(root, ".githooks")) ||
+        !(await isGitRepository(root))
+    ) {
+        statusBar.hide();
+        return;
+    }
+
+    try {
+        if (await hasLocalHooksPath(root)) statusBar.hide();
+        else statusBar.show();
+    } catch (error) {
+        ctx.shared.log(
+            `git: failed to inspect local core.hooksPath: ${error}`
+        );
+    }
+}
+
+async function linkOpenedFolderGitHooks(
+    statusBar: vscode.StatusBarItem,
+    ctx: FeatureContext
+): Promise<void> {
+    const folder = await requireOpenedGitFolder();
+    if (!folder) return;
+
+    try {
+        await linkGitHooks(folder.uri.fsPath);
+        await refreshGitHooksStatus(statusBar, ctx);
+        await vscode.window.showInformationMessage(
+            "Superset: Linked Git hooks with local core.hooksPath=.githooks"
+        );
+    } catch (error) {
+        ctx.shared.log(`git: link hooks failed: ${error}`);
+        await vscode.window.showErrorMessage(
+            `Superset: Failed to link Git hooks: ${error}`
+        );
+    }
+}
+
+async function installOpenedFolderGitHooks(
+    statusBar: vscode.StatusBarItem,
+    ctx: FeatureContext
+): Promise<void> {
+    const folder = await requireOpenedGitFolder();
+    if (!folder) return;
+
+    const templateRoot = path.join(
+        ctx.context.extensionUri.fsPath,
+        "pkg",
+        "resources",
+        "git",
+        "githooks"
+    );
+    const targetRoot = path.join(folder.uri.fsPath, ".githooks");
+
+    try {
+        const result = await copyMissingTree(templateRoot, targetRoot);
+        await linkGitHooks(folder.uri.fsPath);
+        await refreshGitHooksStatus(statusBar, ctx);
+        await vscode.window.showInformationMessage(
+            `Superset: Git hooks installed (${result.copied} added, ${result.skipped} kept) and linked`
+        );
+    } catch (error) {
+        ctx.shared.log(`git: install hooks failed: ${error}`);
+        await vscode.window.showErrorMessage(
+            `Superset: Failed to install Git hooks: ${error}`
+        );
+    }
+}
 
 /**
  * Notification copy used when the command is invoked from the
@@ -223,7 +341,17 @@ async function copyGitHubUrl(
 }
 
 export function register(ctx: FeatureContext): FeatureHandle {
+    const hookStatusBar = vscode.window.createStatusBarItem(
+        vscode.StatusBarAlignment.Left
+    );
+    hookStatusBar.text = "$(link) Git hooks not linked";
+    hookStatusBar.tooltip =
+        "This opened folder contains .githooks, but local core.hooksPath is not set.";
+    hookStatusBar.command = LINK_GIT_HOOKS_COMMAND;
+    hookStatusBar.hide();
+
     ctx.subscriptions.push(
+        hookStatusBar,
         vscode.commands.registerCommand(
             "superset.gitResetHard",
             (...args: unknown[]) =>
@@ -237,8 +365,18 @@ export function register(ctx: FeatureContext): FeatureHandle {
         vscode.commands.registerCommand(
             "superset.copyGitHubUrl",
             (uri: vscode.Uri | undefined) => copyGitHubUrl(uri, ctx)
+        ),
+        vscode.commands.registerCommand(
+            INSTALL_GIT_HOOKS_COMMAND,
+            () => installOpenedFolderGitHooks(hookStatusBar, ctx)
+        ),
+        vscode.commands.registerCommand(
+            LINK_GIT_HOOKS_COMMAND,
+            () => linkOpenedFolderGitHooks(hookStatusBar, ctx)
         )
     );
+
+    void refreshGitHooksStatus(hookStatusBar, ctx);
 
     ctx.shared.log("git: registered");
 

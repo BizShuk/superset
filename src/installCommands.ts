@@ -119,7 +119,7 @@ async function skillInstall(
 }
 
 /**
- * Install the default project template (`resources/config/install-default-project.sh`)
+ * Install the default project template (`pkg/resources/config/install-default-project.sh`)
  * into the workspace, initializing directories, standard ignore files, and the AGENTS.md
  * symbolic link.
  */
@@ -129,6 +129,7 @@ async function installDefaultProject(
 ): Promise<void> {
     const scriptPath = path.join(
         ctx.extensionUri.fsPath,
+        "pkg",
         "resources",
         "config",
         "install-default-project.sh"

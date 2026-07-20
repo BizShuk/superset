@@ -163,7 +163,7 @@ Claude Stop hook  →  `sessiond hook`  (stdin JSON: session_id / transcript_pat
   └─ store.Upsert(session)                            # atomic
 ```
 
-`~/.claude/settings.json`(選裝,需使用者同意):
+`<git-root>/.claude/settings.json`（選裝，需使用者同意）：
 
 ```json
 { "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "sessiond hook" } ] } ] } }
@@ -289,7 +289,7 @@ Phase 0  ✅ 凍結契約:internal/model/session.go(JSONL meta+turn,schemaVersio
 Phase 1  ✅ Go 骨架:main + config.Default("superset") + store(冪等 append 雙索引)+ heuristic
 Phase 2  ✅ Claude:ingest/claude.go + `sessiond hook claude`(讀 stdin payload → transcript)
 Phase 3  ✅ Codex:ingest/codex.go + `sessiond hook codex`(改用 hook,不需 watch daemon)
-         ✅ install-hooks:註冊兩家 hook(dry-run 預設,--apply 才寫,含備份)
+	         ✅ install：註冊兩家 project-level hook（dry-run 預設，`--apply` 才寫，含備份）
 Phase 4  ✅ gemma:summarize/gemini.go 接 agentsdk provider/google(config 驅動,無 key 自動降級 heuristic;只摘要新增 turn)
 Phase 5  🔨 VSCode src/sessions/:讀契約 + TreeView + summary-as-markdown ✅ / resume-in-terminal ⏸
 ```
@@ -306,7 +306,7 @@ Phase 4 換 gemma 升級摘要品質;Phase 5 才畫面(可平行)。
 - `Claude` event 確認為真:`Stop` / `StopFailure` / `SubagentStop` / `TaskCompleted`;`Codex` lifecycle hooks 含 `Stop` / `SubagentStop`,config 在 `config.toml` 的 `[[hooks.*]]`。
 - `Codex` turn 的乾淨來源是 `event_msg` 的 `user_message` / `agent_message`(不是 `response_item` — 後者混入 `<permissions>` / `<recommended_plugins>` / `# AGENTS.md` 等注入,需過濾)。
 - hook 必須 `exit 0`(Claude `exit 2` 會 block Stop);Codex 需在 stdout 回 `{"continue": true}`。
-- `~/.codex/config.toml` 是指向 `cc-plugin/config/config.toml` 的 symlink(共用 repo),`--apply` 前 install-hooks 會警告。
+- project-level Codex target 固定為 `<git-root>/.codex/config.toml`；trusted project 才啟用，且 hook 支援依 installed Codex version 而異。
 
 ---
 

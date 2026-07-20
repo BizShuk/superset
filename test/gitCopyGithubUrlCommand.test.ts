@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("vscode", () => ({
+    StatusBarAlignment: { Left: 1 },
     commands: {
         registerCommand: (
             id: string,
@@ -45,9 +46,20 @@ vi.mock("vscode", () => ({
                 : undefined,
     },
     window: {
+        createStatusBarItem: () => ({
+            text: "",
+            tooltip: "",
+            command: "",
+            show: vi.fn(),
+            hide: vi.fn(),
+            dispose: vi.fn(),
+        }),
         showInformationMessage: mocks.showInformationMessage,
         showErrorMessage: mocks.showErrorMessage,
         showWarningMessage: vi.fn(async () => undefined),
+    },
+    workspace: {
+        workspaceFolders: [],
     },
 }));
 

@@ -484,7 +484,7 @@ describe("terminalSpawner bridge", () => {
             t as { sendText: ReturnType<typeof vi.fn> }
         ).sendText.mock.calls[0][0] as string;
         expect(sent).toBe(
-            "'bash' '/fake/resources/config/install-default-project.sh' 'git' 'gemini' 'claude' && exit\r"
+            "'bash' '/fake/pkg/resources/config/install-default-project.sh' 'git' 'gemini' 'claude' && exit\r"
         );
 
         // Manual dispose must not happen — auto-PTY close is
@@ -526,7 +526,7 @@ describe("terminalSpawner bridge", () => {
         // is forwarded verbatim to the bash script (the script
         // itself handles per-target iteration).
         expect(sent).toBe(
-            "'bash' '/fake/resources/config/install-default-project.sh' 'git' && exit\r"
+            "'bash' '/fake/pkg/resources/config/install-default-project.sh' 'git' && exit\r"
         );
         expect(sent).not.toMatch(/gemini/);
         expect(sent).not.toMatch(/claude/);
