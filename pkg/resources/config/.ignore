@@ -40,9 +40,9 @@
 
 # ── A. OS / File system metadata ──────────────────────────────────────────────
 
-.DS*Store
+.DS_Store
 .DS_Store?
-.*_
+.**
 .Spotlight-V100
 .Trashes
 ehthumbs.db
@@ -69,23 +69,23 @@ _.sublime-workspace
 .fleet/
 .cursor/
 .codium/
-\*.code-workspace
+*.code-workspace
 .project
 .classpath
 .settings/
 
 # ── C. Node / JavaScript / TypeScript ────────────────────────────────────────
 
-node*modules/
+node_modules/
 jspm_packages/
 .npm/
 .yarn/
 .pnp.*
 .pnpm-store/
-.pnpm-debug.log\_
-yarn-debug.log*
+.pnpm-debug.log_
+yarn-debug.log_
 yarn-error.log*
-npm-debug.log\*
+npm-debug.log*
 .eslintcache
 .stylelintcache
 .prettiercache
@@ -101,7 +101,7 @@ npm-debug.log\*
 
 # TypeScript build info
 
-\*.tsbuildinfo
+*.tsbuildinfo
 
 # Compiled output
 
@@ -113,7 +113,7 @@ _.js.map
 _.mjs.map
 _.cjs.map
 _.d.ts.map
-\*.d.ts
+*.d.ts
 
 # Bundle / minified
 
@@ -123,13 +123,13 @@ _.min.css
 _.bundle.js
 _.chunk.js
 _.hot-update.js
-\*.hot-update.json
+*.hot-update.json
 
 # Coverage
 
 coverage/
 .nyc_output/
-\*.lcov
+*.lcov
 
 # Jest / Vitest
 
@@ -151,7 +151,7 @@ _.dll
 _.so
 _.dylib
 _.test
-\*.out
+*.out
 
 # Go workspace
 
@@ -171,15 +171,15 @@ vendor/
 
 # Cobra / stringer generated
 
-\_\_debug*bin
-*\_string.go
-\_\_stringer.go
+__debug_bin
+*_string.go
+__stringer.go
 
 # ── E. Python / Rust / JVM ───────────────────────────────────────────────────
 
 # Python
 
-**pycache**/
+__pycache__/
 _.py[cod]
 _$py.class
 _.egg
@@ -196,11 +196,11 @@ ENV/
 pip-wheel-metadata/
 htmlcov/
 .coverage
-.coverage.\*
+.coverage.*
 
 # Rust
 
-target/ \*_/_.rs.bk
+target/ **/*.rs.bk
 Cargo.lock.bak
 
 # JVM
@@ -211,7 +211,7 @@ _.war
 _.ear
 .gradle/
 build/
-hs_err_pid\*
+hs_err_pid*
 
 # ── F. Build / Dist / Packages ───────────────────────────────────────────────
 
@@ -234,27 +234,27 @@ cypress/screenshots/
 junit.xml
 _.trx
 _.coverage
-\*.lcov
+*.lcov
 
 # ── H. Logs / Runtime dumps ──────────────────────────────────────────────────
 
 logs/
-_.log
-_.log._
+*.log
+*.log.*
 !.npmrc.log
 !yarn.log
 !yarn-error.log
-!npm-debug.log_
+!npm-debug.log*
 .pids
 _.pid
 _.seed
-\*.pid.lock
+*.pid.lock
 
 # Heap / core dumps
 
-heapdump.\*
-_.core
-core._
+heapdump.*
+*.core
+core.*
 
 # ── I. Secrets / Env / Local config ─────────────────────────────────────────
 
@@ -267,25 +267,25 @@ core._
 
 # SSH keys (private keys, configs, known_hosts, agent sockets)
 
-id*rsa
+id_rsa
 id_rsa.*
-id*dsa
+id_dsa
 id_dsa.*
-id*ecdsa
+id_ecdsa
 id_ecdsa.*
-id*ed25519
+id_ed25519
 id_ed25519.*
-id*xmss
-id_xmss.\*
+id_xmss
+id_xmss.*
 *.pub
-!\_.ignore.pub
+!_.ignore.pub
 known_hosts
 authorized_keys
 ssh_config
 .ssh/
 .ssh/known_hosts
 .ssh/authorized_keys
-\*.ppk
+*.ppk
 ssh-agent-sock
 agent.sock
 
@@ -293,7 +293,7 @@ agent.sock
 
 _.asc
 _.gpg
-\*.pgp
+*.pgp
 secring.gpg
 pubring.gpg
 .gnupg/
@@ -306,7 +306,7 @@ _.crt
 _.cer
 _.csr
 _.p12
-\*.pfx
+*.pfx
 keystore.jks
 truststore.jks
 
@@ -323,7 +323,7 @@ config/local.toml
 
 # 這裡只忽略常見的"次要"或備份
 
-\*.lock.bak
+*.lock.bak
 package-lock.json.bak
 yarn.lock.bak
 
@@ -332,6 +332,7 @@ yarn.lock.bak
 # Claude Code
 
 .claude/
+!.claude/
 !.claude/commands/
 !.claude/agents/
 !.claude/skills/
@@ -347,7 +348,7 @@ yarn.lock.bak
 
 # Aider
 
-.aider\*
+.aider*
 .aider.chat.history.md
 .aider.input.history
 .aider.tags.cache.v3/
@@ -396,7 +397,7 @@ scratch/
 samples/
 sample/
 example/
-docs/\_build/
+docs/_build/
 docs/build/
 site/
 gh-pages/
@@ -412,7 +413,7 @@ _.temp
 _.orig
 _.rej
 _.swp
-\*.patch
+*.patch
 
 # Task / planning scratch (常見散落)
 
