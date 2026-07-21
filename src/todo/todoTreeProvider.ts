@@ -3,12 +3,7 @@ import type { TodoChange, TodoItem, TodoViewType } from "./types";
 import type { TodoStore } from "./todoStore";
 import { isArchivedSubsection, cleanTags, isArchivedTask } from "./parser";
 import { makePlansSection, planInfoToTodoItem } from "./plansSource";
-import {
-    extractLink,
-    cleanLabelText,
-    resolveTodoLink,
-    type ResolvedLink,
-} from "../todoEngine/linkUtils";
+import { extractLink } from "../todoEngine/linkUtils";
 import {
     countPending,
     sortSiblings,
@@ -18,12 +13,11 @@ import {
     dispatchContextValue,
 } from "../todoEngine";
 
-// Re-export the link helpers so existing imports of
-// `extractLink` / `resolveTodoLink` / `cleanLabelText` /
-// `ResolvedLink` from this module keep working. The canonical
-// implementations live in `../todoEngine/linkUtils` — this file is
-// now a thin pass-through, not a second copy.
-export { extractLink, cleanLabelText, resolveTodoLink, type ResolvedLink };
+// Re-export removed: link helpers (`extractLink`, `cleanLabelText`,
+// `resolveTodoLink`, `ResolvedLink`) live in `../todoEngine/linkUtils`
+// and are imported directly from there. todoEngine is the single
+// public surface for these helpers; this module only exposes its
+// own (`TodoTreeProvider`, `filterCompleted`, `applyPriorityFilter`).
 
 /**
  * vscode-bound TreeDataProvider for the TODO list.

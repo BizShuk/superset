@@ -122,10 +122,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // 根目錄下符合條件的子目錄收成「Current Workspace」section。
     // 與 `~/projects` 一覽是兩條獨立 store map,互不污染。
     const configSection = "superset.projectsTodo";
-    const readMaxDepth = (): number =>
-        vscode.workspace
+    const readMaxDepth = (): number => {
+        const v = vscode.workspace
             .getConfiguration(configSection)
             .get<number>("maxDepth", 5);
+        // schema 雖標 minimum: 1 / maximum: 10,但 settings.json 不強制
+        // 驗證;這層 clamp 確保繞過 schema 直接寫入的值仍落在 1-10。
+        return Math.min(10, Math.max(1, v));
+    };
     let maxDepth = readMaxDepth();
 
     const loadWorkspaceTodos = () =>

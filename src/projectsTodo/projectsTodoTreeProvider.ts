@@ -328,10 +328,10 @@ export class ProjectsTodoTreeProvider
         // Each project surfaces its own `plans/*.md` as a synthetic
         // "Plans" sub-section under its row, appended after the
         // README.todo sections so users can drill into a project and see
-        // its design docs locally. The top-level "Plans" row at the end
-        // of the overview still aggregates every project's plans for
-        // the "what's happening across all projects" snapshot — both
-        // views coexist.
+        // its design docs locally. Overview 不再有頂層 merged Plans row
+        // (見 CLAUDE.md invariant);plans 只在各自的 per-project scope
+        // 出現,跨專案的 "what's happening" snapshot 走 `plansSource`
+        // 自己的 panel,不混入本 view。
         //
         // 路徑若同時被 workspace scan 收為 sub-project (例如
         // `~/projects/tmp/superset` 既是 ~/projects project 也是

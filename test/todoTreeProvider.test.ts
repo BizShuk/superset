@@ -64,10 +64,12 @@ import {
     TodoTreeProvider,
     filterCompleted,
     applyPriorityFilter,
+} from "../src/todo/todoTreeProvider";
+import {
     extractLink,
     cleanLabelText,
     resolveTodoLink,
-} from "../src/todo/todoTreeProvider";
+} from "../src/todoEngine/linkUtils";
 import { TodoStore } from "../src/todo/todoStore";
 import type { TodoItem } from "../src/todo/types";
 
