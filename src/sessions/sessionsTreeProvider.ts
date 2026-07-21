@@ -1,13 +1,13 @@
 // vscode-bound TreeDataProvider for the Sessions panel.
 //
-// Flat, single-level list: one row per session recorded for the current
-// workspace folder. The second layer of the feature is not a tree level —
-// it is the rendered Markdown document opened in the editor (`markdown.ts`).
+// Two-level tree: session-bearing projects under the current workspace, then
+// each project's sessions. Clicking a session opens its rendered Markdown.
 
+import * as path from "path";
 import * as vscode from "vscode";
-import { listSessions, watchSessions } from "./store";
+import { listSessionProjects, watchSessions } from "./store";
 import { buildSessionRow } from "./treeSpec";
-import type { SessionRecord } from "./types";
+import type { SessionProject, SessionRecord } from "./types";
 
 export const SESSION_CONTEXT_VALUE = "supersetSession";
 
@@ -17,8 +17,9 @@ export {
     sessionPathFromDocUri,
 } from "./docUri";
 
-/** A session row, or the single placeholder row shown on an empty store. */
+/** A project group, session row, or the placeholder shown on an empty store. */
 export type SessionsElement =
+    | { readonly kind: "project"; readonly project: SessionProject }
     | { readonly kind: "session"; readonly record: SessionRecord }
     | { readonly kind: "empty" };
 
@@ -31,7 +32,7 @@ export class SessionsTreeProvider
     readonly onDidChangeTreeData = this.emitter.event;
 
     private watcher?: { dispose(): void };
-    private records: SessionRecord[] = [];
+    private projects: SessionProject[] = [];
 
     constructor(
         private readonly workspaceFolder: string,
@@ -60,7 +61,10 @@ export class SessionsTreeProvider
     }
 
     private reload(): void {
-        this.records = listSessions(this.workspaceFolder, this.dataDirOverride());
+        this.projects = listSessionProjects(
+            this.workspaceFolder,
+            this.dataDirOverride()
+        );
     }
 
     getTreeItem(element: SessionsElement): vscode.TreeItem {
@@ -75,6 +79,22 @@ export class SessionsTreeProvider
                 command: "superset.sessionsSeedSample",
                 title: "Seed sample sessions",
             };
+            return item;
+        }
+
+        if (element.kind === "project") {
+            const { projectPath, sessions } = element.project;
+            const relative = path.relative(this.workspaceFolder, projectPath);
+            const label = relative || path.basename(projectPath);
+            const item = new vscode.TreeItem(
+                label,
+                vscode.TreeItemCollapsibleState.Collapsed
+            );
+            item.description = `${sessions.length} session${
+                sessions.length === 1 ? "" : "s"
+            }`;
+            item.tooltip = projectPath;
+            item.iconPath = new vscode.ThemeIcon("folder");
             return item;
         }
 
@@ -96,11 +116,17 @@ export class SessionsTreeProvider
     }
 
     getChildren(element?: SessionsElement): SessionsElement[] {
+        if (element?.kind === "project") {
+            return element.project.sessions.map((record) => ({
+                kind: "session" as const,
+                record,
+            }));
+        }
         if (element) return [];
-        if (this.records.length === 0) return [{ kind: "empty" }];
-        return this.records.map((record) => ({
-            kind: "session" as const,
-            record,
+        if (this.projects.length === 0) return [{ kind: "empty" }];
+        return this.projects.map((project) => ({
+            kind: "project" as const,
+            project,
         }));
     }
 }

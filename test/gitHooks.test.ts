@@ -4,7 +4,6 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     copyMissingTree,
-    hasLocalHooksPath,
     isGitRepository,
     linkGitHooks,
     readLocalHooksPath,
@@ -107,21 +106,23 @@ describe("Git hooks config helpers", () => {
         ).rejects.toThrow("broken");
     });
 
-    it.each([".githooks\n", "./custom-hooks\n", "/absolute/hooks\n"])(
-        "treats any non-empty local hooks path as linked: %s",
-        async (value) => {
-            await expect(
-                hasLocalHooksPath("/repo", runnerResult(value))
-            ).resolves.toBe(true);
-        }
-    );
+    it.each([
+        ".githooks\n",
+        "./custom-hooks\n",
+        "/absolute/hooks\n",
+        " \n.githooks\t\n",
+    ])("trims and returns a configured local hooks path: %s", async (value) => {
+        await expect(
+            readLocalHooksPath("/repo", runnerResult(value))
+        ).resolves.toBe(value.trim());
+    });
 
     it.each(["", " \n"])(
-        "treats an empty local hooks path as unlinked",
+        "returns an empty string for an empty local hooks path: %s",
         async (value) => {
             await expect(
-                hasLocalHooksPath("/repo", runnerResult(value))
-            ).resolves.toBe(false);
+                readLocalHooksPath("/repo", runnerResult(value))
+            ).resolves.toBe("");
         }
     );
 

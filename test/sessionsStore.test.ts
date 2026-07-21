@@ -1,18 +1,28 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { afterAll, describe, it, expect } from "vitest";
 import {
     decodeWorkspace,
     encodeWorkspace,
+    listSessionProjects,
     listSessions,
     parseSessionJsonl,
+    workspaceSessionsDir,
 } from "../src/sessions/store";
 import { buildSessionRow } from "../src/sessions/treeSpec";
 import { renderSessionMarkdown, formatAge } from "../src/sessions/markdown";
 import {
     renderSampleJsonl,
     sampleCoverage,
+    seedSampleSessions,
     writeSampleSessions,
 } from "../src/sessions/sampleData";
 import {
@@ -79,6 +89,80 @@ describe("workspace path encoding", () => {
     it("maps an empty path to the _unknown bucket", () => {
         expect(encodeWorkspace("")).toBe("_unknown");
         expect(decodeWorkspace("_unknown")).toBe("");
+    });
+});
+
+describe("workspace session projects", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "superset-projects-"));
+    const workspace = "/Users/shuk/projects/utils";
+
+    function writeSession(
+        projectPath: string,
+        id: string,
+        activeAt: string,
+        metaWorkspace = projectPath
+    ): void {
+        const dir = workspaceSessionsDir(projectPath, root);
+        mkdirSync(dir, { recursive: true });
+        const text = jsonl(
+            {
+                ...META,
+                session_id: id,
+                workspace_path: metaWorkspace,
+                title: id,
+            },
+            { ...turn(1), at: activeAt }
+        );
+        writeFileSync(path.join(dir, `${id}.jsonl`), text);
+    }
+
+    writeSession(workspace, "root-old", "2026-07-20T08:00:00.000Z");
+    writeSession(workspace, "root-new", "2026-07-20T10:00:00.000Z");
+    writeSession(
+        path.join(workspace, "apps", "api"),
+        "api",
+        "2026-07-20T09:00:00.000Z",
+        "/wrong/meta/path"
+    );
+    writeSession(
+        path.join(workspace, "packages", "api"),
+        "package-api",
+        "2026-07-20T11:00:00.000Z"
+    );
+    writeSession(
+        `${workspace}-archive`,
+        "outside",
+        "2026-07-20T12:00:00.000Z"
+    );
+    mkdirSync(workspaceSessionsDir(path.join(workspace, "empty"), root), {
+        recursive: true,
+    });
+    mkdirSync(path.join(root, "_unknown"), { recursive: true });
+
+    afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+    it("groups root and descendant workspace buckets only", () => {
+        const projects = listSessionProjects(workspace, root);
+
+        expect(projects.map((project) => project.projectPath)).toEqual([
+            workspace,
+            path.join(workspace, "apps", "api"),
+            path.join(workspace, "packages", "api"),
+        ]);
+        expect(projects[0].sessions.map((record) => record.meta.session_id)).toEqual([
+            "root-new",
+            "root-old",
+        ]);
+    });
+
+    it("uses the bucket path as the canonical project identity", () => {
+        const projects = listSessionProjects(workspace, root);
+        const api = projects.find(
+            (project) => project.projectPath === path.join(workspace, "apps", "api")
+        );
+
+        expect(api?.sessions[0].meta.workspace_path).toBe("/wrong/meta/path");
+        expect(api?.projectPath).toBe(path.join(workspace, "apps", "api"));
     });
 });
 
@@ -309,6 +393,34 @@ describe("sample fixture matrix", () => {
 });
 
 describe("sample data", () => {
+    it("clears stale samples while preserving sample and non-sample boundaries", () => {
+        const seedDir = mkdtempSync(path.join(tmpdir(), "superset-seed-"));
+        const workspace = "/Users/shuk/projects/tmp/superset";
+        const sessionDir = workspaceSessionsDir(workspace, seedDir);
+        const staleSample = path.join(sessionDir, "sample-stale.jsonl");
+        const realSession = path.join(sessionDir, "ingested-real.jsonl");
+        const staleSampleText = jsonl({ ...META, session_id: "sample-stale" });
+        const realSessionText = jsonl({ ...META, session_id: "ingested-real" });
+
+        try {
+            mkdirSync(sessionDir, { recursive: true });
+            writeFileSync(staleSample, staleSampleText);
+            writeFileSync(realSession, realSessionText);
+
+            const written = seedSampleSessions(
+                workspace,
+                Date.parse("2026-07-20T12:00:00.000Z"),
+                seedDir
+            );
+
+            expect(written.length).toBeGreaterThanOrEqual(8);
+            expect(existsSync(staleSample)).toBe(false);
+            expect(existsSync(realSession)).toBe(true);
+            expect(readFileSync(realSession, "utf8")).toBe(realSessionText);
+        } finally {
+            rmSync(seedDir, { recursive: true, force: true });
+        }
+    });
     it("emits JSONL the parser accepts, with tool records", () => {
         const spec = {
             id: "sample-x",

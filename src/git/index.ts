@@ -28,9 +28,9 @@ import {
 } from "./gitReset";
 import {
     copyMissingTree,
-    hasLocalHooksPath,
     isGitRepository,
     linkGitHooks,
+    readLocalHooksPath,
 } from "./gitHooks";
 import {
     buildGitHubFileUrl,
@@ -115,8 +115,12 @@ async function refreshGitHooksStatus(
     }
 
     try {
-        if (await hasLocalHooksPath(root)) statusBar.hide();
-        else statusBar.show();
+        const hooksPath = await readLocalHooksPath(root);
+        if (hooksPath) {
+            statusBar.hide();
+        } else {
+            statusBar.show();
+        }
     } catch (error) {
         ctx.shared.log(
             `git: failed to inspect local core.hooksPath: ${error}`
@@ -238,7 +242,7 @@ async function dispatchReset(
     }
 
     const sha = parsed.historyItem.id;
-    const cwd = resolveCwd(parsed.repository, ctx.workspaceFolder);
+    const cwd = parsed.repository.rootUri?.fsPath ?? ctx.workspaceFolder;
     const cmdline = buildResetCmdline(sha, mode);
 
     await spawnRunTerminal(
@@ -263,19 +267,6 @@ async function dispatchReset(
             }
         );
     }, GIT_REFRESH_DELAY_MS);
-}
-
-/**
- * Anchor the spawned terminal to the repo root when we have one;
- * fall back to the workspace folder so the command still does
- * something sensible in the (uncommon) case where the SCM provider
- * has no `rootUri` (e.g. detached history).
- */
-function resolveCwd(
-    repository: RepositoryLike,
-    workspaceFolder: string
-): string {
-    return repository.rootUri?.fsPath ?? workspaceFolder;
 }
 
 async function getGitApi(): Promise<GitApi | null> {

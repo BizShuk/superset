@@ -395,6 +395,19 @@ export function writeSampleSessions(
     return written;
 }
 
+/**
+ * Clear stale sample files, then write the current fixture matrix.
+ * Non-sample sessions are deliberately preserved.
+ */
+export function seedSampleSessions(
+    workspacePath: string,
+    nowMs: number,
+    override?: string
+): string[] {
+    clearSampleSessions(workspacePath, override);
+    return writeSampleSessions(workspacePath, nowMs, override);
+}
+
 /** Delete every `sample-*.jsonl` in this workspace's session dir. */
 export function clearSampleSessions(
     workspacePath: string,

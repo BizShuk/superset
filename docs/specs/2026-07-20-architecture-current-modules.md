@@ -24,6 +24,14 @@ The order is intentional:
 
 Feature modules live directly under `src/<feature>/`. Cross-feature framework contracts live in `src/shared.ts` and `src/plugin/`; domain types belong to their feature. `src/projects/` has a plugin adapter but is not currently present in the root activation list, while `src/projectsTodo/` owns the two Overall TODO views.
 
+## Sessions
+
+`src/sessions/` is a read-only consumer of the `sessiond` JSONL store under `~/.config/superset/data/sessions`. The Sessions TreeView has two levels: project groups and their session records. Project identity comes from the decoded store bucket path, not from individual JSONL metadata.
+
+The current workspace root and every descendant workspace bucket are eligible. Containment uses path segments rather than string prefixes, so a sibling such as `utils-archive` is not included under `utils`. Empty buckets, `_unknown`, outside workspaces, and unreadable records are omitted. The root group sorts first; descendants use workspace-relative paths, and sessions within each group sort by latest activity.
+
+The store root is watched recursively so existing descendant updates and newly created project buckets refresh the panel. Missing stores degrade to the manual refresh command. Sample seed/clear commands remain scoped to the current workspace root and only remove `sample-*.jsonl`; ingest-created sessions and descendant projects are not modified.
+
 See also:
 
 - [`2026-07-02-architecture-master.md`](2026-07-02-architecture-master.md)

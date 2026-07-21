@@ -1,10 +1,9 @@
 // Sessions feature — read-only consumer of the `sessiond` JSONL store
 // (plan `plans/2026-07-19-multi-agent-session-summary.md` §7).
 //
-// Layer 1: a TreeView listing every agent session recorded for the current
-//          workspace folder, with size / turn count / age as dim text.
-// Layer 2: clicking a row opens the session rendered as Markdown in the
-//          editor, via a virtual read-only document.
+// Layer 1: a TreeView grouping sessions by the current workspace root and
+//          descendant workspace paths recorded by sessiond.
+// Layer 2: clicking a session opens it rendered as Markdown in the editor.
 //
 // The extension never writes session content — the only writer here is the
 // sample-data command, which exists because the Go side's LLM summary path
@@ -18,7 +17,7 @@ import { ensureMarkdownDocument } from "./openSummary";
 import {
     clearSampleSessions,
     sampleCoverage,
-    writeSampleSessions,
+    seedSampleSessions,
 } from "./sampleData";
 import { deleteSession, readSession, workspaceSessionsDir } from "./store";
 import {
@@ -122,13 +121,17 @@ export function register(ctx: FeatureContext): FeatureHandle {
                 const uri = vscode.Uri.from(sessionDocUri(record.filePath));
                 try {
                     const opened = await vscode.workspace.openTextDocument(uri);
-                    await ensureMarkdownDocument(
+                    const markdownDocument = await ensureMarkdownDocument(
                         opened,
-                        vscode.languages.setTextDocumentLanguage
+                        () =>
+                            vscode.languages.setTextDocumentLanguage(
+                                opened,
+                                "markdown"
+                            )
                     );
                     await vscode.commands.executeCommand(
                         "markdown.showPreview",
-                        uri
+                        markdownDocument.uri
                     );
                 } catch (err) {
                     ctx.shared.log(`sessions: preview open failed: ${err}`);
@@ -199,7 +202,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         ),
 
         vscode.commands.registerCommand("superset.sessionsSeedSample", () => {
-            const written = writeSampleSessions(
+            const written = seedSampleSessions(
                 ctx.workspaceFolder,
                 Date.now(),
                 dataDirOverride()

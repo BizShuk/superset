@@ -114,14 +114,6 @@ export async function readLocalHooksPath(
     }
 }
 
-export async function hasLocalHooksPath(
-    repoRoot: string,
-    runGit: GitRunner = defaultGitRunner
-): Promise<boolean> {
-    const hooksPath = await readLocalHooksPath(repoRoot, runGit);
-    return hooksPath !== null && hooksPath.trim().length > 0;
-}
-
 export async function linkGitHooks(
     repoRoot: string,
     runGit: GitRunner = defaultGitRunner

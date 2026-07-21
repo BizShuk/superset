@@ -536,6 +536,47 @@ describe("terminalSpawner bridge", () => {
     });
 });
 
+// Source-level contract check avoids running an installer that writes files.
+describe("default project installer contract", () => {
+    it("keeps target mappings and default target order aligned with the shell installer", () => {
+        const installCommands = fs.readFileSync(
+            path.join(__dirname, "..", "src", "installCommands.ts"),
+            "utf8"
+        );
+        const installer = fs.readFileSync(
+            path.join(
+                __dirname,
+                "..",
+                "pkg",
+                "resources",
+                "config",
+                "install-default-project.sh"
+            ),
+            "utf8"
+        );
+
+        const typescriptMappings = Object.fromEntries(
+            [...installCommands.matchAll(/^    ([a-z]+): "([^\"]+)",$/gm)].map(
+                ([, target, output]) => [target, output]
+            )
+        );
+        const shellMappings = Object.fromEntries(
+            [...installer.matchAll(/^    ([a-z]+)\)\s+out=([^\s]+)\s*;;$/gm)].map(
+                ([, target, output]) => [target, output]
+            )
+        );
+        expect(typescriptMappings).toEqual(shellMappings);
+
+        const typescriptDefaults = installCommands.match(
+            /args\?\.targets \?\? \[([^\]]+)\]/
+        )?.[1]
+            .split(",")
+            .map((target) => target.trim().replace(/^['\"]|['\"]$/g, ""));
+        const shellDefaults = installer.match(/TARGETS=\(([^)]+)\)/)?.[1].split(/\s+/);
+        expect(typescriptDefaults).toEqual(shellDefaults);
+    });
+});
+
 // ---------------------------------------------------------------------------
 // installLicense — QuickPick + LICENSE write + overwrite-confirmation flow.
 // ---------------------------------------------------------------------------

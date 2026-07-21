@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     showInformationMessage: vi.fn(async (_message: string) => undefined),
     showErrorMessage: vi.fn(async (_message: string) => undefined),
     copyMissingTree: vi.fn(async () => ({ copied: 1, skipped: 0 })),
-    hasLocalHooksPath: vi.fn(async () => false),
+    readLocalHooksPath: vi.fn(async () => ""),
     isGitRepository: vi.fn(async () => true),
     linkGitHooks: vi.fn(async () => undefined),
 }));
@@ -30,7 +30,7 @@ vi.mock("node:fs", async (importOriginal) => {
 
 vi.mock("../src/git/gitHooks", () => ({
     copyMissingTree: mocks.copyMissingTree,
-    hasLocalHooksPath: mocks.hasLocalHooksPath,
+    readLocalHooksPath: mocks.readLocalHooksPath,
     isGitRepository: mocks.isGitRepository,
     linkGitHooks: mocks.linkGitHooks,
 }));
@@ -102,8 +102,8 @@ describe("Git hooks commands and status bar", () => {
         mocks.showErrorMessage.mockClear();
         mocks.copyMissingTree.mockReset();
         mocks.copyMissingTree.mockResolvedValue({ copied: 1, skipped: 0 });
-        mocks.hasLocalHooksPath.mockReset();
-        mocks.hasLocalHooksPath.mockResolvedValue(false);
+        mocks.readLocalHooksPath.mockReset();
+        mocks.readLocalHooksPath.mockResolvedValue("");
         mocks.isGitRepository.mockReset();
         mocks.isGitRepository.mockResolvedValue(true);
         mocks.linkGitHooks.mockReset();
@@ -141,7 +141,7 @@ describe("Git hooks commands and status bar", () => {
 
     it("hides for any non-empty local hooksPath", async () => {
         mocks.existsSync.mockReturnValue(true);
-        mocks.hasLocalHooksPath.mockResolvedValue(true);
+        mocks.readLocalHooksPath.mockResolvedValue("  .githooks  ");
         register(featureContext());
         await settle();
 

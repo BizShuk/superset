@@ -59,7 +59,12 @@ export interface SessionTurn {
     readonly tools?: readonly SessionToolCall[];
 }
 
-/** A parsed session file plus the filesystem facts the tree renders. */
+export interface SessionProject {
+    /** Canonical workspace path decoded from the store bucket name. */
+    readonly projectPath: string;
+    readonly sessions: readonly SessionRecord[];
+}
+
 export interface SessionRecord {
     readonly meta: SessionMeta;
     readonly turns: readonly SessionTurn[];

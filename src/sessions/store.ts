@@ -10,6 +10,7 @@ import * as os from "os";
 import * as path from "path";
 import type {
     SessionMeta,
+    SessionProject,
     SessionRecord,
     SessionTurn,
 } from "./types";
@@ -131,7 +132,55 @@ export function listSessions(
     workspacePath: string,
     override?: string
 ): SessionRecord[] {
-    const dir = workspaceSessionsDir(workspacePath, override);
+    return listSessionsInDir(workspaceSessionsDir(workspacePath, override));
+}
+
+/**
+ * Session-bearing workspace buckets at or below `workspacePath`.
+ *
+ * The bucket path is the project identity. Meta is deliberately not used for
+ * grouping because malformed or stale records must not escape their bucket.
+ */
+export function listSessionProjects(
+    workspacePath: string,
+    override?: string
+): SessionProject[] {
+    const root = sessionsRoot(override);
+    let entries: fs.Dirent[];
+    try {
+        entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch {
+        return [];
+    }
+
+    const projects: SessionProject[] = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const projectPath = decodeWorkspace(entry.name);
+        if (!isWorkspaceOrDescendant(workspacePath, projectPath)) continue;
+
+        const sessions = listSessionsInDir(path.join(root, entry.name));
+        if (sessions.length === 0) continue;
+        projects.push({ projectPath, sessions });
+    }
+
+    projects.sort((a, b) => {
+        if (a.projectPath === workspacePath) return -1;
+        if (b.projectPath === workspacePath) return 1;
+        return path
+            .relative(workspacePath, a.projectPath)
+            .localeCompare(path.relative(workspacePath, b.projectPath));
+    });
+    return projects;
+}
+
+function isWorkspaceOrDescendant(root: string, candidate: string): boolean {
+    if (!root || !candidate) return false;
+    const relative = path.relative(path.resolve(root), path.resolve(candidate));
+    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function listSessionsInDir(dir: string): SessionRecord[] {
     let entries: string[];
     try {
         entries = fs.readdirSync(dir);
@@ -189,7 +238,7 @@ export function deleteSession(filePath: string): boolean {
  * refresh.
  */
 export function watchSessions(
-    workspacePath: string,
+    _workspacePath: string,
     onChange: () => void,
     override?: string
 ): { dispose(): void } {
@@ -200,11 +249,9 @@ export function watchSessions(
         timer = setTimeout(onChange, WATCH_DEBOUNCE_MS);
     };
 
-    const dir = workspaceSessionsDir(workspacePath, override);
-    tryWatch(dir, false, debounced, watchers);
-    if (watchers.length === 0) {
-        tryWatch(sessionsRoot(override), true, debounced, watchers);
-    }
+    // Watch the shared root so changes in existing descendant buckets and new
+    // project buckets are both observed. Missing roots degrade to refresh-only.
+    tryWatch(sessionsRoot(override), true, debounced, watchers);
 
     return {
         dispose() {

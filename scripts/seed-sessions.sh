@@ -73,7 +73,7 @@ export SUPERSET_OUT="$REPO_ROOT/out"
 node <<'NODE'
 const path = require("path");
 const out = process.env.SUPERSET_OUT;
-const { clearSampleSessions, sampleCoverage, writeSampleSessions } = require(
+const { clearSampleSessions, sampleCoverage, seedSampleSessions } = require(
     path.join(out, "sessions", "sampleData.js")
 );
 const { listSessions, workspaceSessionsDir } = require(
@@ -93,9 +93,7 @@ if (mode === "clear") {
 }
 
 if (mode === "seed") {
-    // Clear first so a shrunk matrix does not leave orphans behind.
-    clearSampleSessions(workspace, dataDir);
-    const written = writeSampleSessions(workspace, Date.now(), dataDir);
+    const written = seedSampleSessions(workspace, Date.now(), dataDir);
     console.log(`✓ seeded ${written.length} sample session(s)`);
     console.log(`  ${dir}\n`);
     console.log("Coverage:");
