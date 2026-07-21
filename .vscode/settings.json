@@ -1,0 +1,21 @@
+{
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "{.DS_Store,Thumbs.db,**/.svn,**/.hg}": true,
+        "{**/node_modules,**/__pycache__,**/.venv,**/.mvn}": true,
+        "{**/gen,**/kitex_gen,**/thrift_gen,**/target,**/out,**/dist,**/output,**/__debug_bin*}": true,
+        "{**/.git,**/.geminiignore,**/.gitlab,**/.gitkeep,.pre-commit-config.yaml}": true,
+        "{**/.classpath,**/.project,**/.settings,**/.antigravity,**/.playwright-cli,**/.devops}": true,
+        "{*.bak*}": true,
+        "{**/AGENTS.md,**/GEMINI.md}": true,
+        "{**/.agents}": true,
+        "{**/.geminiignore,**/.claudeignore}": true,
+        "{**/*_test.go,**/*.test.ts,go.sum}": true,
+        "*.vsix": true
+    },
+    "explorerExclude.backup": {}
+}
