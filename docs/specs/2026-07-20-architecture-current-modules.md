@@ -150,6 +150,16 @@ See also:
 - [`2026-07-05-tree-comment-highlight.md`](2026-07-05-tree-comment-highlight.md)
 - [`2026-07-01-feature-todo-css-preview.md`](2026-07-01-feature-todo-css-preview.md)
 
+## Install And Setup Commands
+
+`globalCommandsPlugin` owns command registration, while `src/installCommands.ts` owns the install/setup handlers and delegates visible shell work through the PTY-backed Run Terminal bridge. Bundled runtime scripts live under `pkg/resources/config/` and must be present in the packaged VSIX.
+
+`Superset: Projects Setup` uses the fixed `~/projects` convention. Its bundled installer creates that root, clones the standard BizShuk repository set with recursive submodules, and makes reruns idempotent by initializing submodules in repositories that already exist. It does not pull or overwrite an existing repository. A same-name non-Git path is reported as a failure without preventing the remaining repositories from being attempted.
+
+See also:
+
+- [`2026-07-22-projects-setup.md`](2026-07-22-projects-setup.md)
+
 ## Git Commands
 
 Explorer Copy GitHub URL uses stable `explorer/context` and local git metadata. `src/git/githubUrl.ts` normalizes SSH/HTTPS remotes, prefers `origin`, enforces repository-relative paths, and encodes path segments. It does not call GitHub, verify branch/file existence, or derive the current checkout; the generated URL intentionally uses `master`.

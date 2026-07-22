@@ -4,7 +4,7 @@
 // 1. The manager activates every plugin in the list.
 // 2. The returned `extendMarkdownIt` composes the treePreview +
 //    todoPreview hooks in the right order.
-// 3. The global-commands plugin registers all 4 commands.
+// 3. The global-commands plugin registers its expected command surface.
 // 4. `superset.resetCaches` end-to-end fires the manager's resetAll.
 vi.mock("vscode", () => {
     class EventEmitter<T> {
@@ -164,6 +164,7 @@ describe("extension activation via PluginManager", () => {
             "superset.focusPanel",
             "superset.installDefaultTools",
             "superset.skillInstall",
+            "superset.projectsSetup",
         ]) {
             expect(cmds.has(id), `missing global command: ${id}`).toBe(true);
         }

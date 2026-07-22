@@ -23,6 +23,7 @@ a
 | SCM Graph reset           | commit 右鍵直接執行 `Reset Soft` / `Reset Hard`             | 本機使用 proposed API 的 Git 使用者  |
 | Explorer GitHub URL       | 檔案右鍵複製固定 `master` branch 的 GitHub URL              | 分享 repository 檔案連結的人         |
 | Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒 | 使用 repository-local hooks 的開發者 |
+| `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 
 ---
 
@@ -376,13 +377,40 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
+### 13. Projects Setup — projects workspace 初始化
+
+`Superset: Projects Setup` 會建立固定的 `~/projects` root，並從 GitHub clone 下列 BizShuk repositories：
+
+```tree
+~/projects/
+├── env_setup/
+├── cc-plugin/
+├── ai/
+├── game/
+├── data/
+├── iphone/
+├── platform/
+├── playground/
+├── product/
+├── research/
+├── tools/
+└── web/
+```
+
+缺少的 repository 使用 `git clone --recurse-submodules`；已存在的 Git repository 不會被 pull 或覆蓋，只執行 `git submodule sync --recursive` 與 `git submodule update --init --recursive`。若同名路徑已存在但不是 Git repository，命令會保留該路徑、回報錯誤，並繼續處理其餘 repositories。
+
+命令在可見的 Run Terminal 執行。全部成功時 terminal 自動關閉；任一 repository 失敗時 terminal 保留，方便查看錯誤。
+
+---
+
 ## 系統需求 (Requirements)
 
-| 項目    | 版本                                                                   |
+| 項目    | 版本 / 用途                                                            |
 | ------- | ---------------------------------------------------------------------- |
 | VSCode  | `^1.93.0`(需要 Shell Integration API 與 TabInputTerminal 穩定後的版本) |
 | Node.js | `>=20.0.0`(開發環境)                                                   |
 | npm     | 隨 Node 一起裝                                                         |
+| Git     | `Projects Setup`、Git Hooks 與 GitHub URL 功能                          |
 
 ---
 
@@ -438,6 +466,7 @@ code --install-extension superset-*.vsix
 | `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                  |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link |
 | `Superset: Install Default Tools`               | —                   | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond` CLI                      |
+| `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 12 個 BizShuk repositories（含 submodules）   |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 
@@ -480,6 +509,7 @@ npx @vscode/vsce package
 | `Topology` 掃描逾時                   | `netstat` / `scutil` / `arp` 執行慢(尤其 VPN 環境)   | 暫時無法解決(10s 熔斷);手動跑命令驗證輸出                                                         |
 | `Git hooks not linked` 一直顯示       | local `core.hooksPath` 未設定或 Link 失敗            | 點 Status Bar 或執行 `Superset: Link Git Hooks`;用 `git config --local --get core.hooksPath` 檢查 |
 | Install 沒處理預期的 folder           | Multi-root 視窗只處理第一個 opened folder            | 將目標 folder 移到第一位,或在單一 folder 視窗執行                                                 |
+| `Projects Setup` 留下失敗 terminal     | clone/submodule 失敗或同名路徑不是 Git repository    | 查看 terminal 的 failure list；修正 Git access 或衝突路徑後重跑                                  |
 | F2 改名沒寫回檔案                     | `README.todo` 唯讀或無寫入權限                       | 確認檔案可寫;檢查 Output Channel 錯誤                                                             |
 | `vsce package` 報 `Missing publisher` | `package.json` 缺 `publisher`                        | 預設填 `shuk`                                                                                     |
 | VSIX 安裝後沒生效                     | 沒重啟 VSCode                                        | 重新啟動視窗                                                                                      |

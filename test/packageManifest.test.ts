@@ -61,6 +61,16 @@ describe("Git hooks manifest contributions", () => {
     });
 });
 
+describe("Projects Setup manifest contribution", () => {
+    it("publishes the Projects Setup command with its clone icon", () => {
+        expect(manifest.contributes.commands).toContainEqual({
+            command: "superset.projectsSetup",
+            title: "Superset: Projects Setup",
+            icon: "$(repo-clone)",
+        });
+    });
+});
+
 
 describe("SCM Graph manifest contributions", () => {
     it("declares the proposed Source Control history-item menu API", () => {

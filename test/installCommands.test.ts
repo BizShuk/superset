@@ -295,6 +295,44 @@ describe("terminalSpawner bridge", () => {
         expect(showError.mock.calls[0][0]).toMatch(/Terminals 模組尚未啟用/);
     });
 
+    it("projectsSetup runs the bundled setup script against the fixed ~/projects root", async () => {
+        const terminal = {
+            name: "projects setup",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+        const spawn = vi.fn().mockReturnValue(terminal);
+        setTerminalSpawner(spawn);
+        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+        setPluginManager(undefined);
+        globalCommandsPlugin.activate(fakePluginContext() as never);
+
+        const cb = (
+            vscode as unknown as { __commands: Map<string, Function> }
+        ).__commands.get("superset.projectsSetup")!;
+        await cb();
+
+        expect(spawn).toHaveBeenCalledTimes(1);
+        const [name, cwd] = spawn.mock.calls[0] as [string, string];
+        expect(name).toMatch(
+            /^Superset: Projects Setup \(\d{2}:\d{2}:\d{2}\)$/
+        );
+        expect(cwd).toBe(os.homedir());
+
+        const sent = (
+            terminal as { sendText: ReturnType<typeof vi.fn> }
+        ).sendText.mock.calls[0][0] as string;
+        expect(sent).toBe(
+            `'bash' '/fake/pkg/resources/config/setup-projects.sh' '${path.join(
+                os.homedir(),
+                "projects"
+            )}' && exit\r`
+        );
+        expect(vscode.window.showInputBox).not.toHaveBeenCalled();
+        expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
+    });
+
     it("skillInstall shows the repository dropdown with bizshuk/cc-plugin first and installs the default pick", async () => {
         asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
             label: "bizshuk/cc-plugin",

@@ -1,6 +1,6 @@
 // spawnRunTerminal — opens a fresh PTY-backed terminal and runs a
 // command in it. Used by the install commands (installDefaultTools,
-// skillInstall, installDefaultProject) and anything else that needs
+// skillInstall, projectsSetup, installDefaultProject) and anything else that needs
 // to dispatch work to a user-visible terminal without blocking the
 // command caller.
 //

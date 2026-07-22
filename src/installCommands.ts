@@ -1,4 +1,4 @@
-// Install commands — three install/setup commands that all need to
+// Install commands — install/setup commands that need to
 // spawn a fresh terminal and run a shell command in it, plus the
 // offline license-file install. Extracted from
 // `globalCommandsPlugin.ts` as Plan 2 Stage B.
@@ -8,6 +8,7 @@
 // `activate()` calls it alongside its own chrome-command registration.
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { PluginContext } from "./plugin";
@@ -146,6 +147,33 @@ async function skillInstall(
         { closeOnSuccess: true }
     );
     ctx.log(`globalCommands: skillInstall dispatched (${repo})`);
+}
+
+/**
+ * Create the conventional `~/projects` root and clone the standard BizShuk
+ * project repositories into it. The bundled script is intentionally
+ * idempotent: missing repositories are cloned with all submodules, while
+ * existing Git repositories only have their recursive submodules initialized.
+ */
+async function projectsSetup(ctx: PluginContext): Promise<void> {
+    const scriptPath = path.join(
+        ctx.extensionUri.fsPath,
+        "pkg",
+        "resources",
+        "config",
+        "setup-projects.sh"
+    );
+    const homeDir = os.homedir();
+    const projectsRoot = path.join(homeDir, "projects");
+
+    await spawnRunTerminal(
+        "Superset: Projects Setup",
+        ["bash", scriptPath, projectsRoot].map(quoteShellArg).join(" "),
+        { closeOnSuccess: true, cwd: homeDir }
+    );
+    ctx.log(
+        `globalCommands: projectsSetup dispatched (root=${projectsRoot})`
+    );
 }
 
 /**
@@ -317,6 +345,11 @@ export function registerInstallCommands(ctx: PluginContext): void {
         vscode.commands.registerCommand(
             "superset.skillInstall",
             (args?: { repo?: string }) => skillInstall(ctx, args)
+        )
+    );
+    ctx.registerDisposable(
+        vscode.commands.registerCommand("superset.projectsSetup", () =>
+            projectsSetup(ctx)
         )
     );
     ctx.registerDisposable(
