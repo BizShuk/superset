@@ -177,12 +177,12 @@ describe("terminalSpawner bridge", () => {
         asMock(vscode.window.createTerminal).mockClear();
         asMock(vscode.window.showInformationMessage).mockClear();
         asMock(vscode.window.showErrorMessage).mockClear();
-        // Reset the input-box mock too: the default in the vi.mock
-        // returns undefined (Esc / dismissed), but a per-test
-        // `mockResolvedValueOnce("...")` would leak across tests if
-        // we don't clear the queue.
+        // Reset picker mocks too: per-test `mockResolvedValueOnce(...)`
+        // values must not leak into the next command test.
         asMock(vscode.window.showInputBox).mockReset();
         asMock(vscode.window.showInputBox).mockResolvedValue(undefined);
+        asMock(vscode.window.showQuickPick).mockReset();
+        asMock(vscode.window.showQuickPick).mockResolvedValue(undefined);
     });
 
     it("setTerminalSpawner / getTerminalSpawner round-trip", () => {
@@ -278,110 +278,12 @@ describe("terminalSpawner bridge", () => {
         expect(showError.mock.calls[0][0]).toMatch(/Terminals 模組尚未啟用/);
     });
 
-    it("skillInstall pre-fills the input box with the resolved default and uses the spawner on Enter", async () => {
-        // Simulate the user pressing Enter without editing the
-        // prefilled value.
-        (
-            (vscode.window as unknown as {
-                showInputBox: ReturnType<typeof vi.fn>;
-            }).showInputBox as ReturnType<typeof vi.fn>
-        ).mockResolvedValueOnce("bizshuk/custom-skill");
-
-        const t = {
-            name: "Superset: Skill Install (bizshuk/custom-skill)",
-            show: vi.fn(),
-            sendText: vi.fn(),
-            dispose: vi.fn(),
-        } as unknown as vscode.Terminal;
-        const spawn = vi.fn().mockReturnValue(t);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
-        const pCtx = fakePluginContext();
-        globalCommandsPlugin.activate(pCtx as never);
-
-        const cb = (
-            vscode as unknown as { __commands: Map<string, Function> }
-        ).__commands.get("superset.skillInstall")!;
-        await cb({ repo: "bizshuk/custom-skill" });
-
-        // InputBox was shown with the resolved repo pre-filled as
-        // `value` (and fully selected so a single keystroke replaces
-        // it). The spawner is driven only after the user confirms
-        // by pressing Enter (returning the string).
-        const showInput = (vscode.window as unknown as {
-            showInputBox: ReturnType<typeof vi.fn>;
-        }).showInputBox;
-        expect(showInput).toHaveBeenCalledTimes(1);
-        const inputOpts = showInput.mock.calls[0][0] as {
-            value: string;
-            valueSelection: [number, number];
-            placeHolder?: string;
-        };
-        expect(inputOpts.value).toBe("bizshuk/custom-skill");
-        expect(inputOpts.valueSelection).toEqual([0, "bizshuk/custom-skill".length]);
-
-        // No modal: showInformationMessage should NOT have been
-        // called for skillInstall anymore.
-        const showInfo = (vscode.window as unknown as {
-            showInformationMessage: ReturnType<typeof vi.fn>;
-        }).showInformationMessage;
-        expect(showInfo).not.toHaveBeenCalled();
-
-        // Spawner was used with the timestamped name; the cmdline
-        // is `skills add ... && exit` so the shell self-closes on
-        // success.
-        expect(spawn).toHaveBeenCalledTimes(1);
-        expect((t as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
-        expect((t as { sendText: ReturnType<typeof vi.fn> }).sendText).toHaveBeenCalledTimes(1);
-        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
-            .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add bizshuk/custom-skill && exit\r");
-    });
-
-    it("skillInstall honours a user-typed override in the input box", async () => {
-        // User pre-filled with default `bizshuk/cc-plugin` but
-        // edited it to `acme/widget` before pressing Enter. The
-        // command must use the typed value, not the default.
-        (
-            (vscode.window as unknown as {
-                showInputBox: ReturnType<typeof vi.fn>;
-            }).showInputBox as ReturnType<typeof vi.fn>
-        ).mockResolvedValueOnce("acme/widget");
-
-        const t = {
-            name: "Superset: Skill Install (acme/widget)",
-            show: vi.fn(),
-            sendText: vi.fn(),
-            dispose: vi.fn(),
-        } as unknown as vscode.Terminal;
-        const spawn = vi.fn().mockReturnValue(t);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
-        const pCtx = fakePluginContext();
-        globalCommandsPlugin.activate(pCtx as never);
-
-        const cb = (
-            vscode as unknown as { __commands: Map<string, Function> }
-        ).__commands.get("superset.skillInstall")!;
-        await cb(); // no args → default bizshuk/cc-plugin
-
-        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
-            .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add acme/widget && exit\r");
-    });
-
-    it("skillInstall falls back to the default when the user clears the input and presses Enter", async () => {
-        // Simulates: pre-filled with `bizshuk/cc-plugin`, user
-        // selects all + deletes, presses Enter on the empty field.
-        // The contract says empty input is not a meaningful repo,
-        // so we treat it as "accept the default".
-        (
-            (vscode.window as unknown as {
-                showInputBox: ReturnType<typeof vi.fn>;
-            }).showInputBox as ReturnType<typeof vi.fn>
-        ).mockResolvedValueOnce("");
+    it("skillInstall shows the repository dropdown with bizshuk/cc-plugin first and installs the default pick", async () => {
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
+            label: "bizshuk/cc-plugin",
+            description: "預設",
+            repo: "bizshuk/cc-plugin",
+        });
 
         const t = {
             name: "Superset: Skill Install (bizshuk/cc-plugin)",
@@ -399,36 +301,101 @@ describe("terminalSpawner bridge", () => {
         const cb = (
             vscode as unknown as { __commands: Map<string, Function> }
         ).__commands.get("superset.skillInstall")!;
-        await cb(); // no args → default bizshuk/cc-plugin
+        await cb();
 
+        const showQuickPick = asMock(vscode.window.showQuickPick);
+        expect(showQuickPick).toHaveBeenCalledTimes(1);
+        const pickItems = showQuickPick.mock.calls[0][0] as Array<{
+            label: string;
+            description?: string;
+            repo: string;
+        }>;
+        expect(pickItems.map((item) => item.repo)).toEqual([
+            "bizshuk/cc-plugin",
+            "anthropics/claude-plugins-official",
+            "anthropics/skills",
+        ]);
+        expect(pickItems[0]).toMatchObject({
+            label: "bizshuk/cc-plugin",
+            description: "預設",
+        });
+        expect(showQuickPick.mock.calls[0][1]).toMatchObject({
+            title: "Superset: Skill Install",
+            placeHolder: "選擇要安裝的 skill repository",
+        });
+        expect(vscode.window.showInputBox).not.toHaveBeenCalled();
+
+        expect(spawn).toHaveBeenCalledTimes(1);
+        expect((t as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
         const sent = (t as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
         expect(sent).toBe("skills add bizshuk/cc-plugin && exit\r");
     });
 
-    it("skillInstall cancels when the user presses Esc on the input box", async () => {
-        // Esc / dialog dismiss → showInputBox resolves to undefined.
-        (
-            (vscode.window as unknown as {
-                showInputBox: ReturnType<typeof vi.fn>;
-            }).showInputBox as ReturnType<typeof vi.fn>
-        ).mockResolvedValueOnce(undefined);
+    it("skillInstall installs the selected Anthropic repository", async () => {
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
+            label: "anthropics/skills",
+            repo: "anthropics/skills",
+        });
 
-        setTerminalSpawner(undefined);
+        const t = {
+            name: "Superset: Skill Install (anthropics/skills)",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+        setTerminalSpawner(vi.fn().mockReturnValue(t));
         setDiagnosticChannel(vscode.window.createOutputChannel("test"));
         setPluginManager(undefined);
-        const pCtx = fakePluginContext();
-
-        const spawn = vi.fn();
-        setTerminalSpawner(spawn);
-        globalCommandsPlugin.activate(pCtx as never);
+        globalCommandsPlugin.activate(fakePluginContext() as never);
 
         const cb = (
             vscode as unknown as { __commands: Map<string, Function> }
         ).__commands.get("superset.skillInstall")!;
-        await cb({ repo: "bizshuk/never-installed" });
+        await cb();
 
-        // User dismissed the dialog → no terminal was spawned.
+        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
+            .sendText.mock.calls[0][0] as string;
+        expect(sent).toBe("skills add anthropics/skills && exit\r");
+    });
+
+    it("skillInstall uses a programmatic repo argument without showing the dropdown", async () => {
+        const t = {
+            name: "Superset: Skill Install (bizshuk/custom-skill)",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+        setTerminalSpawner(vi.fn().mockReturnValue(t));
+        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+        setPluginManager(undefined);
+        globalCommandsPlugin.activate(fakePluginContext() as never);
+
+        const cb = (
+            vscode as unknown as { __commands: Map<string, Function> }
+        ).__commands.get("superset.skillInstall")!;
+        await cb({ repo: "  bizshuk/custom-skill  " });
+
+        expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
+        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
+            .sendText.mock.calls[0][0] as string;
+        expect(sent).toBe("skills add bizshuk/custom-skill && exit\r");
+    });
+
+    it("skillInstall cancels when the user dismisses the dropdown", async () => {
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+
+        const spawn = vi.fn();
+        setTerminalSpawner(spawn);
+        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+        setPluginManager(undefined);
+        globalCommandsPlugin.activate(fakePluginContext() as never);
+
+        const cb = (
+            vscode as unknown as { __commands: Map<string, Function> }
+        ).__commands.get("superset.skillInstall")!;
+        await cb();
+
         expect(spawn).not.toHaveBeenCalled();
     });
 

@@ -31,6 +31,10 @@ interface InstallToolsSpec {
     cmd: string;
 }
 
+type SkillRepositoryPickItem = vscode.QuickPickItem & {
+    repo: string;
+};
+
 const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
     {
         label: "pm2",
@@ -39,6 +43,22 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
     {
         label: "skills",
         cmd: "go install github.com/bizshuk/skills@master",
+    },
+] as const;
+
+const SKILL_REPOSITORIES: readonly SkillRepositoryPickItem[] = [
+    {
+        label: "bizshuk/cc-plugin",
+        description: "預設",
+        repo: "bizshuk/cc-plugin",
+    },
+    {
+        label: "anthropics/claude-plugins-official",
+        repo: "anthropics/claude-plugins-official",
+    },
+    {
+        label: "anthropics/skills",
+        repo: "anthropics/skills",
     },
 ] as const;
 
@@ -78,38 +98,34 @@ async function installDefaultTools(ctx: PluginContext): Promise<void> {
 
 /**
  * Install a Claude Code skill from a GitHub repo via the `skills`
- * CLI. Default repo is the user's cc-plugin fork; an explicit repo
- * can be passed via the command's `args.repo` parameter (e.g. wired
- * up by a future TreeView menu). An InputBox is shown with the
- * resolved repo pre-filled, so the user can press Enter to accept
- * the default, edit and press Enter to override, or press Esc to
- * cancel.
+ * CLI. Interactive invocation shows a QuickPick whose first (default)
+ * item is the user's cc-plugin fork, followed by the two Anthropic
+ * repositories. A trusted programmatic caller can skip the picker via
+ * the command's `args.repo` parameter (e.g. a future TreeView menu).
  */
 async function skillInstall(
     ctx: PluginContext,
     args?: { repo?: string }
 ): Promise<void> {
-    const defaultRepo = args?.repo ?? "bizshuk/cc-plugin";
-    const input = await vscode.window.showInputBox({
-        title: "Superset: Skill Install",
-        prompt:
-            "要安裝的 skill repo (GitHub owner/repo)。直接 Enter 接受預設。",
-        placeHolder: "owner/repo",
-        value: defaultRepo,
-        // Selecting the whole string lets the user immediately type
-        // a new value to replace the default without first deleting it.
-        valueSelection: [0, defaultRepo.length],
-    });
-    if (input === undefined) {
-        ctx.log(
-            `globalCommands: skillInstall cancelled by user (input dismissed)`
+    let repo = args?.repo?.trim();
+    if (!repo) {
+        const picked = await vscode.window.showQuickPick(
+            SKILL_REPOSITORIES,
+            {
+                title: "Superset: Skill Install",
+                placeHolder: "選擇要安裝的 skill repository",
+                matchOnDescription: true,
+            }
         );
-        return;
+        if (!picked) {
+            ctx.log(
+                "globalCommands: skillInstall cancelled by user (quickpick dismissed)"
+            );
+            return;
+        }
+        repo = picked.repo;
     }
-    // Empty input (user cleared the field then pressed Enter) falls
-    // back to the default. Matches the documented "直接 Enter 接受預設"
-    // affordance — an empty string is not a meaningful repo override.
-    const repo = input.trim() || defaultRepo;
+
     await spawnRunTerminal(
         `Superset: Skill Install (${repo})`,
         `skills add ${repo}`,
