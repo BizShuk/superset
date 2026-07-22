@@ -338,6 +338,8 @@ URL 固定使用 `master` branch。Superset 只讀取本機 Git repository 與 G
 
 `Superset: Install Git Hooks` 只在手動執行時,從 extension 內建模板補齊目前 VS Code 視窗第一個 opened folder 的 `.githooks/`。既有同名檔案不會被覆蓋;補齊成功後會設定 repository-local `core.hooksPath=.githooks`。
 
+內建 `pre-push` 模板在將新 commit 推送到 `master` 時自動建立 annotated release tag。版本取 `max(最高 Git tag 的下一個 patch, package.json.version, .claude-plugin/plugin.json.version)`；不存在的 manifest 會被忽略，且只接受純 `major.minor.patch` 版本。Hook 只讀 manifest，不會回寫版本。
+
 只需要重新設定 Git config 時,執行 `Superset: Link Git Hooks`。若 opened folder 已有 `.githooks/`,但 local `core.hooksPath` 沒有值,左側 Status Bar 會顯示 `Git hooks not linked`;點擊只執行 Link,不安裝模板。
 
 Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath` 都視為已連結,Superset 不驗證它是否指向 `.githooks/`。
