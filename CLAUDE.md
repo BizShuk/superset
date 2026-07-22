@@ -4,6 +4,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 - 進行中、尚未實作的設計放在 [`plans/`](plans/)。
 - 已實作的設計與歷史決策放在 [`docs/specs/`](docs/specs/)。
+- Superset 全專案術語、VS Code UI 名稱與各 feature domain 用語以 [`docs/terminology.md`](docs/terminology.md) 為準。
 - 每次變更都依 semantic versioning (`major` / `minor` / `patch`) 更新 `package.json` 與 `package-lock.json` 的 package version。
 
 ## 與根 `CLAUDE.md` 的關係
