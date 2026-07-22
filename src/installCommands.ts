@@ -266,7 +266,7 @@ async function installLicense(
 
     const template = findLicenseTemplate(licenseId);
 
-    // Safety: same pattern as installIgnoreTemplate — if the file
+    // Safety: same pattern as installDefaultProject — if the file
     // already exists, ask before overwriting. A hand-rolled LICENSE
     // is exactly the kind of file the user might want to *keep* if
     // they customised it. `args.force` skips the gate for tests

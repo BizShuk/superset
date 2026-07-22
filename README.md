@@ -344,7 +344,21 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 11. Default Tools — Go CLI 安裝
+### 11. Default Project Template — workspace 初始化
+
+`Superset: Install Default Project` 會在目前 workspace 根目錄執行內建安裝器，預設安裝三份標準 ignore files：
+
+- `.gitignore`
+- `.geminiignore`
+- `.claudeignore`
+
+同時建立標準 project directories（`docs/tutorials/`、`docs/backlog/`、`docs/specs/`、`plans/`、`pkg/`、`config/`、`cmd/`、`.vscode/`、`.agents/`），並建立 `AGENTS.md -> CLAUDE.md` symbolic link。若目標 ignore file 已存在，執行命令時會先顯示 overwrite confirmation；取消即可保留原檔。
+
+這個命令取代舊的 `Superset: Install Ignore Template`；舊 command ID `superset.installIgnoreTemplate` 已不再註冊。
+
+---
+
+### 12. Default Tools — Go CLI 安裝
 
 `Superset: Install Default Tools` 會依序為目前使用者安裝五個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
 
@@ -418,6 +432,7 @@ code --install-extension superset-*.vsix
 | `Copy GitHub URL`                             | —                     | Explorer 檔案右鍵複製固定 `master` GitHub URL |
 | `Superset: Install Git Hooks`                 | —                     | 補齊 `.githooks/` 模板並設定 local hooks path |
 | `Superset: Link Git Hooks`                    | —                     | 只設定 local `core.hooksPath=.githooks`       |
+| `Superset: Install Default Project`            | —                     | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link |
 | `Superset: Install Default Tools`             | —                     | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond` CLI |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。

@@ -95,7 +95,7 @@ export function buildResetCmdline(sha: string, mode: ResetMode): string {
  * `(no subject)` when the commit message is missing or empty.
  *
  * Output is intentionally in 繁體中文 to match the project's copy
- * style (see `src/installCommands.ts` installIgnoreTemplate modal
+ * style (see `src/installCommands.ts` installDefaultProject modal
  * for the convention).
  */
 export function formatResetHardWarning(

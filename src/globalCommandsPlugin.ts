@@ -3,7 +3,7 @@
 // focusPanel). Implemented as an `ExtensionPlugin` so the
 // `PluginManager` owns its disposable / reset-handler lifecycle
 // alongside the feature plugins. The install-flavor commands
-// (installDefaultTools / skillInstall / installIgnoreTemplate) live
+// (installDefaultTools / skillInstall / installDefaultProject) live
 // in `./installCommands` and are wired in via
 // `registerInstallCommands()` below.
 
