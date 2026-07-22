@@ -193,22 +193,43 @@ describe("terminalSpawner bridge", () => {
         expect(getTerminalSpawner()).toBeUndefined();
     });
 
-    it("installDefaultTools spawns two separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
-        const t1 = {
-            name: "a",
-            show: vi.fn(),
-            sendText: vi.fn(),
-            dispose: vi.fn(),
-        } as unknown as vscode.Terminal;
-        const t2 = {
-            name: "b",
-            show: vi.fn(),
-            sendText: vi.fn(),
-            dispose: vi.fn(),
-        } as unknown as vscode.Terminal;
+    it("installDefaultTools spawns five separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
+        const expectedTools = [
+            {
+                label: "pm2",
+                cmd: "go install github.com/bizshuk/pm2@master",
+            },
+            {
+                label: "skills",
+                cmd: "go install github.com/bizshuk/skills@master",
+            },
+            {
+                label: "dux",
+                cmd: "go install github.com/bizshuk/dux@master",
+            },
+            {
+                label: "port",
+                cmd: "go install github.com/bizshuk/port@master",
+            },
+            {
+                label: "sessiond",
+                cmd: "go install github.com/bizshuk/sessiond@master",
+            },
+        ];
+        const makeTerminal = () =>
+            ({
+                name: "a",
+                show: vi.fn(),
+                sendText: vi.fn(),
+                dispose: vi.fn(),
+            }) as unknown as vscode.Terminal;
+        const terminals = expectedTools.map(() => makeTerminal());
         const spawn = vi.fn()
-            .mockReturnValueOnce(t1)
-            .mockReturnValueOnce(t2);
+            .mockReturnValueOnce(terminals[0])
+            .mockReturnValueOnce(terminals[1])
+            .mockReturnValueOnce(terminals[2])
+            .mockReturnValueOnce(terminals[3])
+            .mockReturnValueOnce(terminals[4]);
         setTerminalSpawner(spawn);
         setDiagnosticChannel(vscode.window.createOutputChannel("test"));
         setPluginManager(undefined);
@@ -220,35 +241,31 @@ describe("terminalSpawner bridge", () => {
         ).__commands.get("superset.installDefaultTools")!;
         await cb();
 
-        // Two spawn calls — pm2 first, skills second. Each gets its
-        // own terminal so the user can watch them in parallel and
-        // abort either with Ctrl-C without affecting the other.
-        expect(spawn).toHaveBeenCalledTimes(2);
-        const [name1, cwd1] = spawn.mock.calls[0] as [string, string];
-        const [name2, cwd2] = spawn.mock.calls[1] as [string, string];
-        expect(name1).toMatch(/^Superset: Install pm2 \(\d{2}:\d{2}:\d{2}\)$/);
-        expect(name2).toMatch(/^Superset: Install skills \(\d{2}:\d{2}:\d{2}\)$/);
-        expect(cwd1).toBe(os.homedir());
-        expect(cwd2).toBe(os.homedir());
+        // Each default tool gets its own terminal, preserving the install
+        // order so the user can watch or abort them independently.
+        expect(spawn).toHaveBeenCalledTimes(expectedTools.length);
+        expectedTools.forEach((tool, index) => {
+            const [name, cwd] = spawn.mock.calls[index] as [string, string];
+            expect(name).toMatch(
+                new RegExp(
+                    `^Superset: Install ${tool.label} \\(\\d{2}:\\d{2}:\\d{2}\\)$`
+                )
+            );
+            expect(cwd).toBe(os.homedir());
 
-        // Each terminal had show() called and got a single
-        // `go install ... && exit` line.
-        const sent1 = (t1 as { sendText: ReturnType<typeof vi.fn> })
-            .sendText.mock.calls[0][0] as string;
-        const sent2 = (t2 as { sendText: ReturnType<typeof vi.fn> })
-            .sendText.mock.calls[0][0] as string;
-        expect(sent1).toBe(
-            "go install github.com/bizshuk/pm2@master && exit\r"
-        );
-        expect(sent2).toBe(
-            "go install github.com/bizshuk/skills@master && exit\r"
-        );
+            const sent = (terminals[index] as { sendText: ReturnType<typeof vi.fn> })
+                .sendText.mock.calls[0][0] as string;
+            expect(sent).toBe(`${tool.cmd} && exit\r`);
+        });
 
         // No manual dispose from the extension — auto-close is
         // driven by the PTY host's onExit handler when the shell
         // exits. The extension just sends the cmdline.
-        expect((t1 as { dispose: ReturnType<typeof vi.fn> }).dispose).not.toHaveBeenCalled();
-        expect((t2 as { dispose: ReturnType<typeof vi.fn> }).dispose).not.toHaveBeenCalled();
+        terminals.forEach((terminal) => {
+            expect(
+                (terminal as { dispose: ReturnType<typeof vi.fn> }).dispose
+            ).not.toHaveBeenCalled();
+        });
 
         // Most importantly: vscode.window.createTerminal was NOT
         // called. A plain terminal would be disposed 150ms later by

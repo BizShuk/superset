@@ -44,6 +44,18 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
         label: "skills",
         cmd: "go install github.com/bizshuk/skills@master",
     },
+    {
+        label: "dux",
+        cmd: "go install github.com/bizshuk/dux@master",
+    },
+    {
+        label: "port",
+        cmd: "go install github.com/bizshuk/port@master",
+    },
+    {
+        label: "sessiond",
+        cmd: "go install github.com/bizshuk/sessiond@master",
+    },
 ] as const;
 
 const SKILL_REPOSITORIES: readonly SkillRepositoryPickItem[] = [
@@ -69,9 +81,9 @@ const IGNORE_TARGETS: Record<string, string> = {
 };
 
 /**
- * Install pm2 + skills CLI binaries at HEAD. Each runs in its own
- * terminal so the user can see both install logs side-by-side and
- * `&& exit` closes the shell on success.
+ * Install the default Go CLI binaries at HEAD. Each runs in its own
+ * terminal so the user can see install logs side-by-side and `&& exit`
+ * closes the shell on success.
  */
 async function installDefaultTools(ctx: PluginContext): Promise<void> {
     if (!getTerminalSpawner()) {
@@ -92,7 +104,9 @@ async function installDefaultTools(ctx: PluginContext): Promise<void> {
         );
     }
     ctx.log(
-        "globalCommands: installDefaultTools dispatched (pm2 + skills @master, two terminals)"
+        `globalCommands: installDefaultTools dispatched (${DEFAULT_TOOLS.map(
+            (tool) => tool.label
+        ).join(", ")} @master, ${DEFAULT_TOOLS.length} terminals)`
     );
 }
 

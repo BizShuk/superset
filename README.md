@@ -344,6 +344,20 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
+### 11. Default Tools — Go CLI 安裝
+
+`Superset: Install Default Tools` 會依序為目前使用者安裝五個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
+
+- `pm2` — `github.com/bizshuk/pm2@master`
+- `skills` — `github.com/bizshuk/skills@master`
+- `dux` — `github.com/bizshuk/dux@master`
+- `port` — `github.com/bizshuk/port@master`
+- `sessiond` — `github.com/bizshuk/sessiond@master`
+
+若只需要安裝 skill repository，使用 `Superset: Skill Install`，它會以 Quick Pick 選擇 repository 後執行 `skills add <repository>`。
+
+---
+
 ## 系統需求 (Requirements)
 
 | 項目    | 版本                                                                       |
@@ -404,6 +418,7 @@ code --install-extension superset-*.vsix
 | `Copy GitHub URL`                             | —                     | Explorer 檔案右鍵複製固定 `master` GitHub URL |
 | `Superset: Install Git Hooks`                 | —                     | 補齊 `.githooks/` 模板並設定 local hooks path |
 | `Superset: Link Git Hooks`                    | —                     | 只設定 local `core.hooksPath=.githooks`       |
+| `Superset: Install Default Tools`             | —                     | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond` CLI |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 
