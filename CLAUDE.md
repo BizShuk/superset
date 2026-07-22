@@ -88,6 +88,12 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 - 修改 manifest、activation order、TreeView registration 或 VSIX 打包內容時，除 unit tests 外必須跑完整 build。
 - 不在本檔維護易漂移的測試檔與 case 數；測試行為以 `test/` 與相關 specs 為準。
 
+## GitHub Actions 發布 (Release)
+
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) 只在推送 `v<major>.<minor>.<patch>` tag 時執行。
+- Tag 必須與 `package.json` 的版本完全相符；workflow 會執行 build、測試與 VSIX 驗證。
+- GitHub Release 只上傳單一 `superset-*.vsix` asset，不上傳其他 build 產物。
+
 ## 規格索引 (Specification Index)
 
 - Current module map：[`docs/specs/2026-07-20-architecture-current-modules.md`](docs/specs/2026-07-20-architecture-current-modules.md)

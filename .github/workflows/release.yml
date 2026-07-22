@@ -1,0 +1,66 @@
+name: Release VSIX
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Check tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          expected_tag="v$(node -p "require('./package.json').version")"
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Release tag $RELEASE_TAG does not match package version $expected_tag" >&2
+            exit 1
+          fi
+
+      - name: Build and verify VSIX
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Select the only VSIX release asset
+        id: vsix
+        shell: bash
+        run: |
+          shopt -s nullglob
+          vsix_files=(superset-*.vsix)
+
+          if (( ${#vsix_files[@]} != 1 )); then
+            echo "Expected exactly one superset-*.vsix, found ${#vsix_files[@]}" >&2
+            printf '%s\n' "${vsix_files[@]}" >&2
+            exit 1
+          fi
+
+          echo "path=${vsix_files[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release with VSIX only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VSIX_PATH: ${{ steps.vsix.outputs.path }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Superset $GITHUB_REF_NAME" \
+            --generate-notes \
+            "$VSIX_PATH"

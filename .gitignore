@@ -54,6 +54,9 @@ _~
 # ── B. Editor / IDE ─────────────────────────────────────────────────────────
 
 .vscode/
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 !.vscode/
 !.vscode/settings.json
 !.vscode/tasks.json
