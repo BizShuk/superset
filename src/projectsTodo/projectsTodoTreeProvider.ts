@@ -402,8 +402,13 @@ export class ProjectsTodoTreeProvider
             projectItems.push(projectItem);
         }
 
-        // Sort ~/projects project folders by name alphabetically.
-        projectItems.sort((a, b) => a.text.localeCompare(b.text));
+        // Sort groups by the folder name where README.todo was found.
+        // Same-name folders use their absolute path as a deterministic tie-breaker.
+        projectItems.sort(
+            (a, b) =>
+                a.text.localeCompare(b.text) ||
+                a.projectPath.localeCompare(b.projectPath),
+        );
 
         return projectItems;
     }

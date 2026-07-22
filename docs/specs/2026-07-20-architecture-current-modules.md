@@ -67,7 +67,7 @@ See also:
 - `projects` discovers and groups projects.
 - `projectsTodo` loads `README.todo` content and presents Workspace TODO and Projects TODO.
 
-Projects TODO scans the first-level project boundary under `~/projects/` and `~/projects/tmp/`. A project row remains visible even when filtering removes every visible child, defaults to collapsed, and reports pending count for visible unchecked tasks. Plan items use `kind: "plan"`, remain read-only, bypass task filters where appropriate, and do not contribute to pending counts.
+Projects TODO scans one root, `~/projects`, recursively from depth 1 through depth 5. It accepts only the exact case-sensitive filename `README.todo`; every matching folder becomes a project row labeled with that folder's basename, and a match does not stop descendant traversal. A project row remains visible even when filtering removes every visible child, defaults to collapsed, and reports pending count for visible unchecked tasks. Plan items use `kind: "plan"`, remain read-only, bypass task filters where appropriate, and do not contribute to pending counts. This current boundary supersedes the earlier first-level `~/projects/` plus `~/projects/tmp/` boundary; see [`2026-07-22-projects-todo-recursive-scan.md`](2026-07-22-projects-todo-recursive-scan.md).
 
 The historical top-level merged Plans row is removed. Local plans belong to the local TODO scope; cross-project plans appear in their matching per-project subsection. Active plans remain in `plans/` until implementation is complete.
 
@@ -76,6 +76,7 @@ See also:
 - [`2026-07-02-architecture-superset.md`](2026-07-02-architecture-superset.md)
 - [`2026-07-08-feature-projects-todo-section-pending-badge.md`](2026-07-08-feature-projects-todo-section-pending-badge.md)
 - [`2026-07-09-feature-plans-source-scan.md`](2026-07-09-feature-plans-source-scan.md)
+- [`2026-07-22-projects-todo-recursive-scan.md`](2026-07-22-projects-todo-recursive-scan.md)
 
 ## Workspace TODO Recursive Scan
 

@@ -119,6 +119,21 @@ describe("ProjectsTodoTreeProvider", () => {
         expect(roots![0].projectPath).toBeDefined();
     });
 
+    it("groups a nested README.todo by the folder name where it was found", async () => {
+        const nested = join(tempDir, "projects", "platform", "apps", "server");
+        mkdirSync(nested, { recursive: true });
+        writeFileSync(join(nested, "README.todo"), "# TODO\n- [ ] nested task\n");
+        await store.load();
+
+        const provider = new ProjectsTodoTreeProvider(store);
+        const roots = await provider.getChildren();
+        const server = roots!.find((root) => root.projectPath === nested);
+
+        expect(server).toBeDefined();
+        expect(server!.text).toBe("server");
+        expect(provider.getTreeItem(server!).tooltip).toBe(nested);
+    });
+
     it("filters completed tasks by default", async () => {
         const provider = new ProjectsTodoTreeProvider(store);
         const roots = await provider.getChildren();

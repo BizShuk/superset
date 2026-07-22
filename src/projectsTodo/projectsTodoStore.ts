@@ -6,12 +6,12 @@ import { TodoStore } from "../todo/todoStore";
 import type { ProjectsTodoChange, ProjectsTodoListener } from "./types";
 
 /**
- * 目錄名稱黑名單 — workspace scan 在遞迴時遇到這些目錄整個跳過。
+ * 目錄名稱黑名單 — TODO scan 在遞迴時遇到這些目錄整個跳過。
  * 預期會膨脹或明顯不是 sub-project 的目錄(例如依賴快取、建置輸出、
  * 測試覆蓋率)。使用者定義的 `node_modules/`、`out/`、`dist/` 等
  * 都會被自動排除,不需要再手動加設定。
  */
-const WORKSPACE_SCAN_SKIP_DIRS: ReadonlySet<string> = new Set([
+const TODO_SCAN_SKIP_DIRS: ReadonlySet<string> = new Set([
     "node_modules",
     "out",
     "dist",
@@ -20,38 +20,20 @@ const WORKSPACE_SCAN_SKIP_DIRS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Project scan 的 workspace 根路徑 (絕對路徑)。Overview 只把
- * `~/projects` 與 `~/projects/tmp` 兩個根目錄底下的**第一層**
- * 子目錄視為 live project — 反映「overview 是 live workspace 一覽」,
- * 深層資料夾 (例如 `~/projects/data/pkg/stock/`) 屬於它所屬的專案
- * 內部子目錄,不由 overview 當作獨立 project 收進來。
- *
- * 為何兩條都列:對應根 `CLAUDE.md` 的 workspace 分層 — `~/projects` 是
- * 所有專案的家目錄,`tmp/` 是其中一個進行中子分類。`playground/` 與
- * `archive/` 不在掃描範圍,因為它們的「第一層子目錄」(實驗/歸檔樣本)
- * 不會再進一步晉升為 live 專案。
- *
- * 此函式同時被 `README.todo` 與 `plans/*.md` 兩種掃描共用,確保兩邊
- * 的「project 邊界」一致。
+ * Projects TODO 的全域掃描上限。`~/projects` 自身是 depth 0,
+ * 其下子目錄依序是 depth 1–5。這是固定專案邊界,不與
+ * Workspace TODO 的可設定 depth 共用。
  */
-function getPlanRoots(home: string): string[] {
-    return [path.join(home, "projects"), path.join(home, "projects", "tmp")];
-}
+const PROJECTS_SCAN_MAX_DEPTH = 5;
 
 /**
  * 跨專案待辦的資料管理層 (ProjectsTodoStore)。
  *
- * 負責兩件事:
- * - 從 `~/projects` 與 `~/projects/tmp` 兩個根目錄各自的**第一層**子目錄
- *   找出含 `README.todo` 的資料夾,為每個建立/維護 `TodoStore` 實例
- *   (重用既有 todo 解析/寫入邏輯)。不向下遞迴 — 深層資料夾屬於它所屬
- *   的專案內部子目錄,不由 overview 收為獨立 project。
- * - 從 `~/projects` 與 `~/projects/tmp` 各自的**第一層**子目錄收集
- *   `<project>/plans/*.md`,合併成一份 workspace 層級的 plan 清單,
- *   給 TreeProvider 在 overview 末端開一個 top-level「Plans」row。
- *
- * README.todo 與 plans 的 project 邊界共用 `getPlanRoots(home)`,確保
- * 兩邊語意一致:「第一層子目錄 = live project」。
+ * 負責:
+ * - 只從 `~/projects` 單一根目錄往下遞迴 depth 1–5。
+ * - 只辨識大小寫完全相符的 `README.todo`;命中後仍繼續掃描子孫。
+ * - 每個命中資料夾建立/維護一個 `TodoStore` 實例,
+ *   TreeProvider 以該資料夾名稱建立 project group。
  */
 export class ProjectsTodoStore {
     private readonly stores = new Map<string, TodoStore>();
@@ -104,20 +86,20 @@ export class ProjectsTodoStore {
     /**
      * 掃描全域專案目錄,尋找包含 `README.todo` 的資料夾。
      *
-     * 掃描範圍:只走 `~/projects` 與 `~/projects/tmp` 兩個根目錄
-     * 各自的第一層子目錄 (即所有「直接子資料夾」)。命中隱藏目錄
-     * (`.` 開頭) 一律跳過。不向下遞迴 — 深層資料夾屬於它所屬的專案
-     * 內部子目錄,不由 overview 收為獨立 project。
+     * 掃描範圍:`~/projects` 單一根目錄下的 depth 1–5。
+     * 只收大小寫完全相符的 `README.todo`,且跳過 dot-prefix
+     * 與 `TODO_SCAN_SKIP_DIRS` 子樹。`~/projects` root 自身不是 project row。
      */
     async load(): Promise<void> {
-        const home = os.homedir();
         const detectedTodoPaths = new Set<string>();
+        const projectsRoot = path.join(os.homedir(), "projects");
 
-        // README.todo:只看兩個根目錄各自的第一層子目錄;深層
-        // (例如 `~/projects/data/pkg/stock/README.todo`)不收。
-        for (const root of getPlanRoots(home)) {
-            await this.collectFirstLayerTodoFiles(root, detectedTodoPaths);
-        }
+        await this.collectTodoFiles(
+            projectsRoot,
+            PROJECTS_SCAN_MAX_DEPTH,
+            false,
+            detectedTodoPaths,
+        );
 
         // 清理被刪除的專案 (移除 store + listener)
         for (const existingPath of [...this.stores.keys()]) {
@@ -170,7 +152,7 @@ export class ProjectsTodoStore {
      *   (大小寫敏感);其他 todo 變體(`todo.md`、`TODO.md` ...)
      *   一律不接受 — 不開放設定開關。
      * - 三層 skip 規則任一命中即跳過**整個**子樹:dot-prefix、
-     *   `WORKSPACE_SCAN_SKIP_DIRS` 黑名單、超過 `maxDepth`。
+     *   `TODO_SCAN_SKIP_DIRS` 黑名單、超過 `maxDepth`。
      *
      * `maxDepth < 1` 視為無效輸入,直接視為空結果(不 throw)。
      */
@@ -190,7 +172,7 @@ export class ProjectsTodoStore {
         }
 
         const detectedTodoPaths = new Set<string>();
-        await this.collectWorkspaceTodoFiles(workspaceFolder, maxDepth, detectedTodoPaths);
+        await this.collectTodoFiles(workspaceFolder, maxDepth, true, detectedTodoPaths);
 
         // 清理被刪除的 workspace sub-project (移除 store + listener)
         for (const existingPath of [...this.workspaceStores.keys()]) {
@@ -227,55 +209,19 @@ export class ProjectsTodoStore {
     }
 
     /**
-     * 掃描 `<root>` 的第一層子目錄,將含 `README.todo` 的路徑加入 `out`。
-     * 不存在的 root 安靜跳過;隱藏目錄 (`.` 開頭) 跳過。
-     */
-    private async collectFirstLayerTodoFiles(root: string, out: Set<string>): Promise<void> {
-        let entries: string[];
-        try {
-            entries = await readdir(root);
-        } catch {
-            return; // root 不存在或無法讀取 (例如 ~/projects/tmp 缺席)
-        }
-        for (const entry of entries) {
-            if (entry.startsWith(".")) continue;
-
-            const fullPath = path.join(root, entry);
-            let isDir = false;
-            try {
-                isDir = (await stat(fullPath)).isDirectory();
-            } catch {
-                continue; // 忽略存取錯誤的 entry
-            }
-            if (!isDir) continue;
-
-            const todoFile = path.join(fullPath, "README.todo");
-            try {
-                const todoStat = await stat(todoFile);
-                if (todoStat.isFile()) {
-                    out.add(fullPath);
-                }
-            } catch {
-                // README.todo 不存在,正常 — 該子目錄不是 live project
-            }
-        }
-    }
-
-    /**
-     * 從 `<root>` 出發往下遞迴,把所有含 `README.todo` 的子目錄
-     * 收進 `out`。設計細節見 `loadWorkspaceTodos` docblock。
+     * 從 `<root>` 出發往下遞迴,把所有含 `README.todo` 的目錄
+     * 收進 `out`。`includeRoot` 用來區分兩條資料邊界:
+     * Projects TODO 不收 `~/projects` 自身,Workspace TODO 會收當前 workspace root。
      *
      * 純函式(無 `vscode` import),易於單元測試。
      */
-    private async collectWorkspaceTodoFiles(
+    private async collectTodoFiles(
         root: string,
         maxDepth: number,
+        includeRoot: boolean,
         out: Set<string>,
     ): Promise<void> {
-        // 從 root 自身 (depth 0) 開始走 — workspace 根目錄也視為合法
-        // sub-project。若它有 `README.todo`,也要收進來(不依賴
-        // local TODO 面板來顯示,因為 overview 是不同視角)。
-        await this.walkWorkspaceTodoFiles(root, root, 0, maxDepth, out);
+        await this.walkTodoFiles(root, 0, maxDepth, includeRoot ? 0 : 1, out);
     }
 
     /**
@@ -289,24 +235,27 @@ export class ProjectsTodoStore {
      * `a/b` 與 `a/b/c` 的 sub-project 會被遮蔽,monorepo 場景的
      * 巢狀 sub-project 完全看不見。
      */
-    private async walkWorkspaceTodoFiles(
-        root: string,
+    private async walkTodoFiles(
         current: string,
         depth: number,
         maxDepth: number,
+        minimumMatchDepth: number,
         out: Set<string>,
     ): Promise<void> {
         // 1. 檢查 README.todo (大小寫敏感,只看完全相同的檔名)。
         // 用 `readdir` 列舉再精確比對,而不是 `stat("README.todo")`
         // — 後者在 macOS APFS (case-insensitive) 預設會把
         // `readme.todo` 對到 `README.todo` 而誤判。
-        let childEntries: string[];
+        let childEntries: Dirent[];
         try {
-            childEntries = await readdir(current);
+            childEntries = await readdir(current, { withFileTypes: true });
         } catch {
             return; // 目錄讀不到,跳過
         }
-        if (childEntries.includes("README.todo")) {
+        if (
+            depth >= minimumMatchDepth &&
+            childEntries.some((entry) => entry.name === "README.todo")
+        ) {
             try {
                 const todoStat = await stat(path.join(current, "README.todo"));
                 if (todoStat.isFile()) {
@@ -322,23 +271,16 @@ export class ProjectsTodoStore {
         if (depth >= maxDepth) return;
 
         // 3. 遞迴進入子目錄
-        let dirEntries: Dirent[];
-        try {
-            dirEntries = await readdir(current, { withFileTypes: true });
-        } catch {
-            return; // 子目錄讀不到,跳過該分支
-        }
-
-        for (const entry of dirEntries) {
+        for (const entry of childEntries) {
             if (!entry.isDirectory()) continue;
             if (entry.name.startsWith(".")) continue;
-            if (WORKSPACE_SCAN_SKIP_DIRS.has(entry.name)) continue;
+            if (TODO_SCAN_SKIP_DIRS.has(entry.name)) continue;
 
-            await this.walkWorkspaceTodoFiles(
-                root,
+            await this.walkTodoFiles(
                 path.join(current, entry.name),
                 depth + 1,
                 maxDepth,
+                minimumMatchDepth,
                 out,
             );
         }

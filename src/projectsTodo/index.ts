@@ -180,10 +180,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
         store.load().then(() => refreshProjectsTodoFilterBadge());
     });
 
-    // Watcher for plans/*.md under any project — plan files can be
-    // authored or removed in projects that have *no* README.todo, so
-    // we always run a full store.load() rather than trying to locate
-    // the affected sub-store. PlansTodoStore.load() walks both maps.
+    // Watcher for plans/*.md under any README.todo-backed project.
+    // Plan files do not create project rows; they only refresh the existing
+    // per-project Plans subsection, so a full load preserves the README.todo
+    // discovery gate while updating that subsection.
     const plansWatcher = vscode.workspace.createFileSystemWatcher(
         new vscode.RelativePattern(projectsBaseDir, "**/plans/*.md")
     );
