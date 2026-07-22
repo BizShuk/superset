@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -10,6 +10,7 @@ const hookPath = path.resolve(
     process.cwd(),
     "pkg/resources/git/githooks/pre-push"
 );
+const activeHookPath = path.resolve(process.cwd(), ".githooks/pre-push");
 const roots: string[] = [];
 const zeroSha = "0".repeat(40);
 
@@ -108,6 +109,12 @@ afterEach(async () => {
 });
 
 describe("pre-push release version selection", () => {
+    it("keeps the repository hook aligned with the install template", async () => {
+        await expect(readFile(activeHookPath, "utf8")).resolves.toBe(
+            await readFile(hookPath, "utf8")
+        );
+    });
+
     it.each([
         {
             name: "increments the highest Git tag when manifests are absent",
@@ -125,10 +132,10 @@ describe("pre-push release version selection", () => {
         {
             name: "uses package.json when it is higher than the next Git patch",
             versions: {
-                tags: ["v2.3.4"],
-                packageVersion: "3.0.0",
+                tags: ["v0.0.6"],
+                packageVersion: "0.15.2",
             },
-            expected: "v3.0.0",
+            expected: "v0.15.2",
         },
         {
             name: "uses the Claude plugin manifest when it is highest",

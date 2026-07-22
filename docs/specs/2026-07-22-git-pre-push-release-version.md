@@ -34,6 +34,7 @@ Claude plugin manifest 的 canonical path 是 `.claude-plugin/plugin.json`。`.c
 - Hook 自己觸發的 tag push 由 ref type gate 跳過，避免遞迴。
 - Hook 失敗不 reject 原始 branch push；診斷透過 `stderr` 輸出。
 - Install 仍為 copy-if-missing；workspace 已存在的同名 `pre-push` 不會被覆蓋。
+- Superset repository 自用的 `.githooks/pre-push` 與 `pkg/resources/git/githooks/pre-push` 安裝模板保持內容一致，避免開發時實際執行舊邏輯。
 
 ## 測試
 
@@ -44,3 +45,4 @@ Claude plugin manifest 的 canonical path 是 `.claude-plugin/plugin.json`。`.c
 - `package.json` 較高時直接使用該版本。
 - `.claude-plugin/plugin.json` 為最高候選時使用該版本。
 - 產生的 tag 為 annotated tag，且已推送到 remote。
+- Repository active hook 與安裝模板內容完全相同。
