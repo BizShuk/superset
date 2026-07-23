@@ -32,9 +32,17 @@ interface InstallToolsSpec {
     cmd: string;
 }
 
-type SkillRepositoryPickItem = vscode.QuickPickItem & {
+type CuratedSkillRepositoryPickItem = vscode.QuickPickItem & {
     repo: string;
 };
+
+type CustomSkillRepositoryPickItem = vscode.QuickPickItem & {
+    custom: true;
+};
+
+type SkillRepositoryPickItem =
+    | CuratedSkillRepositoryPickItem
+    | CustomSkillRepositoryPickItem;
 
 const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
     {
@@ -59,7 +67,7 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
     },
 ] as const;
 
-const SKILL_REPOSITORIES: readonly SkillRepositoryPickItem[] = [
+const SKILL_REPOSITORIES: readonly CuratedSkillRepositoryPickItem[] = [
     {
         label: "bizshuk/cc-plugin",
         description:
@@ -118,6 +126,14 @@ const SKILL_REPOSITORIES: readonly SkillRepositoryPickItem[] = [
     },
 ] as const;
 
+const CUSTOM_SKILL_REPOSITORY: CustomSkillRepositoryPickItem = {
+    label: "$(edit) 自訂 repository…",
+    description: "輸入未列出的 GitHub repository",
+    detail: "例如：owner/repository",
+    alwaysShow: true,
+    custom: true,
+};
+
 const IGNORE_TARGETS: Record<string, string> = {
     git: ".gitignore",
     gemini: ".geminiignore",
@@ -158,8 +174,9 @@ async function installDefaultTools(ctx: PluginContext): Promise<void> {
  * Install a Claude Code skill from a GitHub repo via the `skills`
  * CLI. Interactive invocation shows a QuickPick whose first (default)
  * item is the user's cc-plugin fork, followed by the curated repository
- * catalog. A trusted programmatic caller can skip the picker via the
- * command's `args.repo` parameter (e.g. a future TreeView menu).
+ * catalog and a custom-input action. A trusted programmatic caller can
+ * skip the picker via the command's `args.repo` parameter (e.g. a future
+ * TreeView menu).
  */
 async function skillInstall(
     ctx: PluginContext,
@@ -167,11 +184,15 @@ async function skillInstall(
 ): Promise<void> {
     let repo = args?.repo?.trim();
     if (!repo) {
+        const pickItems: readonly SkillRepositoryPickItem[] = [
+            ...SKILL_REPOSITORIES,
+            CUSTOM_SKILL_REPOSITORY,
+        ];
         const picked = await vscode.window.showQuickPick(
-            SKILL_REPOSITORIES,
+            pickItems,
             {
                 title: "Superset: Install Skills",
-                placeHolder: "選擇要安裝的 skill repository",
+                placeHolder: "選擇或自訂要安裝的 skill repository",
                 matchOnDescription: true,
                 matchOnDetail: true,
             }
@@ -182,12 +203,32 @@ async function skillInstall(
             );
             return;
         }
-        repo = picked.repo;
+        if ("custom" in picked) {
+            const input = await vscode.window.showInputBox({
+                title: "Superset: Install Skills",
+                prompt: "輸入要傳給 skills add 的 GitHub repository",
+                placeHolder: "owner/repository",
+                ignoreFocusOut: true,
+                validateInput: (value) =>
+                    value.trim()
+                        ? undefined
+                        : "請輸入 GitHub repository",
+            });
+            repo = input?.trim();
+            if (!repo) {
+                ctx.log(
+                    "globalCommands: skillInstall cancelled by user (custom repository input dismissed)"
+                );
+                return;
+            }
+        } else {
+            repo = picked.repo;
+        }
     }
 
     await spawnRunTerminal(
         `Superset: Install Skills (${repo})`,
-        `skills add ${repo}`,
+        `skills add ${quoteShellArg(repo)}`,
         { closeOnSuccess: true }
     );
     ctx.log(`globalCommands: skillInstall dispatched (${repo})`);

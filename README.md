@@ -373,7 +373,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 - `port` — `github.com/bizshuk/port@master`
 - `sessiond` — `github.com/bizshuk/sessiond@master`
 
-若只需要安裝 skill repository，使用 `Superset: Install Skills`，它會以 Quick Pick 選擇 repository 後執行 `skills add <repository>`。每個選項同時顯示用途與 GitHub repository：
+若只需要安裝 skill repository，使用 `Superset: Install Skills`。Quick Pick 可直接選擇下列 repository；若清單沒有目標，選擇 `自訂 repository…`，再於 Input Box 輸入 `owner/repository`。確認後會執行 `skills add <repository>`：
 
 | 顯示名稱 | 用途 | GitHub repository |
 | --- | --- | --- |
@@ -385,6 +385,8 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 | `understand-anything` | 把程式碼與文件轉成可搜尋、可提問的互動知識圖譜 | `Egonex-AI/Understand-Anything` |
 | `last30days` | 彙整近 30 天社群與網路討論，產出有來源的研究摘要 | `mvanhorn/last30days-skill` |
 | `ui-ux-pro-max-skill` | 為多平台 UI/UX 產生設計系統、樣式與實作建議 | `nextlevelbuilder/ui-ux-pro-max-skill` |
+
+自訂輸入會先去除頭尾空白，並以單一 shell argument 安全傳給 `skills add`。按 `Esc` 關閉 Quick Pick 或 Input Box 都不會建立 Run Terminal。
 
 ---
 

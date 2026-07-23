@@ -366,7 +366,9 @@ describe("terminalSpawner bridge", () => {
             label: string;
             description?: string;
             detail?: string;
-            repo: string;
+            repo?: string;
+            custom?: true;
+            alwaysShow?: boolean;
         }>;
         expect(pickItems).toEqual([
             {
@@ -427,10 +429,17 @@ describe("terminalSpawner bridge", () => {
                     "GitHub · nextlevelbuilder/ui-ux-pro-max-skill",
                 repo: "nextlevelbuilder/ui-ux-pro-max-skill",
             },
+            {
+                label: "$(edit) 自訂 repository…",
+                description: "輸入未列出的 GitHub repository",
+                detail: "例如：owner/repository",
+                alwaysShow: true,
+                custom: true,
+            },
         ]);
         expect(showQuickPick.mock.calls[0][1]).toMatchObject({
             title: "Superset: Install Skills",
-            placeHolder: "選擇要安裝的 skill repository",
+            placeHolder: "選擇或自訂要安裝的 skill repository",
             matchOnDescription: true,
             matchOnDetail: true,
         });
@@ -443,7 +452,7 @@ describe("terminalSpawner bridge", () => {
         expect((t as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
         const sent = (t as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add bizshuk/cc-plugin && exit\r");
+        expect(sent).toBe("skills add 'bizshuk/cc-plugin' && exit\r");
     });
 
     it("skillInstall installs the selected Anthropic repository", async () => {
@@ -470,7 +479,81 @@ describe("terminalSpawner bridge", () => {
 
         const sent = (t as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add anthropics/skills && exit\r");
+        expect(sent).toBe("skills add 'anthropics/skills' && exit\r");
+    });
+
+    it("skillInstall accepts a custom repository from the dropdown", async () => {
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
+            label: "$(edit) 自訂 repository…",
+            custom: true,
+        });
+        asMock(vscode.window.showInputBox).mockResolvedValueOnce(
+            "  example/custom-skills  "
+        );
+
+        const t = {
+            name: "Superset: Install Skills (example/custom-skills)",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+        const spawn = vi.fn().mockReturnValue(t);
+        setTerminalSpawner(spawn);
+        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+        setPluginManager(undefined);
+        globalCommandsPlugin.activate(fakePluginContext() as never);
+
+        const cb = (
+            vscode as unknown as { __commands: Map<string, Function> }
+        ).__commands.get("superset.skillInstall")!;
+        await cb();
+
+        expect(vscode.window.showInputBox).toHaveBeenCalledWith(
+            expect.objectContaining({
+                title: "Superset: Install Skills",
+                prompt: "輸入要傳給 skills add 的 GitHub repository",
+                placeHolder: "owner/repository",
+                ignoreFocusOut: true,
+                validateInput: expect.any(Function),
+            })
+        );
+        const inputOptions = asMock(vscode.window.showInputBox).mock
+            .calls[0][0] as {
+            validateInput: (value: string) => string | undefined;
+        };
+        expect(inputOptions.validateInput("   ")).toBe(
+            "請輸入 GitHub repository"
+        );
+        expect(
+            inputOptions.validateInput("example/custom-skills")
+        ).toBeUndefined();
+
+        expect(spawn).toHaveBeenCalledTimes(1);
+        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
+            .sendText.mock.calls[0][0] as string;
+        expect(sent).toBe("skills add 'example/custom-skills' && exit\r");
+    });
+
+    it("skillInstall cancels when custom repository input is dismissed", async () => {
+        asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
+            label: "$(edit) 自訂 repository…",
+            custom: true,
+        });
+        asMock(vscode.window.showInputBox).mockResolvedValueOnce(undefined);
+
+        const spawn = vi.fn();
+        setTerminalSpawner(spawn);
+        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
+        setPluginManager(undefined);
+        globalCommandsPlugin.activate(fakePluginContext() as never);
+
+        const cb = (
+            vscode as unknown as { __commands: Map<string, Function> }
+        ).__commands.get("superset.skillInstall")!;
+        await cb();
+
+        expect(vscode.window.showInputBox).toHaveBeenCalledTimes(1);
+        expect(spawn).not.toHaveBeenCalled();
     });
 
     it("skillInstall uses a programmatic repo argument without showing the dropdown", async () => {
@@ -493,7 +576,7 @@ describe("terminalSpawner bridge", () => {
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
         const sent = (t as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add bizshuk/custom-skill && exit\r");
+        expect(sent).toBe("skills add 'bizshuk/custom-skill' && exit\r");
     });
 
     it("skillInstall cancels when the user dismisses the dropdown", async () => {
@@ -636,10 +719,16 @@ describe("default project installer contract", () => {
             "utf8"
         );
 
+        const ignoreTargetsBody = installCommands.match(
+            /const IGNORE_TARGETS:[^{]+\{([\s\S]*?)\n};/
+        )?.[1];
+        expect(ignoreTargetsBody).toBeDefined();
         const typescriptMappings = Object.fromEntries(
-            [...installCommands.matchAll(/^    ([a-z]+): "([^\"]+)",$/gm)].map(
-                ([, target, output]) => [target, output]
-            )
+            [
+                ...ignoreTargetsBody!.matchAll(
+                    /^    ([a-z]+): "([^\"]+)",$/gm
+                ),
+            ].map(([, target, output]) => [target, output])
         );
         const shellMappings = Object.fromEntries(
             [...installer.matchAll(/^    ([a-z]+)\)\s+out=([^\s]+)\s*;;$/gm)].map(
