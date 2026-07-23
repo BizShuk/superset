@@ -94,7 +94,7 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 
 - [`.github/workflows/release.yml`](.github/workflows/release.yml) 只在推送 `v<major>.<minor>.<patch>` tag 時執行。
 - Tag 必須與 `package.json` 的版本完全相符；workflow 會執行 build、測試與 VSIX 驗證。
-- GitHub Release 只上傳單一 `superset-*.vsix` asset，不上傳其他 build 產物。
+- GitHub Release 只上傳單一固定檔名 `superset.vsix` asset，不上傳其他 build 產物。
 
 ## 規格索引 (Specification Index)
 
@@ -109,6 +109,7 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 - Explorer Copy GitHub URL：[`docs/specs/2026-07-17-copy-github-url.md`](docs/specs/2026-07-17-copy-github-url.md)、[`docs/specs/2026-07-17-copy-github-url-implementation.md`](docs/specs/2026-07-17-copy-github-url-implementation.md)
 - Git Hooks Install / Link：[`docs/specs/2026-07-20-git-hooks-install-link.md`](docs/specs/2026-07-20-git-hooks-install-link.md)
 - Git pre-push release 版本選擇：[`docs/specs/2026-07-22-git-pre-push-release-version.md`](docs/specs/2026-07-22-git-pre-push-release-version.md)
+- GitHub Release 固定 VSIX 檔名：[`docs/specs/2026-07-23-github-release-fixed-vsix-filename.md`](docs/specs/2026-07-23-github-release-fixed-vsix-filename.md)
 - Skill Install repository Quick Pick：[`docs/specs/2026-07-22-skill-install-repository-quick-pick.md`](docs/specs/2026-07-22-skill-install-repository-quick-pick.md)、[`docs/specs/2026-07-23-skill-install-expanded-repository-list.md`](docs/specs/2026-07-23-skill-install-expanded-repository-list.md)
 - Install Skills command title：[`docs/specs/2026-07-23-install-skills-command-title.md`](docs/specs/2026-07-23-install-skills-command-title.md)
 - Default Tools CLI set：[`docs/specs/2026-07-22-default-tools-cli-set.md`](docs/specs/2026-07-22-default-tools-cli-set.md)

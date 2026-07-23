@@ -38,8 +38,7 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Select the only VSIX release asset
-        id: vsix
+      - name: Prepare fixed VSIX release asset
         shell: bash
         run: |
           shopt -s nullglob
@@ -51,16 +50,15 @@ jobs:
             exit 1
           fi
 
-          echo "path=${vsix_files[0]}" >> "$GITHUB_OUTPUT"
+          mv "${vsix_files[0]}" superset.vsix
 
       - name: Create GitHub release with VSIX only
         env:
           GH_TOKEN: ${{ github.token }}
-          VSIX_PATH: ${{ steps.vsix.outputs.path }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "Superset $GITHUB_REF_NAME" \
             --generate-notes \
-            "$VSIX_PATH"
+            "superset.vsix"

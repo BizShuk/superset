@@ -430,11 +430,11 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ### 方法 A:從 VSIX 安裝(推薦)
 
-1. 從 [Releases](https://github.com/BizShuk/superset/releases) 下載最新 `superset-<version>.vsix`。
+1. 從 [Releases](https://github.com/BizShuk/superset/releases) 下載最新 `superset.vsix`。
 2. 安裝:
 
     ```bash
-    code --install-extension superset-<version>.vsix
+    code --install-extension superset.vsix
     ```
 
     或 VSCode UI:`Ctrl+Shift+X` 開 Extensions 面板 → 右上 `⋯` → `Install from VSIX...` → 選檔案。
