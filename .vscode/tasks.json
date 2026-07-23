@@ -10,7 +10,8 @@
                 "reveal": "always",
                 "panel": "shared",
                 "focus": true,
-                "clear": true
+                "clear": true,
+                "close": true
             }
         },
         {

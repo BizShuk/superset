@@ -333,15 +333,17 @@ describe("terminalSpawner bridge", () => {
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
     });
 
-    it("skillInstall shows the repository dropdown with bizshuk/cc-plugin first and installs the default pick", async () => {
+    it("skillInstall describes every repository and installs the default pick", async () => {
         asMock(vscode.window.showQuickPick).mockResolvedValueOnce({
             label: "bizshuk/cc-plugin",
-            description: "預設",
+            description:
+                "預設 · AI 編碼代理的全域設定、Skills、Agents 與記憶工具",
+            detail: "GitHub · bizshuk/cc-plugin",
             repo: "bizshuk/cc-plugin",
         });
 
         const t = {
-            name: "Superset: Skill Install (bizshuk/cc-plugin)",
+            name: "Superset: Install Skills (bizshuk/cc-plugin)",
             show: vi.fn(),
             sendText: vi.fn(),
             dispose: vi.fn(),
@@ -363,24 +365,81 @@ describe("terminalSpawner bridge", () => {
         const pickItems = showQuickPick.mock.calls[0][0] as Array<{
             label: string;
             description?: string;
+            detail?: string;
             repo: string;
         }>;
-        expect(pickItems.map((item) => item.repo)).toEqual([
-            "bizshuk/cc-plugin",
-            "anthropics/claude-plugins-official",
-            "anthropics/skills",
+        expect(pickItems).toEqual([
+            {
+                label: "bizshuk/cc-plugin",
+                description:
+                    "預設 · AI 編碼代理的全域設定、Skills、Agents 與記憶工具",
+                detail: "GitHub · bizshuk/cc-plugin",
+                repo: "bizshuk/cc-plugin",
+            },
+            {
+                label: "anthropics/claude-plugins-official",
+                description:
+                    "Anthropic 維護的 Claude Code 高品質 Plugin 目錄",
+                detail: "GitHub · anthropics/claude-plugins-official",
+                repo: "anthropics/claude-plugins-official",
+            },
+            {
+                label: "anthropics/skills",
+                description:
+                    "Anthropic 的 Agent Skills 範例、規格與文件處理技能",
+                detail: "GitHub · anthropics/skills",
+                repo: "anthropics/skills",
+            },
+            {
+                label: "awesome-claude-code-subagents",
+                description:
+                    "涵蓋多種開發任務的 Claude Code 專用 Subagents 合集",
+                detail:
+                    "GitHub · VoltAgent/awesome-claude-code-subagents",
+                repo: "VoltAgent/awesome-claude-code-subagents",
+            },
+            {
+                label: "superpowers",
+                description:
+                    "以 Skills 驅動規劃、TDD、除錯與協作的開發方法",
+                detail: "GitHub · obra/superpowers",
+                repo: "obra/superpowers",
+            },
+            {
+                label: "understand-anything",
+                description:
+                    "把程式碼與文件轉成可搜尋、可提問的互動知識圖譜",
+                detail: "GitHub · Egonex-AI/Understand-Anything",
+                repo: "Egonex-AI/Understand-Anything",
+            },
+            {
+                label: "last30days",
+                description:
+                    "彙整近 30 天社群與網路討論，產出有來源的研究摘要",
+                detail: "GitHub · mvanhorn/last30days-skill",
+                repo: "mvanhorn/last30days-skill",
+            },
+            {
+                label: "ui-ux-pro-max-skill",
+                description:
+                    "為多平台 UI/UX 產生設計系統、樣式與實作建議",
+                detail:
+                    "GitHub · nextlevelbuilder/ui-ux-pro-max-skill",
+                repo: "nextlevelbuilder/ui-ux-pro-max-skill",
+            },
         ]);
-        expect(pickItems[0]).toMatchObject({
-            label: "bizshuk/cc-plugin",
-            description: "預設",
-        });
         expect(showQuickPick.mock.calls[0][1]).toMatchObject({
-            title: "Superset: Skill Install",
+            title: "Superset: Install Skills",
             placeHolder: "選擇要安裝的 skill repository",
+            matchOnDescription: true,
+            matchOnDetail: true,
         });
         expect(vscode.window.showInputBox).not.toHaveBeenCalled();
 
         expect(spawn).toHaveBeenCalledTimes(1);
+        expect(spawn.mock.calls[0][0]).toMatch(
+            /^Superset: Install Skills \(bizshuk\/cc-plugin\) \(\d{2}:\d{2}:\d{2}\)$/
+        );
         expect((t as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
         const sent = (t as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
@@ -394,7 +453,7 @@ describe("terminalSpawner bridge", () => {
         });
 
         const t = {
-            name: "Superset: Skill Install (anthropics/skills)",
+            name: "Superset: Install Skills (anthropics/skills)",
             show: vi.fn(),
             sendText: vi.fn(),
             dispose: vi.fn(),
@@ -416,7 +475,7 @@ describe("terminalSpawner bridge", () => {
 
     it("skillInstall uses a programmatic repo argument without showing the dropdown", async () => {
         const t = {
-            name: "Superset: Skill Install (bizshuk/custom-skill)",
+            name: "Superset: Install Skills (bizshuk/custom-skill)",
             show: vi.fn(),
             sendText: vi.fn(),
             dispose: vi.fn(),

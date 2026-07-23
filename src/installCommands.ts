@@ -62,16 +62,59 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
 const SKILL_REPOSITORIES: readonly SkillRepositoryPickItem[] = [
     {
         label: "bizshuk/cc-plugin",
-        description: "預設",
+        description:
+            "預設 · AI 編碼代理的全域設定、Skills、Agents 與記憶工具",
+        detail: "GitHub · bizshuk/cc-plugin",
         repo: "bizshuk/cc-plugin",
     },
     {
         label: "anthropics/claude-plugins-official",
+        description:
+            "Anthropic 維護的 Claude Code 高品質 Plugin 目錄",
+        detail: "GitHub · anthropics/claude-plugins-official",
         repo: "anthropics/claude-plugins-official",
     },
     {
         label: "anthropics/skills",
+        description:
+            "Anthropic 的 Agent Skills 範例、規格與文件處理技能",
+        detail: "GitHub · anthropics/skills",
         repo: "anthropics/skills",
+    },
+    {
+        label: "awesome-claude-code-subagents",
+        description:
+            "涵蓋多種開發任務的 Claude Code 專用 Subagents 合集",
+        detail: "GitHub · VoltAgent/awesome-claude-code-subagents",
+        repo: "VoltAgent/awesome-claude-code-subagents",
+    },
+    {
+        label: "superpowers",
+        description:
+            "以 Skills 驅動規劃、TDD、除錯與協作的開發方法",
+        detail: "GitHub · obra/superpowers",
+        repo: "obra/superpowers",
+    },
+    {
+        label: "understand-anything",
+        description:
+            "把程式碼與文件轉成可搜尋、可提問的互動知識圖譜",
+        detail: "GitHub · Egonex-AI/Understand-Anything",
+        repo: "Egonex-AI/Understand-Anything",
+    },
+    {
+        label: "last30days",
+        description:
+            "彙整近 30 天社群與網路討論，產出有來源的研究摘要",
+        detail: "GitHub · mvanhorn/last30days-skill",
+        repo: "mvanhorn/last30days-skill",
+    },
+    {
+        label: "ui-ux-pro-max-skill",
+        description:
+            "為多平台 UI/UX 產生設計系統、樣式與實作建議",
+        detail: "GitHub · nextlevelbuilder/ui-ux-pro-max-skill",
+        repo: "nextlevelbuilder/ui-ux-pro-max-skill",
     },
 ] as const;
 
@@ -114,9 +157,9 @@ async function installDefaultTools(ctx: PluginContext): Promise<void> {
 /**
  * Install a Claude Code skill from a GitHub repo via the `skills`
  * CLI. Interactive invocation shows a QuickPick whose first (default)
- * item is the user's cc-plugin fork, followed by the two Anthropic
- * repositories. A trusted programmatic caller can skip the picker via
- * the command's `args.repo` parameter (e.g. a future TreeView menu).
+ * item is the user's cc-plugin fork, followed by the curated repository
+ * catalog. A trusted programmatic caller can skip the picker via the
+ * command's `args.repo` parameter (e.g. a future TreeView menu).
  */
 async function skillInstall(
     ctx: PluginContext,
@@ -127,9 +170,10 @@ async function skillInstall(
         const picked = await vscode.window.showQuickPick(
             SKILL_REPOSITORIES,
             {
-                title: "Superset: Skill Install",
+                title: "Superset: Install Skills",
                 placeHolder: "選擇要安裝的 skill repository",
                 matchOnDescription: true,
+                matchOnDetail: true,
             }
         );
         if (!picked) {
@@ -142,7 +186,7 @@ async function skillInstall(
     }
 
     await spawnRunTerminal(
-        `Superset: Skill Install (${repo})`,
+        `Superset: Install Skills (${repo})`,
         `skills add ${repo}`,
         { closeOnSuccess: true }
     );

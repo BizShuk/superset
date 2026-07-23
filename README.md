@@ -373,7 +373,18 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 - `port` — `github.com/bizshuk/port@master`
 - `sessiond` — `github.com/bizshuk/sessiond@master`
 
-若只需要安裝 skill repository，使用 `Superset: Skill Install`，它會以 Quick Pick 選擇 repository 後執行 `skills add <repository>`。
+若只需要安裝 skill repository，使用 `Superset: Install Skills`，它會以 Quick Pick 選擇 repository 後執行 `skills add <repository>`。每個選項同時顯示用途與 GitHub repository：
+
+| 顯示名稱 | 用途 | GitHub repository |
+| --- | --- | --- |
+| `bizshuk/cc-plugin`（預設） | AI 編碼代理的全域設定、Skills、Agents 與記憶工具 | `bizshuk/cc-plugin` |
+| `anthropics/claude-plugins-official` | Anthropic 維護的 Claude Code 高品質 Plugin 目錄 | `anthropics/claude-plugins-official` |
+| `anthropics/skills` | Anthropic 的 Agent Skills 範例、規格與文件處理技能 | `anthropics/skills` |
+| `awesome-claude-code-subagents` | 涵蓋多種開發任務的 Claude Code 專用 Subagents 合集 | `VoltAgent/awesome-claude-code-subagents` |
+| `superpowers` | 以 Skills 驅動規劃、TDD、除錯與協作的開發方法 | `obra/superpowers` |
+| `understand-anything` | 把程式碼與文件轉成可搜尋、可提問的互動知識圖譜 | `Egonex-AI/Understand-Anything` |
+| `last30days` | 彙整近 30 天社群與網路討論，產出有來源的研究摘要 | `mvanhorn/last30days-skill` |
+| `ui-ux-pro-max-skill` | 為多平台 UI/UX 產生設計系統、樣式與實作建議 | `nextlevelbuilder/ui-ux-pro-max-skill` |
 
 ---
 

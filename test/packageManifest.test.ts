@@ -71,6 +71,15 @@ describe("Projects Setup manifest contribution", () => {
     });
 });
 
+describe("Install Skills manifest contribution", () => {
+    it("uses the action-first plural command title", () => {
+        expect(manifest.contributes.commands).toContainEqual({
+            command: "superset.skillInstall",
+            title: "Superset: Install Skills",
+            icon: "$(add)",
+        });
+    });
+});
 
 describe("SCM Graph manifest contributions", () => {
     it("declares the proposed Source Control history-item menu API", () => {
