@@ -12,16 +12,17 @@ fi
 
 PROJECTS_ROOT="$1"
 REPOSITORIES=(
-    "bizshuk/env_setup"
-    "bizshuk/cc-plugin"
     "bizshuk/ai"
-    "bizshuk/game"
+    "bizshuk/cc-plugin"
     "bizshuk/data"
+    "bizshuk/env_setup"
+    "bizshuk/game"
     "bizshuk/iphone"
     "bizshuk/platform"
     "bizshuk/playground"
     "bizshuk/product"
     "bizshuk/research"
+    "bizshuk/social"
     "bizshuk/tools"
     "bizshuk/web"
 )

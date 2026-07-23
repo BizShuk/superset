@@ -394,16 +394,17 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ```tree
 ~/projects/
-├── env_setup/
-├── cc-plugin/
 ├── ai/
-├── game/
+├── cc-plugin/
 ├── data/
+├── env_setup/
+├── game/
 ├── iphone/
 ├── platform/
 ├── playground/
 ├── product/
 ├── research/
+├── social/
 ├── tools/
 └── web/
 ```
@@ -477,7 +478,7 @@ code --install-extension superset-*.vsix
 | `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                  |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link |
 | `Superset: Install Default Tools`               | —                   | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond` CLI                      |
-| `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 12 個 BizShuk repositories（含 submodules）   |
+| `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）   |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 
