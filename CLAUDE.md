@@ -61,7 +61,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - `treePreview`、`todoPreview` 是 Markdown contributor，不是 TreeView `register()` feature；hook 順序由 `src/extension.ts` 決定。
 - TODO link parsing 與 copy formatting 的唯一 source of truth 是 `src/todoEngine/linkUtils.ts`，`todo` 與 `projectsTodo` 不另建副本。
 - `TerminalRegistry` 是終端機狀態來源；既有 VS Code terminal 使用 Shell Integration fallback，PTY-backed terminal 透過 `node-pty` 取得完整 TUI data path。`markUnseen` 必須保持 idempotent。
-- `@homebridge/node-pty-prebuilt-multiarch` 是 runtime dependency；不可在 `.vscodeignore` 排除 production `node_modules`。
+- `node-pty` 是 runtime PTY binding（upstream `^1.1.0`）；不可換回 `@homebridge/node-pty-prebuilt-multiarch` fork 或在其他 fork 之間切換。不可在 `.vscodeignore` 排除 production `node_modules`。
 - `src/projects/` 只負責專案清單；`src/projectsTodo/` 才負責 TODO 內容。`TODO` 只讀寫當前 project / workspace root，Workspace TODO 只遞迴當前 workspace，Projects TODO 只遞迴 `~/projects`；三者的掃描邊界不混用。
 - Projects TODO 只認大小寫完全相符的 `README.todo`；`~/projects` root 為 depth 0 且不顯示，固定遞迴 depth 1–5，命中後繼續掃描子孫，每個命中資料夾以 `path.basename` 建立 group。
 - Workspace TODO 只認大小寫完全相符的 `README.todo`；root 為 depth 0，預設最大 depth 5（設定 `superset.projectsTodo.maxDepth`，範圍 1–10），命中後仍繼續掃描子孫。
@@ -120,4 +120,4 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 
 - [VS Code Terminal Shell Integration](https://code.visualstudio.com/docs/terminal/shell-integration)
 - [VS Code Pseudoterminal API](https://code.visualstudio.com/api/references/vscode-api#Pseudoterminal)
-- [node-pty prebuilt fork](https://github.com/homebridge/node-pty-prebuilt-multiarch)
+- [node-pty upstream](https://github.com/microsoft/node-pty)

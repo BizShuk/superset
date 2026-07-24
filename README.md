@@ -453,6 +453,9 @@ npm run build         # 型別檢查 + 編譯 + 打包 VSIX
 code --install-extension superset-*.vsix
 ```
 
+> [!WARNING]
+> Linux 仍 ship prebuild 失敗 — `node-pty@1.1.0` 對 Linux 採 `node-gyp` 即時建置，`install` 需要 `build-essential` + `python3`；後續若需 Linux 路徑優化另開 plan。
+
 ---
 
 ## 指令速查 (Commands)

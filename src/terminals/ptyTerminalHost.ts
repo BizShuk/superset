@@ -2,7 +2,7 @@ import type { TerminalHandle } from "./types";
 import type { TerminalRegistry } from "./terminalRegistry";
 
 /**
- * Minimal PTY-process contract. Mirrors the surface of `@homebridge/node-pty-prebuilt-multiarch`
+ * Minimal PTY-process contract. Mirrors the surface of `node-pty`'s `IPty`
  * that we actually use, so tests can fake it without pulling in the
  * native module.
  */
@@ -40,7 +40,7 @@ export interface PtyTerminalHostDeps {
     getActiveTerminal: () => TerminalHandle | undefined;
     /**
      * PTY factory. Injected so tests can fake it; production wires this
-     * to `@homebridge/node-pty-prebuilt-multiarch`'s `spawn`.
+     * to upstream `node-pty`'s `spawn`.
      */
     spawn: PtySpawner;
     /** Shell executable to run inside the PTY (e.g. `/bin/zsh`). */
@@ -84,6 +84,17 @@ export class PtyTerminalHost {
     /** Track which terminals we have already logged markUnseen for, so the
      *  diagnostic channel is not flooded during high-rate TUI redraws. */
     private unseenLogged = new WeakSet<import("./types").TerminalHandle>();
+    /**
+     * Coalescing buffer: chunks from the native PTY are joined and flushed
+     * at the next `setImmediate` boundary so multiple chunks per event-loop
+     * turn become a single `vscode.Pseudoterminal.onDidWrite` emit. The
+     * 4ms-typical latency is humanly imperceptible and materially reduces
+     * IPC overhead under high-rate output (e.g. `cat large-file`, `find /`).
+     * `detectActivity` still runs per-chunk upstream so markUnseen timing
+     * is unaffected.
+     */
+    private writeBuffer = "";
+    private pendingFlush: NodeJS.Immediate | null = null;
 
     constructor(private readonly deps: PtyTerminalHostDeps) {}
 
@@ -109,12 +120,13 @@ export class PtyTerminalHost {
         });
 
         this.proc.onData((data) => {
-            this.fireWrite(data);
+            this.bufferWrite(data);
             this.detectActivity(data);
         });
 
         this.proc.onExit((code) => {
             log?.(`[pty] exit code=${code}`);
+            this.flushWriteBuffer();
             this.fireClose(code);
         });
 
@@ -145,6 +157,7 @@ export class PtyTerminalHost {
         }
         this.opened = false;
         this.deps.log?.(`[pty] close`);
+        this.flushWriteBuffer();
         try {
             this.proc?.kill();
         } catch (err) {
@@ -202,13 +215,58 @@ export class PtyTerminalHost {
 
     private fireWrite(data: string): void {
         for (const cb of this.writeListeners) {
-            cb(data);
+            try {
+                cb(data);
+            } catch (err) {
+                this.deps.log?.(`[pty] write listener ERROR: ${err}`);
+            }
+        }
+    }
+
+    /**
+     * Coalesce a chunk into the write buffer and schedule a flush on the
+     * next event-loop turn. Multiple chunks arriving in the same tick
+     * collapse into a single `fireWrite` call.
+     */
+    private bufferWrite(data: string): void {
+        this.writeBuffer += data;
+        if (this.pendingFlush !== null) {
+            return;
+        }
+        this.pendingFlush = setImmediate(() => {
+            this.pendingFlush = null;
+            const out = this.writeBuffer;
+            this.writeBuffer = "";
+            if (out.length > 0) {
+                this.fireWrite(out);
+            }
+        });
+    }
+
+    /**
+     * Flush any pending coalesced data immediately. Called from `close()`
+     * and from the `proc.onExit` path so the consumer never loses the
+     * tail bytes that would otherwise be delivered after the proc died.
+     */
+    private flushWriteBuffer(): void {
+        if (this.pendingFlush !== null) {
+            clearImmediate(this.pendingFlush);
+            this.pendingFlush = null;
+        }
+        if (this.writeBuffer.length > 0) {
+            const out = this.writeBuffer;
+            this.writeBuffer = "";
+            this.fireWrite(out);
         }
     }
 
     private fireClose(code: number | void = undefined): void {
         for (const cb of this.closeListeners) {
-            cb(code);
+            try {
+                cb(code);
+            } catch (err) {
+                this.deps.log?.(`[pty] close listener ERROR: ${err}`);
+            }
         }
     }
 

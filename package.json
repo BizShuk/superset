@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.17.0",
+    "version": "0.18.0",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -1115,7 +1115,7 @@
         "vitest": "^4.1.9"
     },
     "dependencies": {
-        "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
-        "multicast-dns": "^7.2.5"
+        "multicast-dns": "^7.2.5",
+        "node-pty": "^1.1.0"
     }
 }

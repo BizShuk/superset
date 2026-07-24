@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { PtyTerminalHost } from "../src/terminals/ptyTerminalHost";
 import type { PtyProcess, PtySpawner } from "../src/terminals/ptyTerminalHost";
 import { TerminalRegistry } from "../src/terminals/terminalRegistry";
@@ -120,6 +120,17 @@ function setup(opts: SetupOptions = {}): SetupResult {
 }
 
 describe("PtyTerminalHost", () => {
+    // The host coalesces `proc.onData` chunks on a `setImmediate` boundary,
+    // so tests that inspect listener output must advance the timer to
+    // flush the buffer. `useFakeTimers` is enabled at the suite level so
+    // any newly added `fireData` test inherits the same gate.
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
     it("does not spawn until open() is called", () => {
         const { spawner } = setup();
         expect(spawner).not.toHaveBeenCalled();
@@ -151,6 +162,7 @@ describe("PtyTerminalHost", () => {
         host_instance.open({ columns: 80, rows: 24 });
 
         fake.fireData("hello\n");
+        vi.runAllTimers();
 
         expect(writeSpy).toHaveBeenCalledWith("hello\n");
     });

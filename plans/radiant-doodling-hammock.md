@@ -103,8 +103,14 @@ fireWrite(data):
         catch err: log("[pty] write listener ERROR: ${err}")
 ```
 
-理由：對齊 `PtyTerminalFactory.dataListeners`（`ptyTerminalFactory.ts:118-127`）已有
-的 try/catch 模式。listener throw 不應中斷 fan-out，也不應影響 backpressure 計數。
+理由：`fireWrite` listener 迴圈本身就需要 try/catch 隔離（v0.18.0 起
+`PtyTerminalHost.fireWrite` 已預設包 try/catch），listener throw 不應中斷
+fan-out，也不應影響 backpressure 計數。本段為對齊既有實作。
+
+> ⚠️ Stale (v0.18.0) — 原理由引用 `PtyTerminalFactory.dataListeners`
+> （`ptyTerminalFactory.ts:118-127`）為對齊對象；該 Set 與 fan-out
+> 已於 v0.18.0 隨 mermaid detection 移除整段刪除。此段仍有效，但
+> 對齊對象改成 `fireWrite` 本身。
 
 ## 改動檔案
 

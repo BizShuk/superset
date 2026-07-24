@@ -101,12 +101,19 @@ describe("PtyProcess interface contract (via PtyTerminalHost)", () => {
         });
         host.open({ columns: 80, rows: 24 });
 
-        proc.emitData("hello");
-        // onWrite listener fires synchronously on the emit.
-        const writes: string[] = [];
-        host.onWrite((d) => writes.push(d));
-        proc.emitData("world");
-        expect(writes).toEqual(["world"]);
+        // Output is coalesced on a setImmediate boundary; tests using
+        // fake timers explicitly drive the flush via runAllTimers().
+        vi.useFakeTimers();
+        try {
+            proc.emitData("hello");
+            const writes: string[] = [];
+            host.onWrite((d) => writes.push(d));
+            proc.emitData("world");
+            vi.runAllTimers();
+            expect(writes).toEqual(["helloworld"]);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it("handleInput forwards typed input to the process", () => {
