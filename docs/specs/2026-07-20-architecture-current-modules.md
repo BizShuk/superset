@@ -49,7 +49,7 @@ See also:
 
 `PtyTerminalHost` resolves its `TerminalHandle` lazily through a closure because the Pseudoterminal host must exist before `vscode.window.createTerminal()` returns the terminal object. `TerminalHandle` intentionally exposes only `name`, `show`, and `dispose`; this keeps the core contract independent of broader or proposed VS Code APIs. Because modern `Terminal.name` is getter-only, highlighting can fall back to the panel and status bar when name mutation is unavailable.
 
-Mermaid buffering, link detection, and preview live in `src/mermaid/`, but terminals still wire them because Mermaid detection operates on terminal output rather than as an independent TreeView plugin.
+Only the Mermaid preview command lives in `src/mermaid/`; buffering and terminal-link detection were removed, so terminals no longer wire any Mermaid data path.
 
 See also:
 

@@ -40,7 +40,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | --- | --- | --- |
 | `src/plugin/` | Plugin lifecycle、context、TreeView registry | `PluginManager` |
 | `src/terminals/` | 終端機面板、高亮、群組、PTY 自動替換 | `terminalsPlugin` |
-| `src/mermaid/` | 終端機 Mermaid link 與預覽 | 由 terminals 接線 |
+| `src/mermaid/` | Mermaid preview command（detection 已移除） | `registerMermaidPreviewCommand` |
 | `src/mdns/` | mDNS 服務發現與細節 | `mdnsPlugin` |
 | `src/topology/` | 網路拓撲掃描與 tree 轉換 | `topologyPlugin` |
 | `src/sessions/` | Agent session 清單與 summary markdown(讀 `sessiond` JSONL) | `sessionsPlugin` |

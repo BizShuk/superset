@@ -12,10 +12,7 @@ import {
     PtyTerminalFactory,
     createNodePtySpawner,
 } from "./ptyTerminalFactory";
-import {
-    createShellExecutionSource,
-    createShellExecutionChunkFanOut,
-} from "./shellExecutionSource";
+import { createShellExecutionSource } from "./shellExecutionSource";
 import {
     registerTerminalCommands,
     registerGroupCommands,
@@ -24,8 +21,6 @@ import {
     installAutoPtyReplacer,
     installEditorFocusBridge,
 } from "./lifecycle";
-import { MermaidLineBuffer } from "../mermaid/mermaidLineBuffer";
-import { MermaidTerminalLinkProvider } from "../mermaid/mermaidLinkProvider";
 import { registerMermaidPreviewCommand } from "../mermaid/mermaidPreviewCommand";
 import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
@@ -163,55 +158,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // silently no-op in 0.8.10/0.8.11.
     setTerminalSpawner((name, cwd) => ptyFactory.spawn(name, cwd));
 
-    // ── Mermaid preview (terminal keyword → clickable preview link) ──
+    // ── Mermaid preview command ───────────────────────────────
     //
-    // The buffer receives raw data from two channels so detection works
-    // for both flavours of terminal — the PTY-backed ones this factory
-    // spawns (TUI users) and built-in VSCode shell-integration terminals
-    // (`outputWatcher.ts` covers those for mark-unseen).
-    const mermaidBuffer = new MermaidLineBuffer();
-    const offPtyData = ptyFactory.onData((terminal, data) => {
-        // TEMP DIAGNOSTIC: capture any PTY chunk containing "mermaid" so we
-        // can see claude's actual raw byte format (ANSI, box-drawing,
-        // alternate-screen redraw) and decide how to relax the trigger.
-        // Remove once detection works on claude's real output.
-        if (data.toLowerCase().includes("mermaid")) {
-            log(
-                `[mermaid-diag] terminal="${terminal.name}" ` +
-                    `len=${data.length} ` +
-                    `json=${JSON.stringify(data.slice(0, 400))}`
-            );
-        }
-        mermaidBuffer.append(terminal, data);
-    });
-    const shellFanOut = createShellExecutionChunkFanOut(log);
-    const offShellData = shellFanOut.subscribe((terminal, chunk) => {
-        mermaidBuffer.append(terminal, chunk);
-    });
-    // Drop a terminal's lines the moment it closes — we don't want
-    // stale "mermaid" links for terminals the user no longer sees.
-    const offCloseBuffer = registry.onDidChange((change) => {
-        if (change.type === "removed") {
-            mermaidBuffer.clear(change.terminal);
-        }
-    });
-    const linkProvider = new MermaidTerminalLinkProvider({
-        buffer: mermaidBuffer,
-        onClick: ({ body }) => {
-            // Hand off to the registered preview command so users get
-            // a single source of truth for how the body gets rendered.
-            void vscode.commands.executeCommand(
-                "superset.mermaidPreview",
-                body
-            );
-        },
-        log,
-    });
-    const offLinkProvider = vscode.window.registerTerminalLinkProvider(
-        linkProvider
-    );
+    // Detection (buffer + terminal-link provider) was removed; the
+    // command stays so external callers — other extensions, command
+    // palette, or future re-introduction of detection — can still
+    // invoke `superset.mermaidPreview` with a body.
     const offMermaidPreviewCmd = registerMermaidPreviewCommand({ log });
-    log("mermaid preview wired");
+    log("mermaid preview command registered");
 
     // ── Lifecycle subscriptions ──────────────────────────
 
@@ -293,15 +247,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         activeChangeSub,
         editorFocusSub,
         visibilitySub,
-        // Mermaid preview lifecycle: clear buffer when terminals close
-        // so the next activation doesn't inherit stale lines; tear down
-        // the link provider + command + fan-out subscriptions.
-        { dispose: offPtyData },
-        { dispose: offShellData },
-        { dispose: offCloseBuffer },
-        offLinkProvider,
         offMermaidPreviewCmd,
-        shellFanOut,
         ...commandSubs,
         // `treeViewEntry` is `undefined` when the registry singleton
         // hasn't been initialised (test environment, late activation
