@@ -76,7 +76,7 @@ export function fixAdjacentHeadings(lines: string[], at: number): void {
 }
 
 /** Find the original section name of a line by scanning backwards to the nearest heading. */
-export function findSectionNameOfLine(
+function findSectionNameOfLine(
     lines: string[],
     lineIndex: number
 ): string {

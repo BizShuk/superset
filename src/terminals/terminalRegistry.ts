@@ -80,20 +80,6 @@ export class TerminalRegistry {
         return result;
     }
 
-    getById(id: TerminalId): TerminalEntry | undefined {
-        for (const e of this.entries.values()) {
-            if (e.id === id) {
-                return { id: e.id, terminal: e.terminal, hasUnseenOutput: e.hasUnseenOutput };
-            }
-        }
-        return undefined;
-    }
-
-    getEntryByTerminal(terminal: TerminalHandle): TerminalEntry | undefined {
-        const e = this.entries.get(terminal);
-        return e ? { id: e.id, terminal: e.terminal, hasUnseenOutput: e.hasUnseenOutput } : undefined;
-    }
-
     onDidChange(listener: RegistryListener): () => void {
         this.listeners.add(listener);
         return () => {

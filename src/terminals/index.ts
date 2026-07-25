@@ -12,7 +12,14 @@ import {
     PtyTerminalFactory,
     createNodePtySpawner,
 } from "./ptyTerminalFactory";
-import { createShellExecutionSource } from "./shellExecutionSource";
+import {
+    createShellExecutionSource,
+    createVscodeLifecycleSubscribers,
+} from "./shellExecutionSource";
+import { ActivityCoordinator } from "./activitySource";
+import { createShellIntegrationActivitySource } from "./shellIntegrationActivitySource";
+import { createProcessActivitySource } from "./processActivitySource";
+import { runPsSnapshot, resolveTerminalPid } from "./processSnapshot";
 import {
     registerTerminalCommands,
     registerGroupCommands,
@@ -126,17 +133,62 @@ export function register(ctx: FeatureContext): FeatureHandle {
     });
     presenter.start();
 
-    // OutputWatcher: Shell Integration events for pre-existing terminals.
-    const watcher = new OutputWatcher({
+    // ── Activity detection ───────────────────────────────
+    //
+    // Two byte-free sources feed `markUnseen`:
+    //   A `processActivitySource`  — polls the process tree (covers TUIs
+    //     like `claude` / `vim`, which shell integration cannot see into)
+    //   B `shellIntegrationActivitySource` — start/end execution edges,
+    //     without ever calling `execution.read()`
+    //
+    // Neither moves terminal output through the extension host, so neither
+    // can starve the event loop the way the byte-reading path does.
+    const lifecycle = createVscodeLifecycleSubscribers();
+    const activity = new ActivityCoordinator({
         registry,
         getActiveTerminal: () => tracker.watched,
         isRecentlyActive: (terminal) =>
             tracker.isRecentlyActive(terminal as vscode.Terminal),
         log,
-        onShellExecution: createShellExecutionSource(log),
+        sources: [
+            createShellIntegrationActivitySource({
+                onDidStart: lifecycle.onDidStart,
+                onDidEnd: lifecycle.onDidEnd,
+                log,
+            }),
+            createProcessActivitySource({
+                runPs: runPsSnapshot,
+                getTerminals: () => registry.getAll().map((e) => e.terminal),
+                resolvePid: resolveTerminalPid,
+                log,
+            }),
+        ],
     });
-    watcher.start();
-    log("OutputWatcher started");
+    activity.start();
+    log("ActivityCoordinator started (sources: shell-integration, process-tree)");
+
+    // Legacy byte-reading watcher. Off by default: it drains
+    // `execution.read()` for every execution, which is the path that made
+    // the diagnostic channel a load-bearing performance problem (one
+    // `JSON.stringify` + `appendLine` per chunk). Kept behind a setting so
+    // the old behaviour is recoverable while A/B are being validated.
+    const legacyWatcherEnabled = vscode.workspace
+        .getConfiguration("superset.terminals")
+        .get<boolean>("legacyOutputWatcher", false);
+    const watcher = legacyWatcherEnabled
+        ? new OutputWatcher({
+              registry,
+              getActiveTerminal: () => tracker.watched,
+              isRecentlyActive: (terminal) =>
+                  tracker.isRecentlyActive(terminal as vscode.Terminal),
+              log,
+              onShellExecution: createShellExecutionSource(log),
+          })
+        : undefined;
+    watcher?.start();
+    log(
+        `OutputWatcher ${legacyWatcherEnabled ? "started (legacy)" : "disabled"}`
+    );
 
     // PTY-backed terminal factory (100% TUI interception).
     const ptyFactory = new PtyTerminalFactory({
@@ -178,6 +230,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     const closeSub = vscode.window.onDidCloseTerminal((terminal) => {
         registry.remove(terminal);
+        // Shed the factory's reference too, otherwise every terminal ever
+        // spawned stays alive for the life of the window.
+        ptyFactory.forget(terminal);
     });
 
     const activeChangeSub = vscode.window.onDidChangeActiveTerminal((terminal) => {
@@ -241,7 +296,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
         { dispose: () => treeProvider.stop() },
         { dispose: () => presenter.stop() },
         ctx.shared.statusBar,
-        { dispose: () => watcher.stop() },
+        { dispose: () => activity.stop() },
+        { dispose: () => watcher?.stop() },
+        { dispose: () => ptyFactory.dispose() },
         openSub,
         closeSub,
         activeChangeSub,

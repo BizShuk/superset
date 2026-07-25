@@ -10,8 +10,74 @@ export interface PtyProcess {
     onData(cb: (data: string) => void): void;
     onExit(cb: (code: number) => void): void;
     write(data: string): void;
-    kill(): void;
+    /**
+     * `signal` is optional so existing fakes stay valid. Production passes an
+     * explicit signal to escalate a shell that ignores the default `SIGHUP`.
+     */
+    kill(signal?: string): void;
     resize?(cols: number, rows: number): void;
+    /**
+     * Stop / restart the underlying socket. Optional because the test fakes
+     * predate them; when absent, backpressure bookkeeping still runs but has
+     * nothing to act on.
+     */
+    pause?(): void;
+    resume?(): void;
+}
+
+/** Watermarks, in bytes. See {@link PtyTerminalHostDeps.getConfig}. */
+export const DEFAULT_HIGH_WATER_MARK = 4 * 1024 * 1024;
+export const DEFAULT_LOW_WATER_MARK = 1 * 1024 * 1024;
+export const MIN_WATER_MARK = 1024 * 1024;
+export const MAX_WATER_MARK = 64 * 1024 * 1024;
+
+/**
+ * Upper bound on how many bytes one flush hands to `onDidWrite`.
+ *
+ * `vscode.Pseudoterminal.onDidWrite` serialises its payload across the
+ * extension-host RPC boundary with no acknowledgement from the renderer, so a
+ * single 500 MiB emit would block the host for as long as that serialisation
+ * takes. Capping the per-tick payload turns one unbounded stall into a series
+ * of bounded ones, and is what lets `pendingBytes` fall back below the low
+ * watermark gradually rather than all at once.
+ *
+ * 1 MiB is far above any realistic single PTY read (64 KiB), so ordinary
+ * output still coalesces into exactly one emit per tick.
+ */
+export const MAX_FLUSH_BYTES = 1024 * 1024;
+
+/** Grace period between the polite kill and `SIGKILL`. */
+export const KILL_ESCALATION_MS = 2000;
+
+export interface WaterMarkConfig {
+    readonly highWaterMark: number;
+    readonly lowWaterMark: number;
+}
+
+/**
+ * Clamp a watermark pair into a usable range.
+ *
+ * Exported for the factory, which reads raw numbers out of VS Code settings
+ * where a user can type anything. An inverted or degenerate pair would either
+ * pause and never resume, or thrash pause/resume on every chunk.
+ */
+export function normalizeWaterMarks(
+    config: Partial<WaterMarkConfig> | undefined
+): WaterMarkConfig {
+    const clamp = (value: number | undefined, fallback: number): number => {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+            return fallback;
+        }
+        return Math.min(MAX_WATER_MARK, Math.max(MIN_WATER_MARK, value));
+    };
+    const high = clamp(config?.highWaterMark, DEFAULT_HIGH_WATER_MARK);
+    let low = clamp(config?.lowWaterMark, DEFAULT_LOW_WATER_MARK);
+    if (low >= high) {
+        // A low mark at or above the high mark can never be reached from
+        // above, so the pty would stay paused forever. Fall back to half.
+        low = Math.max(MIN_WATER_MARK, Math.floor(high / 2));
+    }
+    return { highWaterMark: high, lowWaterMark: low };
 }
 
 export interface PtySpawnOptions {
@@ -58,6 +124,12 @@ export interface PtyTerminalHostDeps {
      * shell prompt has time to settle before we type.
      */
     initialCommand?: string;
+    /**
+     * Watermark source. Read once per `open()` so a settings change applies to
+     * newly opened terminals without disturbing running ones. Absent in tests,
+     * which fall back to the defaults.
+     */
+    getConfig?: () => Partial<WaterMarkConfig>;
 }
 
 /**
@@ -95,6 +167,25 @@ export class PtyTerminalHost {
      */
     private writeBuffer = "";
     private pendingFlush: NodeJS.Immediate | null = null;
+    /**
+     * Bytes received from the PTY that we have not yet handed to
+     * `onDidWrite` — i.e. the depth of the queue this class owns. This is the
+     * only queue in the pipeline we can actually measure: everything past
+     * `fireWrite` lives inside VS Code, and `Pseudoterminal.onDidWrite` is
+     * fire-and-forget with no acknowledgement from the renderer.
+     */
+    private pendingBytes = 0;
+    private paused = false;
+    private waterMarks: WaterMarkConfig = normalizeWaterMarks(undefined);
+    /**
+     * Set once the process is gone (exited or killed). Distinct from
+     * `opened === false`, which only means "not currently open" and would let
+     * a stray `open()` silently respawn a shell the user believes is dead.
+     */
+    private disposed = false;
+    /** Guards against `onDidClose` firing twice for one process. */
+    private closeFired = false;
+    private killTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(private readonly deps: PtyTerminalHostDeps) {}
 
@@ -103,10 +194,11 @@ export class PtyTerminalHost {
      * a real PTY and wires output / input / resize plumbing.
      */
     open(dimensions: { columns: number; rows: number }): void {
-        if (this.opened) {
+        if (this.opened || this.disposed) {
             return;
         }
         this.opened = true;
+        this.waterMarks = normalizeWaterMarks(this.deps.getConfig?.());
         const log = this.deps.log;
         log?.(
             `[pty] open shell="${this.deps.shell}" cwd="${this.deps.cwd}" ` +
@@ -126,7 +218,17 @@ export class PtyTerminalHost {
 
         this.proc.onExit((code) => {
             log?.(`[pty] exit code=${code}`);
+            // Tear down for real. Leaving `proc` set meant every later
+            // `handleInput` wrote into a dead pty and had the error swallowed
+            // by its try/catch — the user typed and nothing happened, with no
+            // indication the terminal was gone.
             this.flushWriteBuffer();
+            this.opened = false;
+            this.disposed = true;
+            this.proc = undefined;
+            this.clearKillTimer();
+            this.pendingBytes = 0;
+            this.paused = false;
             this.fireClose(code);
         });
 
@@ -156,15 +258,52 @@ export class PtyTerminalHost {
             return;
         }
         this.opened = false;
+        this.disposed = true;
         this.deps.log?.(`[pty] close`);
         this.flushWriteBuffer();
+        const proc = this.proc;
+        // Pair any outstanding pause with a resume before killing. A paused
+        // socket cannot drain, so a shell killed while paused can block on its
+        // own write and never reach the signal handler.
+        if (this.paused) {
+            this.paused = false;
+            this.deps.log?.(`[pty] backpressure RESUME (close)`);
+            try {
+                proc?.resume?.();
+            } catch (err) {
+                this.deps.log?.(`[pty] resume error: ${err}`);
+            }
+        }
+        this.pendingBytes = 0;
         try {
-            this.proc?.kill();
+            proc?.kill();
         } catch (err) {
             this.deps.log?.(`[pty] kill error: ${err}`);
         }
+        // Escalate. The default signal is SIGHUP, which a foreground process
+        // can ignore (a wedged `ssh`, a `docker exec`); without escalation
+        // those shells outlive the window and leak their pty fds, and enough
+        // of them eventually make new terminals fail to spawn.
+        this.clearKillTimer();
+        this.killTimer = setTimeout(() => {
+            this.killTimer = null;
+            try {
+                proc?.kill("SIGKILL");
+                this.deps.log?.(`[pty] escalated to SIGKILL`);
+            } catch {
+                // Already reaped — the normal path.
+            }
+        }, KILL_ESCALATION_MS);
+        (this.killTimer as { unref?: () => void }).unref?.();
         this.proc = undefined;
         this.fireClose();
+    }
+
+    private clearKillTimer(): void {
+        if (this.killTimer !== null) {
+            clearTimeout(this.killTimer);
+            this.killTimer = null;
+        }
     }
 
     /** Called by `vscode.Pseudoterminal.handleInput()`. */
@@ -230,17 +369,90 @@ export class PtyTerminalHost {
      */
     private bufferWrite(data: string): void {
         this.writeBuffer += data;
+        this.pendingBytes += Buffer.byteLength(data);
+        this.applyBackpressure();
+        this.scheduleFlush();
+    }
+
+    private scheduleFlush(): void {
         if (this.pendingFlush !== null) {
             return;
         }
         this.pendingFlush = setImmediate(() => {
             this.pendingFlush = null;
-            const out = this.writeBuffer;
-            this.writeBuffer = "";
-            if (out.length > 0) {
-                this.fireWrite(out);
-            }
+            this.drainOnce();
         });
+    }
+
+    /**
+     * Emit at most {@link MAX_FLUSH_BYTES} and reschedule while data remains.
+     *
+     * Splitting on a byte budget means a burst that arrived in one tick is
+     * handed to the renderer over several, which is what allows `pendingBytes`
+     * to cross back below the low watermark and release the pause.
+     */
+    private drainOnce(): void {
+        if (this.writeBuffer.length === 0) {
+            this.releaseBackpressure();
+            return;
+        }
+        let out: string;
+        if (Buffer.byteLength(this.writeBuffer) <= MAX_FLUSH_BYTES) {
+            out = this.writeBuffer;
+            this.writeBuffer = "";
+        } else {
+            // Slice by code units, not bytes: cutting mid-surrogate would
+            // hand the renderer a lone surrogate and corrupt the character.
+            // The byte budget is a target, not a hard cap, and multi-byte
+            // characters only ever make the slice smaller than requested.
+            out = this.writeBuffer.slice(0, MAX_FLUSH_BYTES);
+            const tail = this.writeBuffer.charCodeAt(MAX_FLUSH_BYTES - 1);
+            if (tail >= 0xd800 && tail <= 0xdbff) {
+                out = out.slice(0, -1);
+            }
+            this.writeBuffer = this.writeBuffer.slice(out.length);
+        }
+        this.pendingBytes = Math.max(
+            0,
+            this.pendingBytes - Buffer.byteLength(out)
+        );
+        this.fireWrite(out);
+        this.releaseBackpressure();
+        if (this.writeBuffer.length > 0) {
+            this.scheduleFlush();
+        }
+    }
+
+    /** Stop the pty once our own queue exceeds the high watermark. */
+    private applyBackpressure(): void {
+        if (this.paused || this.pendingBytes < this.waterMarks.highWaterMark) {
+            return;
+        }
+        this.paused = true;
+        this.deps.log?.(
+            `[pty] backpressure PAUSE pendingBytes=${this.pendingBytes}`
+        );
+        try {
+            this.proc?.pause?.();
+        } catch (err) {
+            this.deps.log?.(`[pty] pause error: ${err}`);
+        }
+    }
+
+    /** Restart the pty once the queue has drained below the low watermark. */
+    private releaseBackpressure(): void {
+        if (!this.paused || this.pendingBytes > this.waterMarks.lowWaterMark) {
+            return;
+        }
+        this.paused = false;
+        this.deps.log?.(
+            `[pty] backpressure RESUME pendingBytes=${this.pendingBytes}`
+        );
+        try {
+            this.proc?.resume?.();
+        } catch (err) {
+            this.deps.log?.(`[pty] resume error: ${err}`);
+        }
     }
 
     /**
@@ -256,11 +468,19 @@ export class PtyTerminalHost {
         if (this.writeBuffer.length > 0) {
             const out = this.writeBuffer;
             this.writeBuffer = "";
+            this.pendingBytes = 0;
+            // The byte budget deliberately does not apply here: this is the
+            // final flush before teardown, and withholding the tail would
+            // lose it outright rather than merely delay it.
             this.fireWrite(out);
         }
     }
 
     private fireClose(code: number | void = undefined): void {
+        if (this.closeFired) {
+            return;
+        }
+        this.closeFired = true;
         for (const cb of this.closeListeners) {
             try {
                 cb(code);

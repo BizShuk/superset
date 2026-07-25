@@ -39,13 +39,12 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | 模組 | 職責 | 主要入口 |
 | --- | --- | --- |
 | `src/plugin/` | Plugin lifecycle、context、TreeView registry | `PluginManager` |
-| `src/terminals/` | 終端機面板、高亮、群組、PTY 自動替換 | `terminalsPlugin` |
+| `src/terminals/` | 終端機面板、高亮、群組、activity 偵測、PTY 自動替換 | `terminalsPlugin` |
 | `src/mermaid/` | Mermaid preview command（detection 已移除） | `registerMermaidPreviewCommand` |
 | `src/mdns/` | mDNS 服務發現與細節 | `mdnsPlugin` |
 | `src/topology/` | 網路拓撲掃描與 tree 轉換 | `topologyPlugin` |
 | `src/sessions/` | Agent session 清單與 summary markdown(讀 `sessiond` JSONL) | `sessionsPlugin` |
 | `src/todo/` | 當前 workspace 的 `README.todo` 與 plans | `todoPlugin` |
-| `src/projects/` | 專案資料與 TreeView 元件 | `projectsPlugin`（目前未列入 composition root） |
 | `src/projectsTodo/` | Workspace TODO 與跨專案 TODO sibling views | `projectsTodoPlugin` |
 | `src/git/` | SCM reset、Explorer GitHub URL、Git hooks Install/Link 與 Status Bar | `gitPlugin` |
 | `src/editorLayout/` | Editor group 四模式佈局（水平/垂直 × 均分/放大）與網格形狀 | `editorLayoutPlugin` |
@@ -62,8 +61,16 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - `treePreview`、`todoPreview` 是 Markdown contributor，不是 TreeView `register()` feature；hook 順序由 `src/extension.ts` 決定。
 - TODO link parsing 與 copy formatting 的唯一 source of truth 是 `src/todoEngine/linkUtils.ts`，`todo` 與 `projectsTodo` 不另建副本。
 - `TerminalRegistry` 是終端機狀態來源；既有 VS Code terminal 使用 Shell Integration fallback，PTY-backed terminal 透過 `node-pty` 取得完整 TUI data path。`markUnseen` 必須保持 idempotent。
+- Activity 偵測的預設路徑是`零位元組`的來源 `A`（`processActivitySource`，進程樹輪詢）與 `B`（`shellIntegrationActivitySource`，execution start/end edge）。來源 `B` 不得呼叫 `execution.read()`；讀取位元組的 `OutputWatcher` 只在 `superset.terminals.legacyOutputWatcher` 開啟時建立。抑制政策（不在 registry / 正在 focus / 最近 focus / 已是 unseen）只能存在於 `ActivityCoordinator` 一處，不得再複製回各來源。
+- 診斷日誌只在 `seen → unseen` 真的翻轉時輸出。被抑制的路徑是熱路徑，逐事件記錄會讓 OutputChannel 自己變成 EH 主執行緒的效能問題。
+- 來源 `A` 每個 poll 只跑`一次` `ps`（供所有 terminal 共用），下一 tick 只在當前 tick settle 後排程，且 timer 必須 `unref()`。判定用累積 CPU 時間（`ps -o time=`）的 delta 而非 `%cpu`，並排除 shell 自身的 CPU —— 互動式 shell 光是重繪 prompt 就會累積，計入會讓每個閒置 terminal 看起來都在忙。
 - `node-pty` 是 runtime PTY binding（upstream `^1.1.0`）；不可換回 `@homebridge/node-pty-prebuilt-multiarch` fork 或在其他 fork 之間切換。不可在 `.vscodeignore` 排除 production `node_modules`。
-- `src/projects/` 只負責專案清單；`src/projectsTodo/` 才負責 TODO 內容。`TODO` 只讀寫當前 project / workspace root，Workspace TODO 只遞迴當前 workspace，Projects TODO 只遞迴 `~/projects`；三者的掃描邊界不混用。
+- `PtyTerminalHost.pendingBytes` 的定義是`從 pty 收到、尚未交給 onDidWrite 的位元組`——本 class 自己持有的佇列深度。不得改回「已送下游、待 ack」的模型：`vscode.Pseudoterminal.onDidWrite` 是 fire-and-forget，renderer 不回 ack，那樣的計數器沒有東西能遞減，pty 一旦 pause 就永不 resume。
+- Flush 必須受 `MAX_FLUSH_BYTES` 限制並在殘留時重排。切片以 code unit 為界且切點落在 high surrogate 時回退一格；teardown 用的 `flushWriteBuffer` 則刻意不套 budget，扣住尾端等同遺失。
+- `onExit` 必須清掉 `proc` 與 `opened` 並設 `disposed`；`fireClose` 由 `closeFired` 保證只觸發一次。`disposed` 與 `opened` 是兩件事——只靠 `opened === false` 會讓 stray `open()` 復活一個使用者以為已死的 shell。`close()` 在 paused 時必須先補 `resume()` 再 kill，並於 `KILL_ESCALATION_MS` 後升級 `SIGKILL`。
+- PTY 子 shell 的環境一律經 `buildShellEnv`，不得直接傳 `process.env`：必須剝除 `ELECTRON_*` / `VSCODE_*` / `NODE_OPTIONS` 並明確設定 `TERM`。
+- `PtyTerminalFactory` 以 `Map<Terminal, Host>` 持有 host，`onDidCloseTerminal` 必須 `forget()`，feature dispose 必須 `dispose()`。
+- 專案清單本身不是獨立 feature：`src/projectsTodo/` 同時擁有跨專案清單與 TODO 內容（含 `superset.openProject`）。`TODO` 只讀寫當前 project / workspace root，Workspace TODO 只遞迴當前 workspace，Projects TODO 只遞迴 `~/projects`；三者的掃描邊界不混用。
 - Projects TODO 只認大小寫完全相符的 `README.todo`；`~/projects` root 為 depth 0 且不顯示，固定遞迴 depth 1–5，命中後繼續掃描子孫，每個命中資料夾以 `path.basename` 建立 group。
 - Workspace TODO 只認大小寫完全相符的 `README.todo`；root 為 depth 0，預設最大 depth 5（設定 `superset.projectsTodo.maxDepth`，範圍 1–10），命中後仍繼續掃描子孫。
 - Plan item 是 read-only domain kind，不納入 pending task 計數。Overview 不再有 top-level merged Plans row；plans 只出現在對應 local/per-project scope。
@@ -111,6 +118,9 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 - Overall architecture：[`docs/specs/2026-07-02-architecture-master.md`](docs/specs/2026-07-02-architecture-master.md)
 - Plugin framework：[`docs/specs/2026-07-02-architecture-pluginization.md`](docs/specs/2026-07-02-architecture-pluginization.md)
 - Terminals / TUI / PTY：[`docs/specs/2026-06-20-terminal-dashboard-panel.md`](docs/specs/2026-06-20-terminal-dashboard-panel.md)、[`docs/specs/2026-07-02-architecture-terminals.md`](docs/specs/2026-07-02-architecture-terminals.md)
+- Activity 偵測來源 `A` / `B`：[`docs/specs/2026-07-26-terminal-activity-sources-ab.md`](docs/specs/2026-07-26-terminal-activity-sources-ab.md)
+- PTY backpressure 與生命週期加固：[`docs/specs/2026-07-26-pty-backpressure-and-lifecycle-hardening.md`](docs/specs/2026-07-26-pty-backpressure-and-lifecycle-hardening.md)
+- 移除 `src/projects/` 與死碼清理：[`docs/specs/2026-07-26-remove-projects-feature-and-dead-code.md`](docs/specs/2026-07-26-remove-projects-feature-and-dead-code.md)
 - Todo / Projects TODO / Plans：[`docs/specs/2026-07-02-architecture-superset.md`](docs/specs/2026-07-02-architecture-superset.md)、[`docs/specs/2026-07-08-feature-projects-todo-section-pending-badge.md`](docs/specs/2026-07-08-feature-projects-todo-section-pending-badge.md)、[`docs/specs/2026-07-09-feature-plans-source-scan.md`](docs/specs/2026-07-09-feature-plans-source-scan.md)、[`docs/specs/2026-07-22-projects-todo-recursive-scan.md`](docs/specs/2026-07-22-projects-todo-recursive-scan.md)
 - mDNS：[`docs/specs/2026-07-02-architecture-mdns.md`](docs/specs/2026-07-02-architecture-mdns.md)
 - Topology：[`docs/specs/2026-07-02-architecture-topology.md`](docs/specs/2026-07-02-architecture-topology.md)

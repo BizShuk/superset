@@ -8,25 +8,26 @@ import type { TerminalHandle } from "../src/terminals/types";
  * Backpressure tests for `PtyTerminalHost`.
  *
  * Contract being locked down:
- *   - When cumulative pending bytes (delivered by the PTY) cross
- *     HIGH_WATER_MARK (4 MiB) the host calls `proc.pause()` exactly once.
+ *   - When pending bytes cross HIGH_WATER_MARK (4 MiB) the host calls
+ *     `proc.pause()` exactly once.
  *   - Additional chunks delivered while paused do NOT cause `pause` to be
  *     called again (idempotent).
- *   - A `setImmediate` drain tick where pending bytes have dropped to or
- *     below LOW_WATER_MARK (1 MiB) causes the host to call `proc.resume()`.
- *   - If pending bytes are still above LOW on the drain tick, `resume` is
- *     NOT called.
+ *   - Draining below LOW_WATER_MARK (1 MiB) calls `proc.resume()`; a partial
+ *     drain that leaves the backlog above LOW does not.
+ *   - Pause/resume is a repeatable cycle, not a one-shot latch.
+ *   - The per-tick byte budget slices an over-budget burst, never drops it.
  *   - `close()` while paused calls `proc.resume()` and resets internal state.
  *   - A throwing write listener does not affect pause/resume bookkeeping.
  *
- * NOTE: As of writing, the production `PtyProcess` interface does NOT
- * declare `pause`/`resume` and the host does not yet track pending bytes.
- * The fake proc below adds `pause`/`resume` via `as unknown as PtyProcess`,
- * and the test simulates a drain by writing the `pendingBytes` field
- * directly with `(host as ...).pendingBytes = N`. Both casts are
- * intentional contract assertions — the tests are written ahead of the
- * implementation and will fail at runtime (or TypeScript) until the
- * implementation lands.
+ * What `pendingBytes` means, and why the original draft of this file could
+ * not be satisfied: an earlier version modelled it as "handed downstream but
+ * not yet acknowledged" and simulated the consumer by assigning the field
+ * directly. There is no such counter in production — `Pseudoterminal.onDidWrite`
+ * is fire-and-forget and the renderer never acknowledges anything, so nothing
+ * could ever decrement it and the pty would stay paused forever. The counter
+ * here is instead the depth of the one queue this class actually owns: bytes
+ * received from the pty that have not yet been handed to `onDidWrite`. That
+ * queue drains on its own flush ticks, which is what makes resume reachable.
  */
 const HIGH_WATER_MARK = 4 * 1024 * 1024; // 4 MiB
 const LOW_WATER_MARK = 1 * 1024 * 1024; // 1 MiB
@@ -120,15 +121,6 @@ function getPendingBytes(host: PtyTerminalHost): number {
     return (host as unknown as { pendingBytes?: number }).pendingBytes ?? 0;
 }
 
-/**
- * Write the host's pending-bytes counter. The most realistic impl
- * model is "pending bytes = received - consumed"; the test sets the
- * value directly to simulate the consumer draining the buffer.
- */
-function setPendingBytes(host: PtyTerminalHost, bytes: number): void {
-    (host as unknown as { pendingBytes: number }).pendingBytes = bytes;
-}
-
 describe("PtyTerminalHost backpressure", () => {
     beforeEach(() => {
         vi.useFakeTimers();
@@ -167,47 +159,78 @@ describe("PtyTerminalHost backpressure", () => {
         const { host_instance, fake } = setup();
         host_instance.open({ columns: 80, rows: 24 });
 
+        // No timers run in between, so the buffer never drains and the host
+        // stays paused across all three chunks.
         fake.fireData("a".repeat(5 * 1024 * 1024));
-        vi.runAllTimers();
         expect(fake.pauseCalls).toHaveLength(1);
-
-        // More chunks while paused. The host must NOT call pause again.
         fake.fireData("b".repeat(5 * 1024 * 1024));
         fake.fireData("c".repeat(5 * 1024 * 1024));
-        vi.runAllTimers();
 
         expect(fake.pauseCalls).toHaveLength(1);
     });
 
-    it("setImmediate drain tick with pending bytes <= LOW calls resume", () => {
+    it("draining below LOW calls resume exactly once", () => {
         const { host_instance, fake } = setup();
         host_instance.open({ columns: 80, rows: 24 });
 
         fake.fireData("a".repeat(5 * 1024 * 1024));
-        vi.runAllTimers();
         expect(fake.pauseCalls).toHaveLength(1);
         expect(fake.resumeCalls).toHaveLength(0);
 
-        // Simulate the consumer draining back below LOW (1 MiB).
-        setPendingBytes(host_instance, 500 * 1024);
+        // Flush ticks hand the buffer to the write listeners a bounded slice
+        // at a time; once the backlog falls under LOW the pty is released.
         vi.runAllTimers();
 
         expect(fake.resumeCalls).toHaveLength(1);
+        expect(getPendingBytes(host_instance)).toBe(0);
     });
 
-    it("setImmediate drain tick with pending bytes still > LOW does NOT call resume", () => {
+    it("a partial drain that leaves pending bytes above LOW does NOT resume", () => {
+        const { host_instance, fake } = setup();
+        host_instance.open({ columns: 80, rows: 24 });
+
+        fake.fireData("a".repeat(5 * 1024 * 1024));
+        expect(fake.pauseCalls).toHaveLength(1);
+
+        // Exactly one flush tick: a bounded slice leaves the backlog well
+        // above LOW (1 MiB), so the pty must stay paused.
+        vi.advanceTimersToNextTimer();
+
+        expect(getPendingBytes(host_instance)).toBeGreaterThan(1024 * 1024);
+        expect(fake.resumeCalls).toHaveLength(0);
+    });
+
+    it("re-pauses when a fresh burst crosses HIGH again after a drain", () => {
+        // Watermarks are a cycle, not a one-shot latch: each new backlog that
+        // crosses HIGH must stop the pty again.
         const { host_instance, fake } = setup();
         host_instance.open({ columns: 80, rows: 24 });
 
         fake.fireData("a".repeat(5 * 1024 * 1024));
         vi.runAllTimers();
         expect(fake.pauseCalls).toHaveLength(1);
+        expect(fake.resumeCalls).toHaveLength(1);
 
-        // Partial drain: 2 MiB still > LOW (1 MiB).
-        setPendingBytes(host_instance, 2 * 1024 * 1024);
+        fake.fireData("b".repeat(5 * 1024 * 1024));
+        expect(fake.pauseCalls).toHaveLength(2);
+        vi.runAllTimers();
+        expect(fake.resumeCalls).toHaveLength(2);
+    });
+
+    it("delivers every byte of an over-budget burst across the flush ticks", () => {
+        // The per-tick byte budget must slice the backlog, never discard it.
+        const { host_instance, fake } = setup();
+        host_instance.open({ columns: 80, rows: 24 });
+
+        const received: string[] = [];
+        host_instance.onWrite((d) => received.push(d));
+
+        const payload = "a".repeat(5 * 1024 * 1024);
+        fake.fireData(payload);
         vi.runAllTimers();
 
-        expect(fake.resumeCalls).toHaveLength(0);
+        expect(received.length).toBeGreaterThan(1);
+        expect(received.join("")).toBe(payload);
     });
 
     it("close() while paused calls resume and resets internal state", () => {

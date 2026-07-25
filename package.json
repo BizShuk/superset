@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.19.0",
+    "version": "0.22.0",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -80,6 +80,30 @@
                         "type": "string",
                         "default": "",
                         "description": "Override the agent-session store root. Empty uses the sessiond default, ~/.config/superset/data/sessions. Intended for development against a scratch store."
+                    }
+                }
+            },
+            {
+                "title": "Superset Terminals",
+                "properties": {
+                    "superset.terminals.legacyOutputWatcher": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Re-enable the legacy byte-reading activity watcher, which drains every shell execution's output stream through the extension host. Off by default: activity is detected by shell-integration start/end events plus process-tree polling, neither of which moves terminal output through the extension host. Only turn this on to compare against the old behaviour."
+                    },
+                    "superset.terminals.highWaterMark": {
+                        "type": "number",
+                        "default": 4,
+                        "minimum": 1,
+                        "maximum": 64,
+                        "description": "Buffered PTY output, in MiB, at which Superset pauses the terminal's pseudo-terminal to stop it outrunning the renderer (1-64). Applies to PTY-backed terminals only, and is read when a terminal opens. Default 4."
+                    },
+                    "superset.terminals.lowWaterMark": {
+                        "type": "number",
+                        "default": 1,
+                        "minimum": 1,
+                        "maximum": 64,
+                        "description": "Buffered PTY output, in MiB, at which a paused pseudo-terminal is resumed (1-64). Must be below the high watermark; a value at or above it is halved automatically, since a low mark that can never be reached would leave the terminal paused. Default 1."
                     }
                 }
             }

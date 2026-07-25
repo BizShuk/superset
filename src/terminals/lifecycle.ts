@@ -35,7 +35,11 @@ export function installAutoPtyReplacer(
     deps: AutoPtyReplacerDeps
 ): vscode.Disposable {
     const { registry, ptyFactory, getCwd, log } = deps;
-    return vscode.window.onDidOpenTerminal((terminal) => {
+    // Pending dispose-the-original timers. Tracked so teardown cancels them:
+    // an untracked timer fires against an already-disposed terminal if the
+    // feature is disposed inside the 150ms window.
+    const pending = new Set<ReturnType<typeof setTimeout>>();
+    const sub = vscode.window.onDidOpenTerminal((terminal) => {
         if (ptyFactory.isPtyBacked(terminal)) {
             registry.add(terminal);
             return;
@@ -88,8 +92,21 @@ export function installAutoPtyReplacer(
         );
         const pterm = ptyFactory.spawn(terminal.name, getCwd());
         pterm.show();
-        setTimeout(() => terminal.dispose(), 150);
+        const timer = setTimeout(() => {
+            pending.delete(timer);
+            terminal.dispose();
+        }, 150);
+        pending.add(timer);
     });
+    return {
+        dispose() {
+            for (const timer of pending) {
+                clearTimeout(timer);
+            }
+            pending.clear();
+            sub.dispose();
+        },
+    };
 }
 
 export interface EditorFocusBridgeDeps<Terminal> {
