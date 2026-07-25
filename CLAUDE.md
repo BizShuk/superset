@@ -48,6 +48,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | `src/projects/` | 專案資料與 TreeView 元件 | `projectsPlugin`（目前未列入 composition root） |
 | `src/projectsTodo/` | Workspace TODO 與跨專案 TODO sibling views | `projectsTodoPlugin` |
 | `src/git/` | SCM reset、Explorer GitHub URL、Git hooks Install/Link 與 Status Bar | `gitPlugin` |
+| `src/editorLayout/` | Editor group 四模式佈局（水平/垂直 × 均分/放大）與網格形狀 | `editorLayoutPlugin` |
 | `src/installCommands.ts` | Default Project、Default Tools、Skill Install 與 Projects Setup commands | `registerInstallCommands` |
 | `src/treePreview/` | Markdown `tree` fence 渲染 | `treePreviewPlugin` |
 | `src/todoPreview/` | `README.todo` 預覽重組與 CSS 互動 | `todoPreviewPlugin` |
@@ -68,6 +69,14 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - Plan item 是 read-only domain kind，不納入 pending task 計數。Overview 不再有 top-level merged Plans row；plans 只出現在對應 local/per-project scope。
 - `src/sessions/` 對 `sessiond` JSONL store 只讀，唯一寫入路徑是 `sample-*.jsonl` 假資料指令；清除也只認該 prefix，不得動到 ingest 產生的檔案。`deleteSession` 必須在內部守住 prefix gate（不接受「呼叫端已過濾」假設），`superset.sessionsDelete` 等 UI 命令直接呼叫 `deleteSession` 即可，禁止繞過 gate 刪除 ingest 產生的非 `sample-` 檔。
 - Summary markdown 的 heading 契約固定為 `#` session /`##` round /`###` tool，由 `markdown.ts` 單點決定。`##` 層級保留給「Round」序列使用；其他段落（含 Resume、Summary、Overview 等）一律降到 `###` 或更深，確保 VS Code outline 將 round 顯示為同一連續序列，不被同層插入的 heading 打斷。
+- Editor Layout 的 mode 是`兩個方向各自的 sizing 組合`（`{horizontal: even|max} × {vertical: even|max}`），固定四個字面值 `even-even` / `max-even` / `even-max` / `max-max`。決定某一層套用哪個 sizing 的是`該層的方向`而非深度：level 0 依 root `orientation`，以下逐層交替（`directionAt`）。不得回退成「選一個主軸」的單軸模型，也不得加入沿路徑攤平的深度補償 —— 那會讓 `2×2` 的兄弟節點被壓到最小尺寸而看似消失。
+- 網格形狀 (grid shape) 與 root orientation 都與四個 mode 正交，不得升為第五個模式。四個 mode 一律走`保形 (topology-preserving)` 的 `restyleLayout`，保留樹形與 orientation、只重寫各層 `size`；orientation 只由 `transpose` 改變。`buildLayout` 是唯一會改變格子數的路徑，只能從 shape pick / reset 進入，且必須先過 `reconcileShape` 讓 `sum(shape) === groupCount`（`vscode.setEditorLayout` 對 leaf 數不符會新建空 group 或 `mergeGroup` 既有 group）。
+- `activeShare` 必須保證每個非作用中的兄弟至少留下 `MIN_SIBLING_SHARE`，並且不得小於均分值；同層兄弟過多時退化為均分。這是防止 `max` 把格子擠到 VS Code 最小尺寸而視覺上消失的第一道防線。
+- 送進 `setEditorLayout` 的 `size` 必須是`與 getEditorLayout 相同量級的整數像素`，每個 sibling set 沿用該 set 現有的像素總量（無法取得時退回 `FALLBACK_SET_TOTAL`），由 `allocateSizes` 以最大餘數法分配且每格至少 1。不可送出加總為 1 的小數比例 —— `createSerializedGrid` 以 size 總和推導虛擬網格尺寸，小數會造出 `1x1` 的網格，每個 group 都低於最小尺寸而被 clamp，結果是兄弟看似消失但實際存在。
+- 因為 size 是像素，`layoutSignature` 必須以`同層佔比`比較而非原始像素，否則視窗縮放或 ±1px 誤差會被誤判成待套用的變更。
+- Editor Layout 的 `activeIndex` 只能來自 `activeTabGroup.viewColumn - 1`。`tabGroups.all` 是 group `建立順序`，descriptor 的 leaf 序是 `GRID_APPEARANCE` 深度優先順序，兩者在 split / 搬移後會分歧；用 `all.indexOf` 會放大錯誤的 group。
+- Editor Layout 的 signature guard 只比對`本次寫入 vs 上次寫入`，不得改成比對即時佈局 —— VS Code 會 clamp 最小寬高，requested 與 actual 本來就不同，比對即時佈局會讓 follow-active-group 無限重套。明確命令一律 `force`，事件驅動的重套才受 guard 約束。
+- `orientation` 只在 root 生效，巢狀層自動垂直於父層；`size` 是同層相對值。方向命名與 VS Code 選單相反，見 [`docs/terminology.md`](docs/terminology.md)。
 - mDNS service、network-key secondary index 與 expiration cleanup 必須同步更新，避免 stale index 或錯誤合併。
 - Git hooks 只處理 `workspaceFolders[0]`；模板來源為 `pkg/resources/git/githooks/`。Install 採 copy-if-missing 後 Link，Status Bar 只做 Link；local `core.hooksPath` 只要非空即視為已連結。Repository 自用的 `.githooks/pre-push` 必須與內建模板保持一致。`pre-push` release tag 版本固定取 `max(最高 Git tag 的下一個 patch, package.json.version, .claude-plugin/plugin.json.version)`，缺少的 manifest 不納入候選。
 - Projects Setup 固定以 `~/projects` 為 root，不提供自訂路徑；13 個 repository（包含 `social`）的 ordered set 以 `pkg/resources/config/setup-projects.sh` 為 runtime source of truth。首次 clone 必須使用 `--recurse-submodules`，重跑只補做 recursive submodule sync/update，不 pull 或覆蓋既有 repository。

@@ -24,6 +24,7 @@ a
 | Explorer GitHub URL       | 檔案右鍵複製固定 `master` branch 的 GitHub URL              | 分享 repository 檔案連結的人         |
 | Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒 | 使用 repository-local hooks 的開發者 |
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
+| Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 
 ---
 
@@ -417,6 +418,38 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
+### 14. Editor Layout — 四個 editor group 佈局模式
+
+模式是`兩個方向各自`的 even／max `組合`，不是「選一個方向」：
+
+```
+mode = { horizontal: even | max } × { vertical: even | max }
+```
+
+| 模式 | 左右方向 | 上下方向 | 在 `2×2` 網格上的效果 |
+| --- | --- | --- | --- |
+| `H·Even V·Even` | 均分 | 均分 | 四格等大 |
+| `H·Max V·Even` | 作用中欄放大 | 均分 | 作用中那`一欄`變寬（預設佔 80%），欄內兩列仍等高 |
+| `H·Even V·Max` | 均分 | 作用中列放大 | 兩欄等寬，作用中那`一列`變高 |
+| `H·Max V·Max` | 作用中欄放大 | 作用中列放大 | 作用中格子最大，其餘仍看得見 |
+
+`Ctrl+Alt+V` 循環四個組合，`Ctrl+Alt+Shift+V` 開 Quick Pick 直接挑。狀態列右側永遠顯示`兩個方向`（例：`H·Max V·Even 2×2`），點擊等同 Quick Pick。
+
+決定套用到哪一層的是`方向`而不是深度。VS Code 的巢狀層一律垂直於父層，所以 root 往左右切時，`H` 的 sizing 管 root、`V` 管下一層；`Superset: Transpose Editor Grid` 翻轉 root 方向後，兩者管的層級跟著對調 —— 這也就是 NxM 的轉置（`2 欄 × 3 列` 變 `3 欄 × 2 列`），格子數不變。
+
+`不會把格子擠不見`。每個非作用中的兄弟節點至少保有該層 `10%` 的空間；`maxRatio` 太大或同層兄弟太多時，作用中的比例會自動下修，必要時退化成均分。
+
+其他行為：
+
+- 四個模式`保留現有網格形狀與 root 方向`，只重寫各層比例；手動拖出來的巢狀結構不會被覆蓋 —— 每次套用都先讀回目前的真實網格。
+- `只有兩個命令會改變網格形狀`：`Superset: Pick Editor Grid Shape` 與 `Superset: Reset Editor Grid Shape`。形狀清單只列出`格子總數與現有群組數相符`的選項，不會意外產生空群組或把 editor 併到別的群組去。
+- 只要有一個方向是 `max`，佈局就會跟著作用中的群組跑；`H·Even V·Even` 不會自動重算，手動拖過的分隔線會留著。
+- VS Code 對群組有最小寬高限制，`superset.editorLayout.maxRatio` 是`比例提示`而非保證值。
+- 佈局命令只作用於`目前視窗`的 editor 區域；`Move Editor into New Window` 開出來的浮動視窗各有自己的網格。
+- 設定 `superset.editorLayout.maxRatio` 控制 `max` 方向上作用中群組的佔比，預設 `0.8`，可調範圍 `0.5`–`0.9`。其餘設定：`defaultShape`、`followActiveGroup`、`restoreOnActivate`。
+
+---
+
 ## 系統需求 (Requirements)
 
 | 項目    | 版本 / 用途                                                            |
@@ -484,6 +517,13 @@ code --install-extension superset-*.vsix
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link |
 | `Superset: Install Default Tools`               | —                   | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond` CLI                      |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）   |
+| `Superset: Cycle Editor Layout Mode`            | `Ctrl+Alt+V`        | 循環四個 editor group 佈局模式                                           |
+| `Superset: Pick Editor Layout Mode`             | `Ctrl+Alt+Shift+V`  | Quick Pick 直接挑一個佈局模式                                            |
+| `Superset: Toggle Horizontal Editor Sizing`     | —                   | 只翻左右方向的 even／max                                                 |
+| `Superset: Toggle Vertical Editor Sizing`       | —                   | 只翻上下方向的 even／max                                                 |
+| `Superset: Transpose Editor Grid`               | —                   | 翻 root 方向，等同 NxM 網格轉置                                          |
+| `Superset: Pick Editor Grid Shape`              | —                   | 重塑 editor 網格形狀（唯一會改變格子數的命令）                           |
+| `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                   |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 

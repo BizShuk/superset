@@ -367,6 +367,34 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Git Hooks Status Item`      | `.githooks/` 存在但 local `core.hooksPath` 為空時顯示的 Status Bar Item。                                        |
 | `First Opened Folder`        | Git hooks 功能唯一處理的 `workspaceFolders[0]`；multi-root 其餘 folders 不在 scope。                             |
 
+## Editor Layout 術語
+
+方向命名以`群組排列方向`為準，與 VS Code 選單的`分割方向`用語相反 —— 兩者不可混用：
+
+| 本專案用語   | 群組排列    | `orientation` | VS Code 選單用語         |
+| ------------ | ----------- | ------------- | ------------------------ |
+| `Horizontal` | 左 → 右(欄) | `0`           | Vertical Editor Layout   |
+| `Vertical`   | 上 → 下(列) | `1`           | Horizontal Editor Layout |
+
+| 術語                    | 定義                                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `Layout Mode`           | 兩個方向各自 sizing 的`組合`，四個字面值 `even-even`、`max-even`、`even-max`、`max-max`，id 讀作 `<horizontal>-<vertical>`。      |
+| `Sizing`                | 單一方向的空間分配：`even`(同層均分)或 `max`(作用中群組放大)。                                                                    |
+| `Direction`             | 某一層樹節點的切分方向。Level 0 依 root `orientation`，以下逐層交替；決定該層套用哪個方向的 Sizing。                              |
+| `Root Orientation`      | Root 節點的切分方向，`0` 左右、`1` 上下。與 Layout Mode 正交，只由 Transpose 改變。                                               |
+| `Transpose`             | 翻轉 Root Orientation。樹形不變，NxM 因此轉置，兩個方向的 Sizing 也跟著換層級。                                                   |
+| `Grid Shape`            | 網格形狀，與 Layout Mode 正交。以 Partition List 表達，`[2,2]` 是 2x2、`[2,2,1]` 是 ragged 五格。                                 |
+| `Partition List`        | Root 軸各 slot 各含幾個 Leaf Group 的整數陣列；總和必須等於實際 editor group 數。                                                 |
+| `Leaf Group`            | Layout descriptor 樹的葉節點，對應一個真實 editor group。                                                                        |
+| `Topology-preserving`   | 保形：只重寫 `size`，leaf 數、樹形與 orientation 都不變。四個 Layout Mode 一律走這條路徑。                                        |
+| `Reshape`               | 改變 leaf 數或樹形的操作；只有 Pick / Reset Editor Grid Shape 會做，且必須先 reconcile。                                          |
+| `Min Sibling Share`     | 非作用中兄弟節點在該層至少保有的比例；低於此值 VS Code 會 clamp 到最小群組尺寸，視覺上等同消失。                                  |
+| `Size Magnitude`        | `size` 一律為整數像素，與 `getEditorLayout` 回傳值同量級；小數比例會讓 `createSerializedGrid` 造出 `1x1` 虛擬網格而全部被 clamp。 |
+| `Set Total`             | 一個 sibling set 現有的像素總量；重寫比例時沿用它，取不到才退回 `FALLBACK_SET_TOTAL`。                                            |
+| `Grid Appearance Order` | VS Code `getGroups(GRID_APPEARANCE)` 的深度優先順序，等同 descriptor 的 leaf 序，也等同 `viewColumn - 1`。                        |
+| `Creation Order`        | `tabGroups.all` 的順序(group 建立先後)。與 Grid Appearance Order 不同，不可用於 layout indexing。                                 |
+| `Signature Guard`       | 比對本次與上次`寫入`的 descriptor，阻斷 `setEditorLayout` 自身事件造成的無限重套；不與即時佈局比對。                              |
+
 ## 安裝、操作與診斷術語
 
 | 術語                           | 定義                                                                                                                          |

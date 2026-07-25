@@ -13,6 +13,7 @@ import { todoPlugin } from "./todo/plugin";
 import { sessionsPlugin } from "./sessions/plugin";
 import { projectsTodoPlugin } from "./projectsTodo/plugin";
 import { gitPlugin } from "./git/plugin";
+import { editorLayoutPlugin } from "./editorLayout/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
 import { panelLayoutPlugin } from "./panelLayout/plugin";
 import {
@@ -93,6 +94,7 @@ export function activate(
         todoPlugin,
         projectsTodoPlugin,
         gitPlugin,
+        editorLayoutPlugin,
         globalCommandsPlugin,
         panelLayoutPlugin,
     ];

@@ -171,3 +171,128 @@ describe("Explorer GitHub URL manifest contribution", () => {
         });
     });
 });
+
+describe("Editor Layout manifest contributions", () => {
+    interface ManifestKeybinding {
+        readonly command: string;
+        readonly key: string;
+        readonly when?: string;
+    }
+    interface ManifestConfigBlock {
+        readonly title: string;
+        readonly properties: Record<string, Record<string, unknown>>;
+    }
+
+    const keybindings = manifest.contributes
+        .keybindings as ManifestKeybinding[];
+    const configuration = manifest.contributes
+        .configuration as ManifestConfigBlock[];
+    const layoutConfig = configuration.find(
+        (block) => block.title === "Superset Editor Layout"
+    );
+    const titles = new Map(
+        manifest.contributes.commands.map((c) => [c.command, c.title])
+    );
+
+    it("publishes one command per sizing combination, naming both directions", () => {
+        // A mode is {horizontal} x {vertical}; a title that named only
+        // one direction would hide half the state it selects.
+        expect(titles.get("superset.editorLayoutEven")).toBe(
+            "Superset: Editor Layout — Even Both Directions"
+        );
+        expect(titles.get("superset.editorLayoutMaxHorizontal")).toBe(
+            "Superset: Editor Layout — Max Horizontal, Even Vertical"
+        );
+        expect(titles.get("superset.editorLayoutMaxVertical")).toBe(
+            "Superset: Editor Layout — Even Horizontal, Max Vertical"
+        );
+        expect(titles.get("superset.editorLayoutMaxBoth")).toBe(
+            "Superset: Editor Layout — Max Both Directions"
+        );
+    });
+
+    it("publishes the per-direction toggles, transpose and pickers", () => {
+        expect(titles.get("superset.editorLayoutToggleHorizontal")).toBe(
+            "Superset: Toggle Horizontal Editor Sizing"
+        );
+        expect(titles.get("superset.editorLayoutToggleVertical")).toBe(
+            "Superset: Toggle Vertical Editor Sizing"
+        );
+        expect(titles.get("superset.editorLayoutTranspose")).toBe(
+            "Superset: Transpose Editor Grid"
+        );
+        expect(titles.get("superset.editorLayoutCycle")).toBe(
+            "Superset: Cycle Editor Layout Mode"
+        );
+        expect(titles.get("superset.editorLayoutPick")).toBe(
+            "Superset: Pick Editor Layout Mode"
+        );
+        expect(titles.get("superset.editorLayoutShapePick")).toBe(
+            "Superset: Pick Editor Grid Shape"
+        );
+        expect(titles.get("superset.editorLayoutShapeReset")).toBe(
+            "Superset: Reset Editor Grid Shape"
+        );
+    });
+
+    it("does not keep any superseded single-axis command", () => {
+        for (const stale of [
+            "superset.editorLayoutHorizontalEven",
+            "superset.editorLayoutHorizontalMax",
+            "superset.editorLayoutVerticalEven",
+            "superset.editorLayoutVerticalMax",
+            "superset.editorLayoutToggleAxis",
+            "superset.editorLayoutToggleSizing",
+        ]) {
+            expect(titles.has(stale), stale).toBe(false);
+        }
+    });
+
+    it("binds cycle and pick only while an editor is open", () => {
+        const cycle = keybindings.find(
+            (k) => k.command === "superset.editorLayoutCycle"
+        );
+        const pick = keybindings.find(
+            (k) => k.command === "superset.editorLayoutPick"
+        );
+        expect(cycle?.key).toBe("ctrl+alt+v");
+        expect(cycle?.when).toBe("editorIsOpen");
+        expect(pick?.key).toBe("ctrl+alt+shift+v");
+        expect(pick?.when).toBe("editorIsOpen");
+    });
+
+    it("does not turn a bound key into a chord leader", () => {
+        // VS Code rejects a keybinding that is both a standalone
+        // command and the prefix of a chord.
+        const chords = keybindings.filter((k) => k.key.includes(" "));
+        expect(chords).toEqual([]);
+    });
+
+    it("declares the four settings with their bounds", () => {
+        expect(layoutConfig).toBeDefined();
+        const props = layoutConfig!.properties;
+        expect(Object.keys(props).sort()).toEqual([
+            "superset.editorLayout.defaultShape",
+            "superset.editorLayout.followActiveGroup",
+            "superset.editorLayout.maxRatio",
+            "superset.editorLayout.restoreOnActivate",
+        ]);
+
+        const ratio = props["superset.editorLayout.maxRatio"];
+        expect(ratio.type).toBe("number");
+        expect(ratio.default).toBe(0.8);
+        expect(ratio.minimum).toBe(0.5);
+        expect(ratio.maximum).toBe(0.9);
+
+        const shape = props["superset.editorLayout.defaultShape"];
+        expect(shape.enum).toEqual(["flat", "balanced"]);
+        expect(shape.default).toBe("flat");
+
+        expect(props["superset.editorLayout.followActiveGroup"].default).toBe(
+            true
+        );
+        expect(props["superset.editorLayout.restoreOnActivate"].default).toBe(
+            true
+        );
+    });
+});

@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.18.0",
+    "version": "0.19.0",
     "publisher": "shuk",
     "repository": {
         "type": "git",
@@ -39,6 +39,37 @@
                         "minimum": 1,
                         "maximum": 10,
                         "description": "Recursion depth for the workspace-internal TODO scan shared by the SuperSet TODO panel and the 'Workspace TODO' panel under Overall. Scans README.todo files from the open workspace root down to this many subdirectory levels (1–10). The SuperSet TODO panel uses this depth + view switching (Section/Priority/File); the Overall Workspace TODO panel uses this depth only. Default 5."
+                    }
+                }
+            },
+            {
+                "title": "Superset Editor Layout",
+                "properties": {
+                    "superset.editorLayout.maxRatio": {
+                        "type": "number",
+                        "default": 0.8,
+                        "minimum": 0.5,
+                        "maximum": 0.9,
+                        "description": "Share of a direction the active editor group takes where the layout mode asks for 'Max' (0.5–0.9). Applied per direction, so 'Max horizontal, even vertical' widens the active column without shortening the rows inside it. Lowered automatically when a level has too many groups to give every sibling a visible share, and VS Code enforces a minimum group size on top of that, so this is a hint rather than a guarantee. Default 0.8."
+                    },
+                    "superset.editorLayout.defaultShape": {
+                        "type": "string",
+                        "enum": [
+                            "flat",
+                            "balanced"
+                        ],
+                        "default": "flat",
+                        "description": "Grid shape used by 'Reset Editor Grid Shape'. 'flat' puts every editor group on the major axis; 'balanced' arranges them into a near-square grid. Only these two commands reshape the grid — the four layout modes always preserve the existing shape."
+                    },
+                    "superset.editorLayout.followActiveGroup": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "In the 'Max' layout modes, re-apply the layout when the active editor group changes so the focused group is the enlarged one. The 'Even' modes never re-apply, leaving dividers you dragged by hand alone."
+                    },
+                    "superset.editorLayout.restoreOnActivate": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "Apply the workspace's last chosen layout mode on startup. Restoring only rewrites orientation and sizes, never the grid shape."
                     }
                 }
             },
@@ -571,6 +602,61 @@
                 "command": "superset.projectsTodoDelete",
                 "title": "Delete",
                 "icon": "$(trash)"
+            },
+            {
+                "command": "superset.editorLayoutEven",
+                "title": "Superset: Editor Layout — Even Both Directions",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutMaxHorizontal",
+                "title": "Superset: Editor Layout — Max Horizontal, Even Vertical",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutMaxVertical",
+                "title": "Superset: Editor Layout — Even Horizontal, Max Vertical",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutMaxBoth",
+                "title": "Superset: Editor Layout — Max Both Directions",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutToggleHorizontal",
+                "title": "Superset: Toggle Horizontal Editor Sizing",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutToggleVertical",
+                "title": "Superset: Toggle Vertical Editor Sizing",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutTranspose",
+                "title": "Superset: Transpose Editor Grid",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutCycle",
+                "title": "Superset: Cycle Editor Layout Mode",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutPick",
+                "title": "Superset: Pick Editor Layout Mode",
+                "icon": "$(editor-layout)"
+            },
+            {
+                "command": "superset.editorLayoutShapePick",
+                "title": "Superset: Pick Editor Grid Shape",
+                "icon": "$(grabber)"
+            },
+            {
+                "command": "superset.editorLayoutShapeReset",
+                "title": "Superset: Reset Editor Grid Shape",
+                "icon": "$(debug-restart)"
             }
         ],
         "viewsContainers": {
@@ -1096,6 +1182,18 @@
                 "command": "superset.jumpToTerminal",
                 "key": "ctrl+alt+t",
                 "mac": "ctrl+alt+t"
+            },
+            {
+                "command": "superset.editorLayoutCycle",
+                "key": "ctrl+alt+v",
+                "mac": "ctrl+alt+v",
+                "when": "editorIsOpen"
+            },
+            {
+                "command": "superset.editorLayoutPick",
+                "key": "ctrl+alt+shift+v",
+                "mac": "ctrl+alt+shift+v",
+                "when": "editorIsOpen"
             }
         ]
     },
