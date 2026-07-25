@@ -573,6 +573,12 @@ npx @vscode/vsce package
 
 ---
 
+## 已淘汰功能 (Deprecated Features)
+
+| 淘汰日期 | 功能 | 原始文件 | 說明 |
+| -------- | ---- | -------- | ---- |
+| 2026-07-26 | 整併完成 — 41 份 `docs/specs/` 2026-06-20 ~ 2026-07-10 歷史文件 | `docs/specs/2026-06-20-*.md` ~ `2026-07-10-*.md` | 全部 contents 收進 [`docs/specs/2026-07-26-Summary.md`](docs/specs/2026-07-26-Summary.md);無功能淘汰 |
+
 ## 授權 (License)
 
 `Apache-2.0`,見 [`LICENSE`](LICENSE)。

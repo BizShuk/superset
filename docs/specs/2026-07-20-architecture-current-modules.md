@@ -102,8 +102,8 @@ The recursive scan contract is:
 
 Historical sequence:
 
-- [`tingly-tickling-shamir.md`](tingly-tickling-shamir.md) proposed the first recursive Current Workspace section with depth 3 and stop-on-hit semantics. Those two details are historical and no longer current.
-- [`bright-foraging-teapot.md`](bright-foraging-teapot.md) hardened the sibling view registration, empty placeholder, panel persistence, and depth-5 default.
+- [`2026-07-19-feat-recursive-workspace-todo-panel.md`](2026-07-19-feat-recursive-workspace-todo-panel.md) proposed the first recursive Current Workspace section with depth 3 and stop-on-hit semantics. Those two details are historical and no longer current.
+- [`2026-07-19-fix-workspace-todo-view-registration.md`](2026-07-19-fix-workspace-todo-view-registration.md) hardened the sibling view registration, empty placeholder, panel persistence, and depth-5 default.
 
 The current behavior above also includes the later continue-after-hit and sibling-view implementation reflected by code, tests, and `package.json`.
 

@@ -134,7 +134,7 @@ private bufferWrite(data: string): void {
 
 ## 互動點
 
-- **`plans/radiant-doodling-hammock.md`** (backpressure) 是 in-progress plan。
+- **`plans/2026-07-24-feat-pty-host-backpressure.md`** (backpressure) 是 in-progress plan。
   本 spec 落地後：
   - 該 plan line 106-107 引用 `dataListeners` 變 stale，下次 backpressure
     實作時刪除那段 reference

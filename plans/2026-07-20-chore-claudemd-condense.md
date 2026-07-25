@@ -18,7 +18,7 @@ Root `CLAUDE.md` has grown to roughly 551 lines and currently mixes three respon
    - Move the still-relevant implementation details that are currently unique to `CLAUDE.md` into this reference, organized by terminal/TUI, plugin composition, Todo/Projects TODO, Workspace TODO, mDNS, topology, previews, and Git.
    - Record only current implemented behavior; use “See also” links for detailed historical rationale already covered by existing specs instead of copying it again.
    - For Workspace TODO, document the final behavior: sibling `superset.workspaceTodo` view, empty placeholder, exact case-sensitive `README.todo`, depth 0 eligibility, default depth 5/range 1–10, skip directories, continued recursion after a hit, relative naming, separate store maps, duplicate suppression, and live configuration reload.
-   - Link the historical implementation sequence (`tingly-tickling-shamir.md` and `bright-foraging-teapot.md`) rather than presenting their stale depth-3/stop-on-hit proposal as current behavior.
+   - Link the historical implementation sequence (`2026-07-19-feat-recursive-workspace-todo-panel.md` and `2026-07-19-fix-workspace-todo-view-registration.md`) rather than presenting their stale depth-3/stop-on-hit proposal as current behavior.
    - Link terminal/module history to the existing canonical specs, including `2026-06-20-terminal-dashboard-panel.md`, `2026-07-02-architecture-{master,superset,pluginization,terminals,mdns,topology}.md`, mDNS feature specs, Projects TODO/Plans specs, Mermaid extraction, and Copy GitHub URL specs.
 
 3. Keep unfinished SCM work in its correct lifecycle location.
@@ -34,8 +34,8 @@ Root `CLAUDE.md` has grown to roughly 551 lines and currently mixes three respon
 
 - `CLAUDE.md` — compact operational context and specification index.
 - `docs/specs/2026-07-20-architecture-current-modules.md` — dated home for current module implementation details.
-- `docs/specs/tingly-tickling-shamir.md` — retained as historical Workspace TODO proposal; linked, not rewritten.
-- `docs/specs/bright-foraging-teapot.md` — retained as the depth-5/view-registration follow-up; linked, not rewritten.
+- `docs/specs/2026-07-19-feat-recursive-workspace-todo-panel.md` — retained as historical Workspace TODO proposal; linked, not rewritten.
+- `docs/specs/2026-07-19-fix-workspace-todo-view-registration.md` — retained as the depth-5/view-registration follow-up; linked, not rewritten.
 - `plans/2026-07-17-scm-graph-proposed-api.md` — active plan remains in place.
 - `package.json`, `package-lock.json` — patch version synchronization.
 

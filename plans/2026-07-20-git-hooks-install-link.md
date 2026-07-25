@@ -1115,7 +1115,7 @@ Expected: only Git hooks/resource structure documentation changes. Do not commit
 Files:
 
 - Verify all files from Tasks 1–6.
-- Do not modify `pkg/sessiond/**`, `plans/serialized-wishing-sketch.md`, or unrelated user files.
+- Do not modify `pkg/sessiond/**`, `plans/2026-07-21-feat-sessiond-project-level-hooks.md`, or unrelated user files.
 
 Interfaces:
 
@@ -1187,7 +1187,7 @@ git diff -- package.json package-lock.json pkg/sessiond/README.md pkg/sessiond/c
 Expected:
 
 - Feature files and approved spec are present.
-- Existing `pkg/sessiond/**`, `plans/serialized-wishing-sketch.md`, and `scripts/seed-sessions.sh` work is not overwritten.
+- Existing `pkg/sessiond/**`, `plans/2026-07-21-feat-sessiond-project-level-hooks.md`, and `scripts/seed-sessions.sh` work is not overwritten.
 - `package.json`/`package-lock.json` preserve pre-existing edits in addition to this feature's targeted version/manifest changes.
 - No whitespace errors.
 

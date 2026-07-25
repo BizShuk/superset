@@ -18,7 +18,7 @@ PTY-backed terminal 的核心 data path。經重新驗證，目前 codebase (v0.
    高頻輸出場景（`cat large-file`、`yes`、`find /`）每 byte 一次
    `vscode.Pseudoterminal.onDidWrite` IPC，渲染端 parse 成本高。
 
-不包括 `plans/radiant-doodling-hammock.md` 的 backpressure 設計
+不包括 `plans/2026-07-24-feat-pty-host-backpressure.md` 的 backpressure 設計
 （pause/resume watermark）—— 那份是獨立 in-progress plan，與本
 plan 在 `proc.onData` 內可並存；本 plan 結束後那份 JSDoc 引用
 `dataListeners` 的字句會自然過時，後續實作時順手更新即可。
@@ -119,7 +119,7 @@ fake `PtyProcess` pattern。覆蓋：
 
 ## 互動點
 
-- **`plans/radiant-doodling-hammock.md`** (backpressure) 是 in-progress plan。
+- **`plans/2026-07-24-feat-pty-host-backpressure.md`** (backpressure) 是 in-progress plan。
   本 plan 落地後：
   - 該 plan line 106-107 引用 `dataListeners` 變 stale；下次 backpressure
     實作時刪除那段 reference
@@ -144,7 +144,7 @@ fake `PtyProcess` pattern。覆蓋：
 ## 後續可選 (非本次範圍)
 
 - 動態 `setImmediate` 改為可注入 scheduler，便於測試更複雜的時序
-- 將 `radiant-doodling-hammock.md` backpressure 與本 plan 的 bufferWrite
+- 將 `2026-07-24-feat-pty-host-backpressure.md` backpressure 與本 plan 的 bufferWrite
   寫成單一狀態機 class（`PtyDataPipeline`），目前兩者各佔一小段邏輯
 - 若未來 `dataListeners` 復活需要，新介面應明確為 "raw chunks"，避免
   與 coalesced `onWrite` 混淆
