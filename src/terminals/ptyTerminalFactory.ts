@@ -59,6 +59,19 @@ export interface PtyTerminalFactoryDeps {
     readonly isRecentlyActive: (terminal: TerminalHandle) => boolean;
     readonly spawn: PtySpawner;
     readonly log: (msg: string) => void;
+    /**
+     * Optional hook fired right after `vscode.window.createTerminal({ pty })`
+     * returns, with the live `PtyTerminalHost` and its name + cwd (the host
+     * itself does not expose those — they live on `vscode.Terminal` and the
+     * spawn arguments respectively). Used by the PtyTap feature to
+     * subscribe to `host.onWrite` / `host.onClose` so it can stream the raw
+     * PTY bytes to an external listener. Kept optional so existing tests
+     * and unrelated callers stay decoupled.
+     */
+    readonly onHostCreated?: (
+        host: PtyTerminalHost,
+        meta: { name: string; cwd: string }
+    ) => void;
 }
 
 /**
@@ -98,6 +111,7 @@ export class PtyTerminalFactory {
         terminalRef = vscode.window.createTerminal({ name, pty });
         this.ptyBacked.add(terminalRef);
         log(`spawnPtyTerminal: "${name}" cwd=${cwd}`);
+        this.deps.onHostCreated?.(host, { name, cwd });
         return terminalRef;
     }
 }
