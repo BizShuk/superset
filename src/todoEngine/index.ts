@@ -35,3 +35,7 @@ export {
     type DispatchContextValueInput,
     type ContextValueAxis,
 } from "./contextValue";
+export {
+    scanWorkspaceTodoDirs,
+    TODO_SCAN_SKIP_DIRS,
+} from "./workspaceScanner";

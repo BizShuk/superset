@@ -13,6 +13,7 @@ import {
     priorityIconPath,
     dispatchContextValue,
 } from "../todoEngine";
+import { extractLink } from "../todoEngine/linkUtils";
 
 /**
  * vscode-bound TreeDataProvider for the Projects TODO list.
@@ -29,6 +30,7 @@ export class ProjectsTodoTreeProvider
     private unsubscribeStore?: () => void;
     private showCompleted = false;
     private enabledPriorities = new Set<"P0" | "P1" | "P2">();
+    private viewType: "section" | "priority" | "file" = "section";
 
     constructor(
         private readonly store: ProjectsTodoStore,
@@ -47,6 +49,13 @@ export class ProjectsTodoTreeProvider
          * - workspace: current-workspace-only sub-panel view
          */
         private readonly rootMode: "projects" | "workspace" = "projects",
+        /**
+         * Optional override for the workspace empty-state placeholder
+         * text. Panels that mount this provider with their own copy
+         * (e.g. the SuperSet TODO panel) pass a custom string;
+         * `superset.workspaceTodo` keeps the default.
+         */
+        private readonly emptyStateCopy?: string,
     ) {}
 
     start(): void {
@@ -54,6 +63,32 @@ export class ProjectsTodoTreeProvider
         this.unsubscribeStore = this.store.onDidChange(() => {
             this.refresh();
         });
+        // Push initial viewType so the View button menu wiring
+        // (`view == superset.todo && superset.todo.viewType == '...'`)
+        // resolves correctly on first activation. Panels that don't
+        // expose view switching (e.g. `superset.workspaceTodo`) leave
+        // `viewType` at the default `"section"` and the context key is
+        // effectively a no-op for them.
+        void vscode.commands.executeCommand(
+            "setContext",
+            "superset.todo.viewType",
+            this.viewType,
+        );
+    }
+
+    setViewType(t: "section" | "priority" | "file"): void {
+        if (this.viewType === t) return;
+        this.viewType = t;
+        void vscode.commands.executeCommand(
+            "setContext",
+            "superset.todo.viewType",
+            t,
+        );
+        this.refresh();
+    }
+
+    getViewType(): "section" | "priority" | "file" {
+        return this.viewType;
     }
 
     stop(): void {
@@ -314,7 +349,24 @@ export class ProjectsTodoTreeProvider
         // row inside the tree.
         if (this.rootMode === "workspace") {
             if (!this.workspaceRoot) return [];
-            return this.makeWorkspaceSection(workspaceStores).children ?? [];
+            // Section view is the default and the only mode exposed to
+            // `superset.workspaceTodo` (the Overall view's separate
+            // workspace panel never installs view-switch commands).
+            // Priority/file views are reachable from the SuperSet TODO
+            // panel via the View buttons that ship with the local TODO
+            // feature.
+            if (this.viewType === "priority") {
+                return this.buildWorkspacePriorityGroups(workspaceStores);
+            }
+            if (this.viewType === "file") {
+                return this.buildWorkspaceFileGroups(workspaceStores);
+            }
+            return (
+                this.makeWorkspaceSection(
+                    workspaceStores,
+                    this.emptyStateCopy,
+                ).children ?? []
+            );
         }
 
         const projectItems: ProjectTodoItem[] = [];
@@ -425,6 +477,7 @@ export class ProjectsTodoTreeProvider
      */
     private makeWorkspaceSection(
         workspaceStores: Map<string, import("../todo/todoStore").TodoStore>,
+        emptyStateCopy?: string,
     ): ProjectTodoItem {
         const subProjects: ProjectTodoItem[] = [];
 
@@ -483,12 +536,18 @@ export class ProjectsTodoTreeProvider
         // 注意 — 真實 sub-project 數量在加入 placeholder 之前快照,
         // 傳給 section item 的 description 用這個快照計算
         // `N sub-projects`,不要把 placeholder 算進去。
+        //
+        // 個別 panel 可透過 `emptyStateCopy` 覆寫 placeholder 文字
+        // (SuperSet TODO panel 用「drop into a folder」措辭對齊
+        // depth-1 contract,Workspace TODO 沿用舊文案)。
         const realSubProjectCount = subProjects.length;
         if (subProjects.length === 0) {
             subProjects.push({
                 line: 0,
                 text: "No README.todo files in this workspace",
-                description: "Drop a README.todo into a subdirectory to add it here",
+                description:
+                    emptyStateCopy ??
+                    "Drop a README.todo into a subdirectory to add it here",
                 kind: "list",
                 checked: false,
                 children: undefined,
@@ -512,6 +571,178 @@ export class ProjectsTodoTreeProvider
             description: `${realSubProjectCount} sub-project${realSubProjectCount === 1 ? "" : "s"}`,
         };
     }
+
+    /**
+     * Flatten every workspace sub-project's actionable items into a
+     * single flat list (sections and Plans wrappers dropped), apply
+     * the active showCompleted + priority filters, then bucket by
+     * leading `[Px]` tag. Mirrors `TodoTreeProvider.buildPriorityGroups`
+     * but operates across multiple sub-stores — the SuperSet TODO
+     * panel mounts this so its View: Priority button has the same
+     * effect as the local TODO panel's.
+     *
+     * Plan items are passed through (no priority tag) and end up in
+     * the `"None"` bucket, matching the local provider.
+     */
+    private buildWorkspacePriorityGroups(
+        workspaceStores: Map<string, import("../todo/todoStore").TodoStore>,
+    ): ProjectTodoItem[] {
+        const flat: ProjectTodoItem[] = [];
+        for (const [projectPath, store] of workspaceStores) {
+            const projectName = this.workspaceRoot
+                ? path.relative(this.workspaceRoot, projectPath) ||
+                  path.basename(projectPath)
+                : path.basename(projectPath);
+            const raw = store.getItems();
+            const completedFiltered = this.showCompleted
+                ? raw
+                : filterCompleted(raw);
+            const filtered = applyPriorityFilter(
+                completedFiltered,
+                this.enabledPriorities,
+            );
+            // Plan items survive filterCompleted / applyPriorityFilter
+            // (their passthrough behaviour mirrors the local panel),
+            // but in priority view they belong in the "None" bucket.
+            collectWorkspaceLeafItems(filtered, projectName, projectPath, flat);
+        }
+
+        const p0: ProjectTodoItem[] = [];
+        const p1: ProjectTodoItem[] = [];
+        const p2: ProjectTodoItem[] = [];
+        const none: ProjectTodoItem[] = [];
+        for (const item of flat) {
+            const m = item.text.match(/^(\[|\()?(P[0-2])(\]|\))?/i);
+            const tag = m?.[2]?.toUpperCase();
+            const copy: ProjectTodoItem = { ...item, children: undefined };
+            if (tag === "P0") p0.push(copy);
+            else if (tag === "P1") p1.push(copy);
+            else if (tag === "P2") p2.push(copy);
+            else none.push(copy);
+        }
+
+        const groups: ProjectTodoItem[] = [];
+        if (p0.length > 0) {
+            groups.push({
+                line: -100,
+                text: "P0",
+                kind: "section",
+                checked: false,
+                children: p0,
+                projectName: "<workspace>",
+                projectPath: "",
+            });
+        }
+        if (p1.length > 0) {
+            groups.push({
+                line: -101,
+                text: "P1",
+                kind: "section",
+                checked: false,
+                children: p1,
+                projectName: "<workspace>",
+                projectPath: "",
+            });
+        }
+        if (p2.length > 0) {
+            groups.push({
+                line: -102,
+                text: "P2",
+                kind: "section",
+                checked: false,
+                children: p2,
+                projectName: "<workspace>",
+                projectPath: "",
+            });
+        }
+        if (none.length > 0) {
+            groups.push({
+                line: -103,
+                text: "None",
+                kind: "section",
+                checked: false,
+                children: none,
+                projectName: "<workspace>",
+                projectPath: "",
+            });
+        }
+        return groups;
+    }
+
+    /**
+     * Flatten every workspace sub-project's items, group by source
+     * filename (via `extractLink` semantics), and return the grouped
+     * tree. Mirrors `TodoTreeProvider.buildFileGroups`.
+     *
+     * Plan items are routed to a synthetic `"plans"` group via
+     * `getWorkspaceFileGroup`'s kind-aware branch.
+     */
+    private buildWorkspaceFileGroups(
+        workspaceStores: Map<string, import("../todo/todoStore").TodoStore>,
+    ): ProjectTodoItem[] {
+        const flat: ProjectTodoItem[] = [];
+        for (const [projectPath, store] of workspaceStores) {
+            const projectName = this.workspaceRoot
+                ? path.relative(this.workspaceRoot, projectPath) ||
+                  path.basename(projectPath)
+                : path.basename(projectPath);
+            const raw = store.getItems();
+            const completedFiltered = this.showCompleted
+                ? raw
+                : filterCompleted(raw);
+            const filtered = applyPriorityFilter(
+                completedFiltered,
+                this.enabledPriorities,
+            );
+            collectWorkspaceLeafItems(filtered, projectName, projectPath, flat);
+        }
+
+        const groupsMap = new Map<
+            string,
+            {
+                label: string;
+                description?: string;
+                children: ProjectTodoItem[];
+            }
+        >();
+        for (const item of flat) {
+            const grp = getWorkspaceFileGroup(item.text, item.kind);
+            const key = grp.label;
+            const copy: ProjectTodoItem = { ...item, children: undefined };
+            const existing = groupsMap.get(key) ?? {
+                label: grp.label,
+                description: grp.description,
+                children: [],
+            };
+            existing.children.push(copy);
+            groupsMap.set(key, existing);
+        }
+
+        const groups: ProjectTodoItem[] = [];
+        let index = 0;
+        for (const val of groupsMap.values()) {
+            groups.push({
+                line: -200 - index,
+                text: val.label,
+                description: val.description,
+                kind: "section",
+                checked: false,
+                children: val.children,
+                projectName: "<workspace>",
+                projectPath: "",
+            });
+            index++;
+        }
+
+        groups.sort((a, b) => {
+            if (a.text === "README.todo") return -1;
+            if (b.text === "README.todo") return 1;
+            if (a.text === "plans") return -1;
+            if (b.text === "plans") return 1;
+            return a.text.localeCompare(b.text);
+        });
+        return groups;
+    }
 }
 
 function decorateItems(items: any[], projectName: string, projectPath: string): ProjectTodoItem[] {
@@ -526,4 +757,88 @@ function decorateItems(items: any[], projectName: string, projectPath: string): 
         }
         return decorated;
     });
+}
+
+/**
+ * Walk a sub-store's filtered items, dropping section wrappers and
+ * collecting every leaf checkbox/list/plan item into `out`. Children
+ * of leaf items are dropped (priority/file views show one row per
+ * task, not the full sub-tree — matching `TodoTreeProvider`'s
+ * behaviour). Recurses into section children because `filterCompleted`
+ * / `applyPriorityFilter` return a top-level list where the leaves
+ * are nested under their `##`/Default section wrapper.
+ */
+function collectWorkspaceLeafItems(
+    items: import("../todo/types").TodoItem[],
+    projectName: string,
+    projectPath: string,
+    out: ProjectTodoItem[],
+): void {
+    for (const item of items) {
+        if (item.kind !== "section") {
+            out.push({
+                ...item,
+                children: undefined,
+                projectName,
+                projectPath,
+            });
+            continue;
+        }
+        if (item.children && item.children.length > 0) {
+            collectWorkspaceLeafItems(
+                item.children,
+                projectName,
+                projectPath,
+                out,
+            );
+        }
+    }
+}
+
+/**
+ * Decide which file-group bucket a leaf item belongs to. Mirrors
+ * `TodoTreeProvider.getFileGroup`:
+ * - plan items → synthetic "plans" group
+ * - no extractable link → "README.todo"
+ * - link not ending in `.todo` → "README.todo"
+ * - `.todo` link → host-relative label (filename + path description)
+ */
+function getWorkspaceFileGroup(
+    text: string,
+    kind: ProjectTodoItem["kind"],
+): { label: string; description?: string } {
+    if (kind === "plan") {
+        return { label: "plans", description: "plans/" };
+    }
+    const link = extractLink(text);
+    if (!link) {
+        return { label: "README.todo" };
+    }
+    let cleanLink = link.split("#")[0];
+    if (!cleanLink.toLowerCase().endsWith(".todo")) {
+        return { label: "README.todo" };
+    }
+    if (cleanLink.startsWith("file:///")) {
+        const p = cleanLink.substring(8);
+        return labelForWorkspaceFilePath(p);
+    }
+    return labelForWorkspaceFilePath(cleanLink);
+}
+
+function labelForWorkspaceFilePath(
+    filePath: string,
+): { label: string; description?: string } {
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+        try {
+            const url = new URL(filePath);
+            return { label: url.hostname, description: url.pathname };
+        } catch {
+            return { label: filePath };
+        }
+    }
+    const normalized = filePath.replace(/\\/g, "/");
+    const parts = normalized.split("/");
+    const label = parts[parts.length - 1] || filePath;
+    const description = parts.length > 1 ? parts.slice(0, -1).join("/") : undefined;
+    return { label, description };
 }

@@ -38,7 +38,7 @@
                         "default": 5,
                         "minimum": 1,
                         "maximum": 10,
-                        "description": "Recursion depth for the 'Current Workspace' section in the Projects TODO overview. Scans README.todo files from the open workspace root down to this many subdirectory levels (1–10). Default 5."
+                        "description": "Recursion depth for the workspace-internal TODO scan shared by the SuperSet TODO panel and the 'Workspace TODO' panel under Overall. Scans README.todo files from the open workspace root down to this many subdirectory levels (1–10). The SuperSet TODO panel uses this depth + view switching (Section/Priority/File); the Overall Workspace TODO panel uses this depth only. Default 5."
                     }
                 }
             },

@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import type { FeatureContext, FeatureHandle } from "../shared";
-import { TodoStore } from "./todoStore";
-import { TodoTreeProvider } from "./todoTreeProvider";
+import { ProjectsTodoStore } from "../projectsTodo/projectsTodoStore";
+import { ProjectsTodoTreeProvider } from "../projectsTodo/projectsTodoTreeProvider";
 import { computeTodoBadgeTitle } from "./badge";
 import {
     completePlan as completePlanFs,
@@ -19,13 +20,44 @@ import {
     type TodoCommandStore,
     type TodoCommandTreeProvider,
     type TodoCommandPlanActions,
+    type TodoEngineItem,
 } from "../todoEngine";
 
 const TODO_VIEW_TITLE = "TODO";
+// SuperSet TODO 專用空狀態文案 — 與 Overall Workspace TODO 走同樣
+// 的 scan 邊界(maxDepth + includeRoot=true),所以這裡直接沿用
+// 「workspace subdirs」的措辭,不再提「immediate」之類 depth-1 語意。
+const SUPER_SET_EMPTY_COPY =
+    "No README.todo files in this workspace — drop a README.todo into a subdirectory to add it here.";
 
+/**
+ * SuperSet TODO panel — 取代原本的「讀 workspace root README.todo」
+ * 單檔行為,改用 workspace 內部掃描:
+ *
+ * - 從當前 workspace 根目錄出發,沿用與 Overall Workspace TODO
+ *   相同的 `superset.projectsTodo.maxDepth` 設定(預設 5,範圍
+ *   1–10),includeRoot = true(workspace root 自身也收)。
+ *   設定變更時自動重新掃描。
+ * - 每個含 `README.todo` 的子目錄作為一個 project row,內含
+ *   sections + Plans(對齊 Workspace TODO view 既有行為)。
+ * - 保留 `src/todo/` 既有的所有 title buttons:View: Section /
+ *   Priority / File、New TODO、Filter P0/P1/P2、Hide Completed /
+ *   Show All、Open README.todo — 共 29 個 `superset.todo*` 命令。
+ *   這是 SuperSet TODO 與 Overall Workspace TODO 唯一的功能差異:
+ *   同一個 scan 邊界,但前者提供 view-type 切換,後者只有 section。
+ * - row context menu 與 inline action 行為不變(`projectsTodo*`
+ *   context values 已涵蓋 `superset.todo` view 因為兩個 panel
+ *   共用同一個 provider)。
+ */
 export function register(ctx: FeatureContext): FeatureHandle {
-    const store = new TodoStore(ctx.workspaceFolder);
-    const provider = new TodoTreeProvider(store, ctx.context.extensionUri);
+    const store = new ProjectsTodoStore();
+    const provider = new ProjectsTodoTreeProvider(
+        store,
+        ctx.workspaceFolder,
+        ctx.context.extensionUri,
+        "workspace",
+        SUPER_SET_EMPTY_COPY,
+    );
     provider.start();
 
     const view = vscode.window.createTreeView("superset.todo", {
@@ -72,51 +104,82 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     const refreshTodoFilterBadge = () => {
         const filtering = !provider.isShowingCompleted();
-        const total = store.getCompletedCount();
         if (!filtering) {
             updateTodoFilterBadge(false, 0);
             return;
         }
-        // Type widened from `"checkbox" | "list"` to `string` because
-        // the synthetic "Plans" section (added in getChildren when the
-        // workspace has plan files) has kind: "section". We only read
-        // `.length` downstream so the looser type is safe.
-        const all = provider.getChildren() as
-            | { line: number; text: string; kind: string; checked: boolean; children?: unknown[] }[]
-            | undefined;
-        const shown = all?.length ?? 0;
-        const totalTop = store.getItems().length + (store.getPlanItems().length > 0 ? 1 : 0);
-        const hidden = Math.max(0, totalTop - shown);
-        updateTodoFilterBadge(true, hidden);
+        // depth-1 面板把「已隱藏」計成所有 workspaceStores 已完成
+        // 項目的總和 — 對齊既有 local TODO `store.getCompletedCount()`
+        // 行為。多 sub-project 不會 double-count 因為各 store 各自
+        // 持有自己的 items 快照。
+        let totalHidden = 0;
+        for (const s of store.getWorkspaceStores().values()) {
+            totalHidden += s.getCompletedCount();
+        }
+        updateTodoFilterBadge(true, totalHidden);
     };
 
     // Push initial state.
     refreshTodoFilterBadge();
 
-    // Load initial data; re-load on file changes.
-    store.load();
+    // Workspace scan — 與 Overall Workspace TODO 同步:
+    // - 讀取 `superset.projectsTodo.maxDepth` 設定(預設 5,範圍 1–10)
+    // - `includeRoot = true`(workspace root 自身也收)
+    // - 設定變更時自動重新掃描
+    //
+    // 兩個 panel 共用同一條 scan 邊界,差異只剩 SuperSet TODO 提供
+    // view-type 切換(View Sec/PX/File)。
+    const configSection = "superset.projectsTodo";
+    const readMaxDepth = (): number => {
+        const v = vscode.workspace
+            .getConfiguration(configSection)
+            .get<number>("maxDepth", 5);
+        return Math.min(10, Math.max(1, v));
+    };
+    let maxDepth = readMaxDepth();
+
+    const loadWorkspaceTodos = () =>
+        store
+            .loadWorkspaceTodos(ctx.workspaceFolder, maxDepth, true)
+            .then(() => refreshTodoFilterBadge());
+
+    loadWorkspaceTodos();
+
+    const configSub = vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration(`${configSection}.maxDepth`)) {
+            maxDepth = readMaxDepth();
+            void loadWorkspaceTodos();
+        }
+    });
 
     ctx.resetHandlers.push(async () => {
         await store.reset();
         refreshTodoFilterBadge();
     });
 
-    const todoFileWatcher = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(ctx.workspaceFolder, "README.todo")
+    // Watch every `README.todo` under the workspace root recursively so
+    // any new file at any depth re-triggers the scan. The depth is
+    // applied inside `loadWorkspaceTodos(folder, maxDepth, true)` —
+    // the watcher just nudges the scan.
+    const workspaceTodoWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(ctx.workspaceFolder, "**/README.todo")
     );
-    const onTodoFileChanged = () => {
-        store.load().then(() => refreshTodoFilterBadge());
+    const onWorkspaceTodoChanged = () => {
+        void loadWorkspaceTodos();
     };
-    todoFileWatcher.onDidChange(onTodoFileChanged);
-    todoFileWatcher.onDidCreate(onTodoFileChanged);
+    workspaceTodoWatcher.onDidChange(onWorkspaceTodoChanged);
+    workspaceTodoWatcher.onDidCreate(onWorkspaceTodoChanged);
+    workspaceTodoWatcher.onDidDelete(onWorkspaceTodoChanged);
 
-    // Watch the workspace's plans/ folder so newly authored plan files
-    // appear in the panel without needing to reload the window.
+    // Watch every sub-project's `plans/*.md` so newly authored plan
+    // files appear in the panel without needing to reload the window.
     const plansWatcher = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(ctx.workspaceFolder, "plans/*.md")
+        new vscode.RelativePattern(ctx.workspaceFolder, "**/plans/*.md")
     );
     const onPlansFileChanged = () => {
-        store.load().then(() => refreshTodoFilterBadge());
+        store.reset().then(() => {
+            void loadWorkspaceTodos();
+        });
     };
     plansWatcher.onDidChange(onPlansFileChanged);
     plansWatcher.onDidCreate(onPlansFileChanged);
@@ -136,7 +199,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // Normalize a TodoEngineItem (the factory's wider-kind union
     // that includes `checkboxWithLink`, `listArchived`, etc.) to the
-    // narrower TodoItem the store understands.
+    // narrower TodoItem the sub-store understands.
     const asTodoItem = (item: {
         line: number;
         checked: boolean;
@@ -169,42 +232,139 @@ export function register(ctx: FeatureContext): FeatureHandle {
         } as TodoItem;
     };
 
-    const todoStoreAdapter: TodoCommandStore = {
-        toggle: (item) => store.toggle(asTodoItem(item)),
-        updatePriority: (item, p) => store.updatePriority(asTodoItem(item), p),
-        addTodo: (_item, text, section) => store.addTodo(text, section),
-        openTodoFile: async (_item) => {
-            // The single-workspace panel always opens the local
-            // README.todo; no project picker needed.
-            const uri = vscode.Uri.file(
-                `${ctx.workspaceFolder}/README.todo`
+    const getSubStore = (projectPath: string | undefined) => {
+        if (!projectPath) return undefined;
+        return store.getWorkspaceStore(projectPath);
+    };
+
+    // dispatchItem routes a per-row mutation through the owning
+    // sub-store. Mirrors the helper used by `src/projectsTodo/index.ts`
+    // but is scoped to the workspace store map only — `~/projects`
+    // projects are not visible from this panel.
+    const dispatchItem = async (
+        kind:
+            | "toggle"
+            | "updatePriority"
+            | "archiveTodo"
+            | "rollbackTodo"
+            | "moveTodo"
+            | "deleteTodo"
+            | "updateText"
+            | "archiveSection"
+            | "unarchiveSection"
+            | "deleteSection",
+        item: TodoEngineItem,
+        ...rest: unknown[]
+    ): Promise<void> => {
+        const sub = getSubStore(item.projectPath);
+        if (!sub) return;
+        const fn = (sub as unknown as Record<string, (...a: unknown[]) => unknown>)[kind];
+        if (typeof fn === "function") await fn(item, ...rest);
+    };
+
+    // Pick a sub-project path — prefer the row's `projectPath`,
+    // otherwise surface a QuickPick of the discovered workspace
+    // sub-directories that have a `README.todo` file. Empty workspace
+    // → info message.
+    const pickSubProjectPath = async (
+        context: "new" | "open",
+    ): Promise<string | undefined> => {
+        const todoSet = new Set(store.getWorkspaceStores().keys());
+        if (todoSet.size === 0) {
+            vscode.window.showInformationMessage(
+                context === "new"
+                    ? "No README.todo in any subdirectory — drop one into a folder to add a TODO."
+                    : "No README.todo in any subdirectory to open."
             );
+            return undefined;
+        }
+        const activeProjects = [...todoSet]
+            .sort()
+            .map((p) => ({
+                label: path.relative(ctx.workspaceFolder, p) || path.basename(p),
+                description: p,
+            }));
+        const placeHolder =
+            context === "new"
+                ? "Select a subdirectory to add a TODO"
+                : "Select a README.todo to open";
+        const pick = await vscode.window.showQuickPick(activeProjects, {
+            placeHolder,
+        });
+        return pick?.description;
+    };
+
+    const todoStoreAdapter: TodoCommandStore = {
+        toggle: (item) => dispatchItem("toggle", item),
+        updatePriority: (item, p) =>
+            dispatchItem("updatePriority", item, p),
+        addTodo: async (item, text, section) => {
+            let projectPath = item?.projectPath;
+            if (!projectPath) {
+                projectPath = await pickSubProjectPath("new");
+                if (!projectPath) return;
+            }
+            const sub = getSubStore(projectPath);
+            if (!sub) return;
+            await sub.addTodo(text, section);
+        },
+        openTodoFile: async (item) => {
+            let projectPath = item?.projectPath;
+            if (!projectPath) {
+                const todoSet = new Set(store.getWorkspaceStores().keys());
+                if (todoSet.size === 0) {
+                    vscode.window.showInformationMessage(
+                        "No README.todo in any subdirectory — drop one into a folder to open."
+                    );
+                    return;
+                }
+                if (todoSet.size === 1) {
+                    projectPath = [...todoSet][0]!;
+                } else {
+                    projectPath = await pickSubProjectPath("open");
+                    if (!projectPath) return;
+                }
+            }
+            const uri = vscode.Uri.file(`${projectPath}/README.todo`);
             try {
-                const doc = await vscode.workspace.openTextDocument(uri);
-                if (doc.languageId !== "markdown") {
-                    await vscode.languages.setTextDocumentLanguage(
-                        doc,
-                        "markdown"
+                const doc = await vscode.window.showTextDocument(uri, {
+                    preview: true,
+                });
+                void doc; // keep linter quiet; preview is side-effect.
+            } catch (err) {
+                try {
+                    const doc = await vscode.workspace.openTextDocument(uri);
+                    if (doc.languageId !== "markdown") {
+                        await vscode.languages.setTextDocumentLanguage(
+                            doc,
+                            "markdown"
+                        );
+                    }
+                    await vscode.commands.executeCommand(
+                        "markdown.showPreview",
+                        uri
+                    );
+                } catch (innerErr) {
+                    vscode.window.showErrorMessage(
+                        `Failed to open README.todo: ${innerErr ?? err}`
                     );
                 }
-                await vscode.commands.executeCommand(
-                    "markdown.showPreview",
-                    uri
-                );
-            } catch (err) {
-                vscode.window.showErrorMessage(
-                    `Failed to open README.todo: ${err}`
-                );
             }
         },
-        moveTodo: (item, section) => store.moveTodo(asTodoItem(item), section),
-        archiveTodo: (item) => store.archiveTodo(asTodoItem(item)),
-        rollbackTodo: (item) => store.rollbackTodo(asTodoItem(item)),
-        archiveSection: (item) => store.archiveSection(asTodoItem(item)),
-        unarchiveSection: (item) => store.unarchiveSection(asTodoItem(item)),
-        deleteSection: (item) => store.deleteSection(asTodoItem(item)),
-        updateText: (line, text) => store.updateText(line, text),
-        deleteTodo: (item) => store.deleteTodo(asTodoItem(item)),
+        moveTodo: (item, section) => dispatchItem("moveTodo", item, section),
+        archiveTodo: (item) => dispatchItem("archiveTodo", item),
+        rollbackTodo: (item) => dispatchItem("rollbackTodo", item),
+        archiveSection: (item) => dispatchItem("archiveSection", item),
+        unarchiveSection: (item) => dispatchItem("unarchiveSection", item),
+        deleteSection: (item) => dispatchItem("deleteSection", item),
+        updateText: (line, text) =>
+            dispatchItem("updateText", {
+                line,
+                text,
+                checked: false,
+                kind: "checkbox",
+            } as TodoEngineItem),
+        deleteTodo: (item) => dispatchItem("deleteTodo", item),
         reset: async () => {
             await store.reset();
         },
@@ -216,7 +376,24 @@ export function register(ctx: FeatureContext): FeatureHandle {
         togglePriority: (p) => provider.togglePriorityFilter(p),
         setViewType: (t) => provider.setViewType(t),
         getViewType: () => provider.getViewType(),
-        getSectionList: () => provider.getSectionList(),
+        // Section names the user can move an item into. When the row
+        // carries a `projectPath`, look up the owning sub-store and
+        // enumerate its `##`/`###` headings; otherwise fall back to
+        // `["Default"]` so the QuickPick has at least one option.
+        getSectionList: (item?: TodoEngineItem) => {
+            const sub = item?.projectPath
+                ? store.getWorkspaceStore(item.projectPath)
+                : undefined;
+            if (!sub) return ["Default"];
+            const sections = new Set<string>(["Default"]);
+            for (const it of sub.getItems()) {
+                const level = (it as { level?: number }).level;
+                if (level !== undefined && it.text) {
+                    sections.add(it.text);
+                }
+            }
+            return [...sections];
+        },
     };
     const planActionAdapter: TodoCommandPlanActions = {
         complete: (root, name) => completePlanFs(root, name),
@@ -244,20 +421,24 @@ export function register(ctx: FeatureContext): FeatureHandle {
     //
     // Two row kinds carry a checkbox:
     //   - `kind: "checkbox"` (regular todo): toggle the checked state
-    //     via the store, which writes the file and emits the change
-    //     that re-renders the tree with the new state.
+    //     via the owning sub-store, which writes the file and emits
+    //     the change that re-renders the tree with the new state.
     //   - `kind: "plan"`: route through `superset.todoCompletePlan`,
     //     which moves the file to `docs/specs/` and refreshes the
     //     store. The row disappears from the tree entirely, so the
     //     checkbox is never seen in a "checked" state.
     view.onDidChangeCheckboxState?.(async (e) => {
         for (const [item] of e.items) {
-            if (item.kind === "checkbox") {
-                await store.toggle(item);
-            } else if (item.kind === "plan") {
+            const pItem = item as TodoEngineItem;
+            if (pItem.kind === "checkbox") {
+                const subStore = getSubStore(pItem.projectPath);
+                if (subStore) {
+                    await subStore.toggle(asTodoItem(pItem));
+                }
+            } else if (pItem.kind === "plan") {
                 await vscode.commands.executeCommand(
                     "superset.todoCompletePlan",
-                    item,
+                    pItem,
                 );
             }
         }
@@ -272,8 +453,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
     ctx.subscriptions.push(
         view,
         visibilitySub,
-        todoFileWatcher,
+        workspaceTodoWatcher,
         plansWatcher,
+        configSub,
         // All `superset.todo*` commands (Toggle / ChangePriority /
         // Filter{P0,P1,P2}{,On} / ViewSec/PX/File / FilterHideCompleted /
         // ShowAll / New / Open / OpenLink / Complete|Backlog|Archive|Delete
@@ -296,8 +478,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
             // Factory disposes its own registered commands via
             // `todoFactorySet.disposables` above.
             view.dispose();
-            todoFileWatcher.dispose();
+            workspaceTodoWatcher.dispose();
             plansWatcher.dispose();
+            configSub.dispose();
         },
     };
 }

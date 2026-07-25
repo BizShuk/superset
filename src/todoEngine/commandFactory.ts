@@ -253,11 +253,16 @@ export function createTodoCommands(
             const item = raw as TodoEngineItem | undefined;
             if (!item?.filePath) return;
             const basename = path.basename(item.filePath);
+            // Resolve the plan's owning directory: prefer the row's
+            // `projectPath` (set by both `src/projectsTodo/` and the
+            // depth-1 panel in `src/todo/`), fall back to the open
+            // workspace for the legacy single-file panel. Without this
+            // `??`, plan actions on rows that live in a sub-project
+            // (e.g. `~/projects/foo/plans/bar.md`) would target the
+            // workspace's `plans/` directory and silently miss.
+            const planRoot = item.projectPath ?? ctx.workspaceFolder;
             try {
-                await ctx.planActions[action](
-                    ctx.workspaceFolder,
-                    basename
-                );
+                await ctx.planActions[action](planRoot, basename);
                 if (ctx.store.reset) {
                     await ctx.store.reset();
                 }
