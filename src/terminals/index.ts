@@ -28,6 +28,12 @@ import {
     captureSnapshot,
     renderActivityMarkdown,
 } from "../terminalActivitySummary";
+import { PtyTap } from "./ptyTap";
+import {
+    PtyTapServer,
+    defaultTapSocketPath,
+    subscribeShellExecToTap,
+} from "./ptyTapServer";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const log = ctx.shared.log;
@@ -138,6 +144,50 @@ export function register(ctx: FeatureContext): FeatureHandle {
     watcher.start();
     log("OutputWatcher started");
 
+    // ── PtyTap (terminal-listener bridge) ───────────────────────────
+    //
+    // Routes every PTY-backed terminal's raw bytes to a per-window Unix
+    // domain socket so an external `superset-pty` CLI can subscribe.
+    // Two source paths are bridged:
+    //
+    //   1. PTY-backed terminals — `ptyFactory.onHostCreated` registers
+    //      each new `PtyTerminalHost.onWrite` / `onClose` to the tap.
+    //   2. Shell Integration terminals — `subscribeShellExecToTap`
+    //      drains `execution.read()` for every non-PTY shell.
+    //
+    // The sink is held behind a let-binding so the async server
+    // construction (which removes stale sockets and binds the listener)
+    // can hand off its reference without blocking the rest of register().
+    // Frames emitted before the server is listening go to a null sink
+    // (no-op) and are dropped — this only matters in the few-ms window
+    // before listen() resolves; no terminals exist yet at that point.
+    const tapSocketPath = defaultTapSocketPath(
+        vscode.env.sessionId,
+        process.pid
+    );
+    let ptyTapServer: PtyTapServer | undefined;
+    const ptyTapSink = {
+        write: (frame: import("./ptyTap").Frame): void => {
+            ptyTapServer?.write(frame);
+        },
+    };
+    const ptyTap = new PtyTap({
+        sessionId: vscode.env.sessionId,
+        pid: process.pid,
+        sink: ptyTapSink,
+        log,
+    });
+    void PtyTapServer.create(tapSocketPath, log).then((server) => {
+        ptyTapServer = server;
+    });
+
+    // Bridge Shell Integration terminals into the same tap. Drains
+    // `execution.read()` for every non-PTY shell and emits
+    // open/data/close frames. Runs independently of OutputWatcher,
+    // which uses its own `createShellExecutionSource` drain.
+    const tapBindingDisposers: (() => void)[] = [];
+    const unsubscribeShellExec = subscribeShellExecToTap(ptyTap, log);
+
     // PTY-backed terminal factory (100% TUI interception).
     const ptyFactory = new PtyTerminalFactory({
         registry,
@@ -146,6 +196,19 @@ export function register(ctx: FeatureContext): FeatureHandle {
             tracker.isRecentlyActive(terminal as vscode.Terminal),
         spawn: createNodePtySpawner(),
         log,
+        // Every time a new PtyTerminalHost is built, register its
+        // onWrite / onClose listeners with the tap so the raw bytes
+        // get framed and pushed to the socket. The disposable chain
+        // is captured so we can detach when the feature tears down.
+        onHostCreated: (host, { name, cwd }) => {
+            const binding = ptyTap.bindPty(name, cwd);
+            const offWrite = host.onWrite(binding.onData);
+            const offClose = host.onClose((code) => binding.onClose(code ?? 0));
+            tapBindingDisposers.push(() => {
+                offWrite();
+                offClose();
+            });
+        },
     });
     const getCwd = () =>
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
@@ -248,6 +311,21 @@ export function register(ctx: FeatureContext): FeatureHandle {
         editorFocusSub,
         visibilitySub,
         offMermaidPreviewCmd,
+        // PtyTap teardown: detach host listeners, stop the shell-exec
+        // subscriber, then close the Unix socket server. Order matters —
+        // detaching listeners first prevents new frames being routed
+        // after the sink starts dropping.
+        { dispose: () => unsubscribeShellExec() },
+        { dispose: () => tapBindingDisposers.splice(0).forEach((d) => d()) },
+        {
+            dispose: () => {
+                const server = ptyTapServer;
+                ptyTapServer = undefined;
+                if (server) {
+                    void server.stop();
+                }
+            },
+        },
         ...commandSubs,
         // `treeViewEntry` is `undefined` when the registry singleton
         // hasn't been initialised (test environment, late activation
