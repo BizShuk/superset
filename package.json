@@ -1209,8 +1209,8 @@
             },
             {
                 "command": "superset.editorLayoutCycle",
-                "key": "ctrl+alt+v",
-                "mac": "ctrl+alt+v",
+                "key": "cmd+alt+v",
+                "mac": "cmd+alt+v",
                 "when": "editorIsOpen"
             },
             {
