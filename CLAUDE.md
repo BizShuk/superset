@@ -65,6 +65,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - 診斷日誌只在 `seen → unseen` 真的翻轉時輸出。被抑制的路徑是熱路徑，逐事件記錄會讓 OutputChannel 自己變成 EH 主執行緒的效能問題。
 - 來源 `A` 每個 poll 只跑`一次` `ps`（供所有 terminal 共用），下一 tick 只在當前 tick settle 後排程，且 timer 必須 `unref()`。判定用累積 CPU 時間（`ps -o time=`）的 delta 而非 `%cpu`，並排除 shell 自身的 CPU —— 互動式 shell 光是重繪 prompt 就會累積，計入會讓每個閒置 terminal 看起來都在忙。
 - `node-pty` 是 runtime PTY binding（upstream `^1.1.0`）；不可換回 `@homebridge/node-pty-prebuilt-multiarch` fork 或在其他 fork 之間切換。不可在 `.vscodeignore` 排除 production `node_modules`。
+- `node-pty@1.1.0` 的 macOS `spawn-helper` 必須保持 executable bit。根 `postinstall` 以 `scripts/prepare-node-pty.js` 修復所有 Darwin prebuild，`scripts/verify-vsix.sh` 必須同時驗證 `darwin-x64` / `darwin-arm64` helper 在 VSIX 內為 executable；PTY spawn 例外必須回報 UI 並觸發 close，不得留下永久等待的 terminal。
 - `PtyTerminalHost.pendingBytes` 的定義是`從 pty 收到、尚未交給 onDidWrite 的位元組`——本 class 自己持有的佇列深度。不得改回「已送下游、待 ack」的模型：`vscode.Pseudoterminal.onDidWrite` 是 fire-and-forget，renderer 不回 ack，那樣的計數器沒有東西能遞減，pty 一旦 pause 就永不 resume。
 - Flush 必須受 `MAX_FLUSH_BYTES` 限制並在殘留時重排。切片以 code unit 為界且切點落在 high surrogate 時回退一格；teardown 用的 `flushWriteBuffer` 則刻意不套 budget，扣住尾端等同遺失。
 - `onExit` 必須清掉 `proc` 與 `opened` 並設 `disposed`；`fireClose` 由 `closeFired` 保證只觸發一次。`disposed` 與 `opened` 是兩件事——只靠 `opened === false` 會讓 stray `open()` 復活一個使用者以為已死的 shell。`close()` 在 paused 時必須先補 `resume()` 再 kill，並於 `KILL_ESCALATION_MS` 後升級 `SIGKILL`。

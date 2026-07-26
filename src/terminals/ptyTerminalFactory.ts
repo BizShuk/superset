@@ -172,6 +172,11 @@ export class PtyTerminalFactory {
             env: buildShellEnv(),
             getConfig: readWaterMarkConfig,
             log,
+            onSpawnError: (message) => {
+                void vscode.window.showErrorMessage(
+                    `Superset: 無法啟動 PTY terminal：${message}`
+                );
+            },
         });
         const pty = createPtyPseudoterminal(host);
         terminalRef = vscode.window.createTerminal({ name, pty });

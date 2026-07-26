@@ -131,6 +131,45 @@ describe("PtyTerminalHost lifecycle hardening", () => {
         expect(fake.writes).toEqual(["before\n"]);
     });
 
+    it("reports and closes when spawning the PTY fails instead of leaving a stuck terminal", () => {
+        const registry = new TerminalRegistry();
+        const terminal = fakeTerminal("pty");
+        registry.add(terminal);
+        const spawn = vi.fn(() => {
+            throw new Error("posix_spawnp failed");
+        });
+        const log = vi.fn();
+        const onSpawnError = vi.fn();
+        const host = new PtyTerminalHost({
+            getTerminal: () => terminal,
+            registry,
+            getActiveTerminal: () => undefined,
+            spawn,
+            shell: "/bin/zsh",
+            args: ["-i"],
+            cwd: "/tmp",
+            env: {},
+            log,
+            onSpawnError,
+        });
+        const writes: string[] = [];
+        const onClose = vi.fn();
+        host.onWrite((data) => writes.push(data));
+        host.onClose(onClose);
+
+        expect(() => host.open({ columns: 80, rows: 24 })).not.toThrow();
+        expect(writes.join("")).toContain("posix_spawnp failed");
+        expect(onSpawnError).toHaveBeenCalledWith("posix_spawnp failed");
+        expect(onClose).toHaveBeenCalledOnce();
+        expect(onClose).toHaveBeenCalledWith(1);
+        expect(log).toHaveBeenCalledWith(
+            expect.stringContaining("spawn ERROR: posix_spawnp failed")
+        );
+
+        host.open({ columns: 80, rows: 24 });
+        expect(spawn).toHaveBeenCalledOnce();
+    });
+
     it("fires onClose exactly once when exit is followed by close()", () => {
         const { host, fake } = setup();
         host.open({ columns: 80, rows: 24 });

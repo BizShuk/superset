@@ -5,10 +5,12 @@ import type { PtyProcess } from "../src/terminals/ptyTerminalHost";
 // import time. Neither is available under vitest, so both are faked; the
 // factory's own logic (env sanitising, host bookkeeping) is what is under test.
 const created: Array<{ name: string; pty: unknown; disposed: boolean }> = [];
+const showErrorMessage = vi.fn();
 
 vi.mock("node-pty", () => ({ spawn: () => ({}) }));
 vi.mock("vscode", () => ({
     window: {
+        showErrorMessage,
         createTerminal: ({ name, pty }: { name: string; pty: unknown }) => {
             const terminal = { name, pty, disposed: false };
             created.push(terminal);
@@ -79,6 +81,7 @@ describe("buildShellEnv", () => {
 describe("PtyTerminalFactory host bookkeeping", () => {
     beforeEach(() => {
         created.length = 0;
+        showErrorMessage.mockClear();
     });
 
     function makeFactory() {
@@ -155,5 +158,26 @@ describe("PtyTerminalFactory host bookkeeping", () => {
         factory.forget(a);
         factory.dispose();
         expect(killed).toHaveLength(0);
+    });
+
+    it("shows the PTY spawn error instead of leaving a silent terminal", () => {
+        const factory = new PtyTerminalFactory({
+            registry: new TerminalRegistry(),
+            getWatched: () => undefined,
+            isRecentlyActive: () => false,
+            spawn: () => {
+                throw new Error("posix_spawnp failed");
+            },
+            log: () => {},
+        });
+        const terminal = factory.spawn("broken", "/tmp");
+        const pty = (terminal as unknown as {
+            pty: { open: (dimensions: unknown) => void };
+        }).pty;
+
+        expect(() => pty.open({ columns: 80, rows: 24 })).not.toThrow();
+        expect(showErrorMessage).toHaveBeenCalledWith(
+            "Superset: 無法啟動 PTY terminal：posix_spawnp failed"
+        );
     });
 });

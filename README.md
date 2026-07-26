@@ -360,6 +360,8 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 同時建立標準 project directories（`docs/tutorials/`、`docs/backlog/`、`docs/specs/`、`plans/`、`pkg/`、`config/`、`cmd/`、`.vscode/`、`.agents/`），並建立 `AGENTS.md -> CLAUDE.md` symbolic link。若目標 ignore file 已存在，執行命令時會先顯示 overwrite confirmation；取消即可保留原檔。
 
+安裝成功後 Run Terminal 會自動關閉。若 PTY shell 無法啟動，Superset 會顯示具體錯誤並結束該 terminal，不會留下持續等待的空白 terminal。
+
 這個命令取代舊的 `Superset: Install Ignore Template`；舊 command ID `superset.installIgnoreTemplate` 已不再註冊。
 
 ---

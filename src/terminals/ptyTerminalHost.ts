@@ -116,6 +116,8 @@ export interface PtyTerminalHostDeps {
     env: NodeJS.ProcessEnv;
     isRecentlyActive?: (terminal: TerminalHandle) => boolean;
     log?: (msg: string) => void;
+    /** Report a shell spawn failure to the UI without importing vscode here. */
+    onSpawnError?: (message: string) => void;
     /**
      * Optional command to run inside the shell once it spawns.
      * Used by the mDNS one-click-connect flow (`Superset: Connect`)
@@ -204,19 +206,41 @@ export class PtyTerminalHost {
             `[pty] open shell="${this.deps.shell}" cwd="${this.deps.cwd}" ` +
                 `cols=${dimensions.columns} rows=${dimensions.rows}`
         );
-        this.proc = this.deps.spawn(this.deps.shell, this.deps.args, {
-            cwd: this.deps.cwd,
-            env: this.deps.env,
-            cols: dimensions.columns,
-            rows: dimensions.rows,
-        });
+        let proc: PtyProcess;
+        try {
+            proc = this.deps.spawn(this.deps.shell, this.deps.args, {
+                cwd: this.deps.cwd,
+                env: this.deps.env,
+                cols: dimensions.columns,
+                rows: dimensions.rows,
+            });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            log?.(`[pty] spawn ERROR: ${message}`);
+            this.opened = false;
+            this.disposed = true;
+            this.proc = undefined;
+            this.pendingBytes = 0;
+            this.paused = false;
+            this.fireWrite(
+                `\r\nSuperset: PTY terminal 啟動失敗: ${message}\r\n`
+            );
+            try {
+                this.deps.onSpawnError?.(message);
+            } catch (reportErr) {
+                log?.(`[pty] spawn error reporter ERROR: ${reportErr}`);
+            }
+            this.fireClose(1);
+            return;
+        }
+        this.proc = proc;
 
-        this.proc.onData((data) => {
+        proc.onData((data) => {
             this.bufferWrite(data);
             this.detectActivity(data);
         });
 
-        this.proc.onExit((code) => {
+        proc.onExit((code) => {
             log?.(`[pty] exit code=${code}`);
             // Tear down for real. Leaving `proc` set meant every later
             // `handleInput` wrote into a dead pty and had the error swallowed
