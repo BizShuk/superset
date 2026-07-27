@@ -19,11 +19,22 @@ import { panelLayoutPlugin } from "./panelLayout/plugin";
 import {
     setDiagnosticChannel,
     setPluginManager,
+    setTerminalSpawner,
 } from "./crossModuleState";
 import {
     setTreeViewRegistry,
     TreeViewRegistry,
 } from "./plugin/treeViewRegistry";
+
+interface ActiveRuntime {
+    readonly manager: PluginManager;
+    readonly diag: vscode.OutputChannel;
+    readonly log: (message: string) => void;
+    readonly activation: Promise<void>;
+}
+
+let activeRuntime: ActiveRuntime | undefined;
+let teardownPromise: Promise<void> | undefined;
 
 /**
  * Composition root — pre-plugin-orchestration this file directly
@@ -35,9 +46,19 @@ import {
  * Adding a new feature no longer requires editing this file — drop
  * the plugin into the list (or load it dynamically).
  */
-export function activate(
+export async function activate(
     context: vscode.ExtensionContext
 ): Promise<{ extendMarkdownIt(md: MarkdownIt): MarkdownIt } | undefined> {
+    // VS Code activates an extension once per host, but keeping this boundary
+    // re-entrant prevents a reload/test activation from inheriting sockets,
+    // watchers, commands, or timers from a previous runtime.
+    if (teardownPromise) {
+        await teardownPromise;
+    }
+    if (activeRuntime) {
+        await deactivate();
+    }
+
     // Diagnostic channel — owned by the root so it survives across plugins.
     const diag = vscode.window.createOutputChannel("Superset");
     const log = (msg: string) => {
@@ -99,17 +120,63 @@ export function activate(
         panelLayoutPlugin,
     ];
 
-    // Await the full activation batch so every plugin has finished
-    // its `activate()` before we compose the markdown-it chain.
-    // VSCode accepts a `Thenable` return from `activate()`.
-    return manager
-        .activateAll(plugins, context)
-        .then(() => manager.getMarkdownExtension());
+    // Store the in-flight activation as part of the runtime. If shutdown
+    // races activation, deactivate() waits for the batch before walking the
+    // completed plugin set in reverse order.
+    const activation = manager.activateAll(plugins, context);
+    const runtime: ActiveRuntime = { manager, diag, log, activation };
+    activeRuntime = runtime;
+
+    try {
+        await activation;
+    } catch (err) {
+        if (activeRuntime === runtime) {
+            await deactivate();
+        }
+        throw err;
+    }
+
+    // A concurrent deactivate/re-activate may have retired this runtime while
+    // activation was settling. Never return hooks backed by a dead manager.
+    if (activeRuntime !== runtime) {
+        return undefined;
+    }
+    return manager.getMarkdownExtension();
 }
 
-export function deactivate(): void {
-    // Plugin disposables are torn down by VSCode via
-    // `context.subscriptions`; the manager also force-disposes any
-    // plugin-registered disposables during its own `deactivateAll`
-    // pass, but that's optional for the standard deactivation path.
+export function deactivate(): Promise<void> {
+    if (teardownPromise) {
+        return teardownPromise;
+    }
+
+    const runtime = activeRuntime;
+    if (!runtime) {
+        return Promise.resolve();
+    }
+    activeRuntime = undefined;
+
+    teardownPromise = (async () => {
+        try {
+            // `PluginContext.registerDisposable()` writes to manager-owned
+            // pools, not `ExtensionContext.subscriptions`. This call is the
+            // authoritative shutdown path for mDNS, TreeView refresh timers,
+            // file watchers, PTYs, commands, and status items.
+            await runtime.activation.catch(() => undefined);
+            runtime.log("deactivate start");
+            await runtime.manager.deactivateAll();
+            runtime.log("deactivate complete");
+        } finally {
+            // Drop module-level roots after feature teardown so no stale
+            // manager/view/provider/PTY factory can survive a window reload.
+            setTerminalSpawner(undefined);
+            setTreeViewRegistry(undefined);
+            setPluginManager(undefined);
+            setDiagnosticChannel(undefined);
+            runtime.diag.dispose();
+        }
+    })().finally(() => {
+        teardownPromise = undefined;
+    });
+
+    return teardownPromise;
 }

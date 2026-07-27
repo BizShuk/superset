@@ -7,6 +7,7 @@
 // 3. The global-commands plugin registers its expected command surface.
 // 4. `superset.resetCaches` end-to-end fires the manager's resetAll.
 vi.mock("vscode", () => {
+    let outputDisposeCount = 0;
     class EventEmitter<T> {
         private listeners = new Set<(e: T) => void>();
         event = (listener: (e: T) => void) => {
@@ -32,7 +33,9 @@ vi.mock("vscode", () => {
             createOutputChannel: () => ({
                 appendLine: noop,
                 show: noop,
-                dispose: noop,
+                dispose: () => {
+                    outputDisposeCount += 1;
+                },
             }),
             createStatusBarItem: () => ({
                 text: "",
@@ -90,11 +93,23 @@ vi.mock("vscode", () => {
         Disposable: { from: () => noopDisposable },
         // Test helpers
         __commands: commands,
+        __outputDisposeCount: () => outputDisposeCount,
+        __resetTestState: () => {
+            commands.clear();
+            outputDisposeCount = 0;
+        },
     };
 });
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as vscode from "vscode";
+import {
+    getDiagnosticChannel,
+    getPluginManager,
+    getTerminalSpawner,
+    setTerminalSpawner,
+} from "../src/crossModuleState";
+import { getTreeViewRegistry } from "../src/plugin/treeViewRegistry";
 
 const { activate, deactivate } = await import("../src/extension");
 
@@ -111,8 +126,15 @@ function fakeExtCtx(): vscode.ExtensionContext {
 }
 
 describe("extension activation via PluginManager", () => {
-    beforeEach(() => {
-        (vscode as unknown as { __commands: Map<string, Function> }).__commands.clear();
+    beforeEach(async () => {
+        await deactivate();
+        (
+            vscode as unknown as { __resetTestState(): void }
+        ).__resetTestState();
+    });
+
+    afterEach(async () => {
+        await deactivate();
     });
 
     it("activates without throwing and returns a markdown-it extender", async () => {
@@ -202,7 +224,37 @@ describe("extension activation via PluginManager", () => {
         expect(viewIds).toContain("superset.projectsTodo");
     });
 
-    it("deactivate() is a no-op (no throw)", () => {
-        expect(() => deactivate()).not.toThrow();
+    it("deactivate() releases manager-owned resources and global roots", async () => {
+        const ext = fakeExtCtx();
+        await activate(ext);
+        const testApi = vscode as unknown as {
+            __commands: Map<string, Function>;
+            __outputDisposeCount(): number;
+        };
+
+        expect(getPluginManager()).toBeDefined();
+        expect(getDiagnosticChannel()).toBeDefined();
+        expect(getTreeViewRegistry()).toBeDefined();
+        // The lightweight vscode mock cannot fully activate terminals, so
+        // seed the same cross-module root that a real activation publishes.
+        setTerminalSpawner(() => ({} as vscode.Terminal));
+        expect(getTerminalSpawner()).toBeDefined();
+        expect(testApi.__commands.has("superset.mdnsRefresh")).toBe(true);
+
+        await deactivate();
+
+        expect(getPluginManager()).toBeUndefined();
+        expect(getDiagnosticChannel()).toBeUndefined();
+        expect(getTreeViewRegistry()).toBeUndefined();
+        expect(getTerminalSpawner()).toBeUndefined();
+        expect(testApi.__commands.has("superset.mdnsRefresh")).toBe(false);
+        expect(testApi.__commands.has("superset.sessionsRefresh")).toBe(false);
+        expect(testApi.__commands.has("superset.resetCaches")).toBe(false);
+        expect(testApi.__outputDisposeCount()).toBe(1);
+
+        // Root teardown is idempotent; VS Code may dispose subscriptions
+        // after awaiting the exported deactivate hook.
+        await deactivate();
+        expect(testApi.__outputDisposeCount()).toBe(1);
     });
 });

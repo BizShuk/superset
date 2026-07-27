@@ -195,7 +195,9 @@ export class TreeViewRegistry {
  *  `setTreeViewRegistry(registry)` in `extension.ts` after
  *  construction. */
 let registryRef: TreeViewRegistry | undefined;
-export function setTreeViewRegistry(registry: TreeViewRegistry): void {
+export function setTreeViewRegistry(
+    registry: TreeViewRegistry | undefined
+): void {
     registryRef = registry;
 }
 export function getTreeViewRegistry(): TreeViewRegistry | undefined {

@@ -76,6 +76,33 @@ describe("PluginManager", () => {
         );
     });
 
+    it("tears down partial resources when plugin activation fails", async () => {
+        const log = vi.fn();
+        const mgr = new PluginManager({
+            extensionContext: fakeExtCtx(),
+            workspaceFolder: "/ws",
+            log,
+            showStatus: () => {},
+        });
+        const disposable = { dispose: vi.fn() };
+        const deactivate = vi.fn();
+        const broken = makePlugin({
+            id: "partial",
+            activate: (ctx: PluginContext) => {
+                ctx.registerDisposable(disposable);
+                throw new Error("failed after allocating");
+            },
+            deactivate,
+        });
+
+        await mgr.activateAll([broken], fakeExtCtx());
+
+        expect(deactivate).toHaveBeenCalledOnce();
+        expect(disposable.dispose).toHaveBeenCalledOnce();
+        expect(mgr.has("partial")).toBe(false);
+        expect(mgr.getDisposables("partial")).toEqual([]);
+    });
+
     it("marks failed plugins in workspaceState", async () => {
         const ext = fakeExtCtx();
         const mgr = new PluginManager({
@@ -119,6 +146,10 @@ describe("PluginManager", () => {
         expect(d1.dispose).toHaveBeenCalledOnce();
         expect(d2.dispose).toHaveBeenCalledOnce();
         expect(mgr.has("d")).toBe(false);
+
+        await mgr.deactivateAll();
+        expect(d1.dispose).toHaveBeenCalledOnce();
+        expect(d2.dispose).toHaveBeenCalledOnce();
     });
 
     it("runs reset handlers and isolates per-handler failures", async () => {

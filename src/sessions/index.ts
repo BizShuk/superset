@@ -239,7 +239,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         refreshAll();
     });
 
-    return {
+    const handle: FeatureHandle = {
         dispose() {
             for (const c of commands) c.dispose();
             docRegistration.dispose();
@@ -250,6 +250,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
             provider.dispose();
         },
     };
+    // Unlike the older feature modules, Sessions owns its watcher and
+    // commands only through this aggregate handle. Bridge it into the
+    // manager-owned pool so root deactivation actually reaches them.
+    ctx.subscriptions.push(handle);
+    return handle;
 }
 
 function asSession(element?: SessionsElement) {

@@ -39,6 +39,9 @@ export class MdnsExpirationSweeper {
     start(): void {
         if (this.timer) return;
         this.timer = setInterval(() => this.sweep(), EXPIRY_TICK_MS);
+        // The UDP transport owns mDNS liveness. The maintenance sweep must
+        // not independently pin Node's event loop if host teardown is late.
+        (this.timer as { unref?: () => void }).unref?.();
     }
 
     stop(): void {

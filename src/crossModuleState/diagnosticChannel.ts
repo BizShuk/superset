@@ -12,7 +12,7 @@ let diagnosticChannel: vscode.OutputChannel | undefined;
 
 /** Set the active diagnostic channel. Called once by `extension.ts`. */
 export function setDiagnosticChannel(
-    channel: vscode.OutputChannel
+    channel: vscode.OutputChannel | undefined
 ): void {
     diagnosticChannel = channel;
 }

@@ -43,6 +43,13 @@ export class PluginManager {
                 this.base.log(`plugin activated: ${plugin.id}`);
             } catch (err) {
                 this.markFailed(plugin.id, err);
+                // Activation may fail after a command, watcher, socket, or
+                // timer has already been registered. A failed plugin is not
+                // added to activePlugins, so waiting until deactivateAll()
+                // would otherwise skip those partial resources forever.
+                await this.deactivatePlugin(plugin, disposables);
+                this.disposables.delete(plugin.id);
+                this.resetHandlers.delete(plugin.id);
             }
         }
     }
@@ -100,24 +107,8 @@ export class PluginManager {
     async deactivateAll(): Promise<void> {
         const plugins = Array.from(this.activePlugins.values()).reverse();
         for (const plugin of plugins) {
-            try {
-                await plugin.deactivate?.();
-            } catch (err) {
-                this.base.log(
-                    `plugin ${plugin.id} deactivate() threw: ${err}`
-                );
-            }
-
             const disposables = this.disposables.get(plugin.id) ?? [];
-            for (const d of disposables) {
-                try {
-                    d.dispose();
-                } catch (err) {
-                    this.base.log(
-                        `disposable from ${plugin.id} threw on dispose: ${err}`
-                    );
-                }
-            }
+            await this.deactivatePlugin(plugin, disposables);
         }
         this.activePlugins.clear();
         this.contexts.clear();
@@ -148,5 +139,30 @@ export class PluginManager {
             `plugin.failed.${id}`,
             true
         );
+    }
+
+    private async deactivatePlugin(
+        plugin: ExtensionPlugin,
+        disposables: readonly vscode.Disposable[]
+    ): Promise<void> {
+        try {
+            await plugin.deactivate?.();
+        } catch (err) {
+            this.base.log(
+                `plugin ${plugin.id} deactivate() threw: ${err}`
+            );
+        }
+
+        // A legacy feature may register the same VS Code object through two
+        // adaptation paths. Dispose each identity once per teardown pass.
+        for (const d of new Set(disposables)) {
+            try {
+                d.dispose();
+            } catch (err) {
+                this.base.log(
+                    `disposable from ${plugin.id} threw on dispose: ${err}`
+                );
+            }
+        }
     }
 }

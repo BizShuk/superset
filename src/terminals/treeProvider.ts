@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
-import type { TerminalHandle } from "./types";
-import type { TerminalRegistry } from "./terminalRegistry";
 import { GroupStore, UNGROUPED_ID, type Group } from "./groupStore";
-import { buildTreeItemSpec, buildGroupSpec } from "./treeSpec";
+import type { TerminalRegistry } from "./terminalRegistry";
+import { buildGroupSpec, buildTreeItemSpec } from "./treeSpec";
+import type { TerminalHandle } from "./types";
 
-export { UNSEEN_PREFIX, stripUnseenPrefix } from "./treeSpec";
+export { stripUnseenPrefix, UNSEEN_PREFIX } from "./treeSpec";
 
 type TreeElement = Group | TerminalHandle;
 
@@ -77,14 +77,20 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
                     this.emitter.fire(undefined);
                     break;
                 case "groupChanged":
-                    this.emitter.fire(
-                        this.groupStore.getGroup(change.groupId)
-                    );
+                    this.emitter.fire(this.groupStore.getGroup(change.groupId));
                     break;
             }
         });
 
-        this.syncRefreshTimer();
+        if (this.refreshIntervalMs > 0) {
+            this.refreshTimer = setInterval(() => {
+                this.emitter.fire(undefined);
+            }, this.refreshIntervalMs);
+            // Periodic label refresh is useful while the host is alive, but
+            // must never be the handle that keeps an orphan extension host
+            // running after its renderer disappears.
+            (this.refreshTimer as { unref?: () => void }).unref?.();
+        }
     }
 
     stop(): void {
@@ -184,7 +190,7 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
 
     private buildTerminalTreeItem(terminal: TerminalHandle): vscode.TreeItem {
         const spec = buildTreeItemSpec(terminal, {
-            isUnseen: this.unseen.has(terminal),
+            isUnseen: this.unseen.has(terminal)
         });
         const item = new vscode.TreeItem(spec.label);
         item.description = spec.description;
@@ -197,16 +203,14 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
         item.command = {
             command: spec.command.command,
             title: "Focus Terminal",
-            arguments: spec.command.arguments,
+            arguments: spec.command.arguments
         };
         item.contextValue = spec.contextValue;
         return item;
     }
 
     private refreshUnseenSet(): void {
-        this.unseen = new Set(
-            this.registry.getUnseen().map((e) => e.terminal)
-        );
+        this.unseen = new Set(this.registry.getUnseen().map((e) => e.terminal));
     }
 }
 
