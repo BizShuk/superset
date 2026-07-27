@@ -97,6 +97,108 @@ describe("MdnsRegistry", () => {
         expect(transport.started).toBe(false);
     });
 
+    it("flushes on a fixed window even while later packets keep arriving", () => {
+        vi.useFakeTimers();
+        try {
+            registry.start();
+            transport.feed({
+                answers: [
+                    ptrRecord("_a._tcp.local", "A._a._tcp.local"),
+                ],
+            });
+            vi.advanceTimersByTime(200);
+            transport.feed({
+                answers: [
+                    ptrRecord("_b._tcp.local", "B._b._tcp.local"),
+                ],
+            });
+
+            vi.advanceTimersByTime(50);
+
+            expect(registry.getAll().map((service) => service.name)).toEqual([
+                "A._a._tcp.local",
+                "B._b._tcp.local",
+            ]);
+        } finally {
+            registry.stop();
+            vi.useRealTimers();
+        }
+    });
+
+    it("drops pending records when stopped", () => {
+        vi.useFakeTimers();
+        try {
+            registry.start();
+            transport.feed({
+                answers: [
+                    ptrRecord("_http._tcp.local", "Old._http._tcp.local"),
+                ],
+            });
+            registry.stop();
+            registry.start();
+            transport.feed({
+                answers: [
+                    ptrRecord("_http._tcp.local", "New._http._tcp.local"),
+                ],
+            });
+
+            vi.advanceTimersByTime(250);
+
+            expect(registry.getAll().map((service) => service.name)).toEqual([
+                "New._http._tcp.local",
+            ]);
+        } finally {
+            registry.stop();
+            vi.useRealTimers();
+        }
+    });
+
+    it("processes at most 256 records from one packet", () => {
+        vi.useFakeTimers();
+        try {
+            registry.start();
+            transport.feed({
+                answers: Array.from({ length: 257 }, (_, index) =>
+                    ptrRecord(
+                        `_svc-${index}._tcp.local`,
+                        `Svc-${index}._svc-${index}._tcp.local`
+                    )
+                ),
+            });
+
+            vi.advanceTimersByTime(250);
+
+            expect(registry.getAll()).toHaveLength(256);
+        } finally {
+            registry.stop();
+            vi.useRealTimers();
+        }
+    });
+
+    it("retains at most 512 pending or stored services", () => {
+        vi.useFakeTimers();
+        try {
+            registry.start();
+            for (let batch = 0; batch < 3; batch += 1) {
+                transport.feed({
+                    answers: Array.from({ length: 256 }, (_, index) =>
+                        ptrRecord(
+                            `_svc-${batch}-${index}._tcp.local`,
+                            `Svc-${batch}-${index}._svc-${batch}-${index}._tcp.local`
+                        )
+                    ),
+                });
+            }
+
+            vi.advanceTimersByTime(250);
+
+            expect(registry.getAll()).toHaveLength(512);
+        } finally {
+            registry.stop();
+            vi.useRealTimers();
+        }
+    });
+
     it("start is idempotent", () => {
         registry.start();
         registry.start();

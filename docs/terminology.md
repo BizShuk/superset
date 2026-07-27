@@ -300,7 +300,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `First Seen`                | Canonical Service 首次被發現的 timestamp。                                                  |
 | `Last Seen`                 | 最近一次持續 update 或 rediscovery 的 timestamp；merge 不得被較舊值倒退。                   |
 | `Source Address`            | 收到 multicast packet 的來源 IP，用於 network interface diagnosis。                         |
-| `Connect Action`            | 依 service type 嘗試以適當 URI scheme 連線，例如 `ssh://`。                                 |
+| `Connect Action`            | `resolveConnectCommand` 驗證 mDNS 欄位後產生的 discriminated union；SSH 為 terminal `cmd + args`，HTTP(S)/IPP(S) 為 external URI，無效輸入回傳 `null`。 |
 
 ## Topology 術語
 

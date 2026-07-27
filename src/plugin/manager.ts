@@ -155,9 +155,9 @@ export class PluginManager {
 
         // A legacy feature may register the same VS Code object through two
         // adaptation paths. Dispose each identity once per teardown pass.
-        for (const d of new Set(disposables)) {
+        for (const disposable of new Set(disposables)) {
             try {
-                d.dispose();
+                disposable.dispose();
             } catch (err) {
                 this.base.log(
                     `disposable from ${plugin.id} threw on dispose: ${err}`

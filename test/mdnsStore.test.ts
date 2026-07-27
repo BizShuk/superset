@@ -100,6 +100,32 @@ describe("MdnsStore", () => {
         expect(store.getAll()).toHaveLength(0);
     });
 
+    it("evicts the oldest service when its configured capacity is reached", () => {
+        const store = new MdnsStore(2);
+        store.upsert(
+            "A",
+            svc({ name: "A", host: "a.local", port: 80 })
+        );
+        store.upsert(
+            "B",
+            svc({ name: "B", host: "b.local", port: 80 })
+        );
+
+        const result = store.upsert(
+            "C",
+            svc({ name: "C", host: "c.local", port: 80 })
+        );
+
+        expect(result).toMatchObject({
+            kind: "added",
+            evicted: { name: "A" },
+        });
+        expect(store.getAll().map((service) => service.name)).toEqual([
+            "B",
+            "C",
+        ]);
+    });
+
     it("getDetailCached caches the result and reuses on second call", () => {
         const store = new MdnsStore();
         store.upsert("A", svc({}));

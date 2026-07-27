@@ -119,7 +119,7 @@ a
 
 ### 2. `MDNS` — 區網服務探索
 
-**功能**:訂閱同網段 mDNS / DNS-SD 廣播(印表機、AirPlay、SSH 等),以 tree view 列出所有可發現服務,展開可看位址、埠號、TXT 屬性等細節,並可一鍵複製 `host:port`。
+**功能**:訂閱同網段 mDNS / DNS-SD 廣播(印表機、AirPlay、SSH 等),以 tree view 列出所有可發現服務,展開可看位址、埠號、TXT 屬性等細節,並可一鍵複製 `host:port` 或連線。
 
 #### 2.1 自動去重 (Network-identity dedup)
 
@@ -158,14 +158,29 @@ a
 
 `buildMdnsDetailFields` (`src/mdns/mdnsTreeSpec.ts:36-38`) 在「主機」欄之後、「埠號」之前插入「別名」欄位,內容為 `aliases.join(", ")`;`aliases` 為空陣列或缺值時整欄省略。
 
-#### 2.4 逐步使用
+#### 2.4 安全邊界 (Security Boundaries)
+
+同網段的 mDNS 廣播一律視為不可信輸入。每個封包最多處理 `256` 筆 record，
+pending 與已儲存服務各最多 `512` 筆；DNS name、TXT、address、alias、
+subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無限累積。
+
+`Connect Action` 只有兩條執行路徑：
+
+- `_http._tcp`、`_https._tcp`、`_ipp._tcp`、`_ipps._tcp` 經 VS Code
+  `openExternal` 開啟已驗證 URI，不送進 shell。
+- `_ssh._tcp`、`_sftp._tcp` 只接受已驗證的 user、host 與 port，再將
+  `ssh` arguments 逐一 shell quote 後送入 PTY terminal。
+
+無法通過驗證或不支援的服務只顯示警告，不開 URI、也不執行 terminal command。
+
+#### 2.5 逐步使用
 
 1. 主側欄 `Superset` icon → 點開 `MDNS` 面板。
 2. 面板開始訂閱 UDP/5353,數秒內應自動出現同網段服務。
 3. 點某個服務列的右側 icon:
     - 📋 `Copy Service Address` → 複製 `host:port`
     - 👁 `Show Service Detail` → 顯示完整 TXT 屬性對話框
-    - 🔌 `Connect` → 嘗試用對應 URI scheme 連線(如 `ssh://`)
+    - 🔌 `Connect` → HTTP / IPP 交給外部應用；SSH 以安全引用的 terminal command 連線
 4. 點 `↻` icon 手動重新整理。
 5. 想看細節欄位(別名、TXT 屬性):點 `>` icon 展開該列。
 
@@ -485,8 +500,7 @@ mode = { horizontal: even | max } × { vertical: even | max }
 ```bash
 git clone https://github.com/BizShuk/superset
 cd superset
-npm install
-npm run build         # 型別檢查 + 編譯 + 打包 VSIX
+npm run build         # npm ci + 型別檢查 + 編譯 + 打包與驗證 VSIX
 code --install-extension superset-*.vsix
 ```
 
@@ -505,7 +519,7 @@ code --install-extension superset-*.vsix
 | `Superset: Scan Network Topology`               | —                   | 掃描網路拓撲                                                             |
 | `Superset: Refresh mDNS`                        | —                   | 重新整理 mDNS 面板                                                       |
 | `Superset: Copy Service Address`                | —                   | 複製 `host:port`                                                         |
-| `Superset: Connect`                             | —                   | 用對應 scheme 連線                                                       |
+| `Superset: Connect`                             | —                   | 驗證 mDNS 連線資料後，以外部 URI 或 SSH terminal 連線                     |
 | `Superset: New Terminal`                        | `Ctrl+Shift+``      | 開新 terminal                                                            |
 | `Superset: New Group`                           | —                   | 新增 terminal 群組                                                       |
 | `Superset: Rename` / `Rename Group`             | `F2`(terminal 面板) | 重新命名                                                                 |
@@ -536,7 +550,7 @@ code --install-extension superset-*.vsix
 ## 開發 (Develop)
 
 ```bash
-npm install              # 安裝相依
+npm ci                   # 依 lockfile 安裝相依
 npm run build            # 型別檢查 + tsc 編譯 + vsce package + verify-vsix
 npm run watch            # 邊改邊編譯
 npm test                 # 跑全部單元測試 (Vitest)
@@ -553,10 +567,11 @@ npm run test:watch       # watch 模式
 ### 打包
 
 ```bash
-npx @vscode/vsce package
+npm run package
 ```
 
-產出 `superset-<version>.vsix`(目前約 157 KB,只包當前 platform 的 `node-pty` prebuild)。
+產出 `superset-<version>.vsix`(目前約 2.8 MB，保留所有 platform 的
+`node-pty` runtime prebuild，並由 `scripts/verify-vsix.sh` 驗證內容)。
 
 ---
 

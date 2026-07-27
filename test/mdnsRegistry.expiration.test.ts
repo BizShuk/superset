@@ -232,4 +232,17 @@ describe("MdnsRegistry expiration", () => {
         expect(registry.getAll()).toHaveLength(0);
         expect(expiredCalls(listener)).toHaveLength(1);
     });
+
+    it("clamps an advertised TTL to 4500 seconds", () => {
+        const listener = vi.fn();
+        registry.onDidChange(listener);
+        feedService(transport, "Huge", { ttl: 1_000_000 });
+        flush();
+
+        advance(4_500 * TTL_GRACE_MULTIPLIER * 1000 + 1);
+        tickExpiry();
+
+        expect(registry.getAll()).toHaveLength(0);
+        expect(expiredCalls(listener)).toHaveLength(1);
+    });
 });

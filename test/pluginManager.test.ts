@@ -101,6 +101,9 @@ describe("PluginManager", () => {
         expect(disposable.dispose).toHaveBeenCalledOnce();
         expect(mgr.has("partial")).toBe(false);
         expect(mgr.getDisposables("partial")).toEqual([]);
+        await mgr.deactivateAll();
+        expect(deactivate).toHaveBeenCalledOnce();
+        expect(disposable.dispose).toHaveBeenCalledOnce();
     });
 
     it("marks failed plugins in workspaceState", async () => {

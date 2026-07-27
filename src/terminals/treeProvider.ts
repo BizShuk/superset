@@ -82,15 +82,7 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
             }
         });
 
-        if (this.refreshIntervalMs > 0) {
-            this.refreshTimer = setInterval(() => {
-                this.emitter.fire(undefined);
-            }, this.refreshIntervalMs);
-            // Periodic label refresh is useful while the host is alive, but
-            // must never be the handle that keeps an orphan extension host
-            // running after its renderer disappears.
-            (this.refreshTimer as { unref?: () => void }).unref?.();
-        }
+        this.syncRefreshTimer();
     }
 
     stop(): void {
@@ -125,7 +117,9 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
         this.refreshTimer = setInterval(() => {
             this.emitter.fire(undefined);
         }, this.refreshIntervalMs);
-        this.refreshTimer.unref?.();
+        // Periodic label refresh is useful while the view is visible, but
+        // must never be the handle that keeps an orphan extension host alive.
+        (this.refreshTimer as { unref?: () => void }).unref?.();
     }
 
     /**

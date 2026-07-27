@@ -10,6 +10,9 @@
 import * as os from "node:os";
 import * as vscode from "vscode";
 import { getDiagnosticChannel, getTerminalSpawner } from "./crossModuleState";
+import { quoteShellArg } from "./shellCommand";
+
+export { quoteShellArg } from "./shellCommand";
 
 export interface SpawnRunTerminalOptions {
     /** When `true` and the command exits 0, append `&& exit` so the
@@ -22,16 +25,6 @@ export interface SpawnRunTerminalOptions {
      *  `.gitignore`) MUST pass the target directory explicitly —
      *  otherwise the files land in `~/`. */
     cwd?: string;
-}
-
-/**
- * Wrap a string in single quotes, escaping any inner single quotes.
- * Used to make user-supplied paths / repo names safe to splice into
- * a shell command.
- */
-export function quoteShellArg(value: string): string {
-    if (value === "") return "''";
-    return `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 /**

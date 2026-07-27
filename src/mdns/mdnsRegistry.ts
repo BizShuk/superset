@@ -16,6 +16,14 @@ import {
     createMutableService,
     freezeMutable,
 } from "./parser";
+import type { MutableService } from "./parser";
+import {
+    isDnsName,
+    MAX_PENDING_SERVICES,
+    MAX_RECORDS_PER_PACKET,
+    MAX_STORED_SERVICES,
+    validServicePort,
+} from "./limits";
 
 export type { ClockSource };
 
@@ -43,7 +51,7 @@ export class MdnsRegistry {
         clock: ClockSource = DEFAULT_CLOCK
     ) {
         this.clock = clock;
-        this.store = new MdnsStore();
+        this.store = new MdnsStore(MAX_STORED_SERVICES);
         this.sweeper = new MdnsExpirationSweeper(
             this.store,
             (svc) => this.emit({ type: "expired", service: svc }),
@@ -70,6 +78,7 @@ export class MdnsRegistry {
             clearTimeout(this.coalesceTimer);
             this.coalesceTimer = undefined;
         }
+        this.pending.clear();
         this.sweeper.stop();
         this.transport.stop();
     }
@@ -111,24 +120,28 @@ export class MdnsRegistry {
     // ── Private: packet processing ─────────────────────────
 
     private handlePacket(pkt: MdnsPacket): void {
-        const allRecords = [
-            ...pkt.answers,
-            ...(pkt.additionals ?? []),
-        ];
+        let processed = 0;
+        records: for (const batch of [
+            pkt.answers,
+            pkt.additionals ?? [],
+        ]) {
+            for (const r of batch) {
+                if (processed >= MAX_RECORDS_PER_PACKET) break records;
+                processed += 1;
 
-        for (const r of allRecords) {
-            if (r.type === "PTR") {
-                this.handlePtr(r, pkt.srcAddress);
-            } else if (r.type === "SRV") {
-                this.handleSrv(r, pkt.srcAddress);
-            } else if (r.type === "TXT") {
-                this.handleTxt(r, pkt.srcAddress);
-            } else if (r.type === "A" || r.type === "AAAA") {
-                this.handleAddress(r);
+                if (r.type === "PTR") {
+                    this.handlePtr(r, pkt.srcAddress);
+                } else if (r.type === "SRV") {
+                    this.handleSrv(r, pkt.srcAddress);
+                } else if (r.type === "TXT") {
+                    this.handleTxt(r, pkt.srcAddress);
+                } else if (r.type === "A" || r.type === "AAAA") {
+                    this.handleAddress(r);
+                }
             }
         }
 
-        this.flushPending();
+        this.schedulePendingFlush();
     }
 
     private handlePtr(
@@ -136,10 +149,11 @@ export class MdnsRegistry {
         srcAddress?: string
     ): void {
         const data = r.data as string;
-        if (typeof data !== "string") return;
+        if (!isDnsName(r.name) || !isDnsName(data)) return;
         if (data === r.name) return; // skip self-referential
         const key = data;
         const pending = this.getPending(key, srcAddress);
+        if (!pending) return;
         // Stamp the pending entry with the time the record arrived —
         // matches the pre-refactor behaviour where `lastSeen` reflects
         // packet time, not flush time.
@@ -156,9 +170,17 @@ export class MdnsRegistry {
             priority?: number;
             weight?: number;
         };
-        if (!data || typeof data.port !== "number") return;
+        if (
+            !isDnsName(r.name) ||
+            !data ||
+            !validServicePort(data.port) ||
+            !isDnsName(data.target)
+        ) {
+            return;
+        }
         const key = r.name;
         const pending = this.getPending(key, srcAddress);
+        if (!pending) return;
         applySrv(r, pending, this.clockNow());
     }
 
@@ -167,9 +189,10 @@ export class MdnsRegistry {
         srcAddress?: string
     ): void {
         const data = r.data as Record<string, string> | Buffer | undefined;
-        if (!data) return;
+        if (!isDnsName(r.name) || !data) return;
         const key = r.name;
         const pending = this.getPending(key, srcAddress);
+        if (!pending) return;
         applyTxt(r, pending, this.clockNow());
     }
 
@@ -181,9 +204,13 @@ export class MdnsRegistry {
         applyAddress(r, this.pending, this.clockNow());
     }
 
-    private getPending(key: string, srcAddress?: string): MutableService {
+    private getPending(
+        key: string,
+        srcAddress?: string
+    ): MutableService | undefined {
         let p = this.pending.get(key);
         if (!p) {
+            if (this.pending.size >= MAX_PENDING_SERVICES) return undefined;
             p = createMutableService();
             this.pending.set(key, p);
         } else if (srcAddress && !p.srcAddress) {
@@ -193,20 +220,22 @@ export class MdnsRegistry {
     }
 
     /**
-     * Flush pending coalesced records after a 250ms debounce.
+     * Flush pending coalesced records after a fixed 250ms window.
      * Multiple DNS records for the same service arrive in one UDP datagram;
      * we coalesce them into a single MdnsService before emitting.
      */
-    private flushPending(): void {
-        if (this.coalesceTimer) {
-            clearTimeout(this.coalesceTimer);
-        }
+    private schedulePendingFlush(): void {
+        if (this.coalesceTimer || this.pending.size === 0) return;
+
         this.coalesceTimer = setTimeout(() => {
             this.coalesceTimer = undefined;
             for (const [key, p] of this.pending) {
                 if (!p.name || !p.type) continue;
                 const service = freezeMutable(p);
                 const result = this.store.upsert(key, service);
+                if (result.evicted) {
+                    this.emit({ type: "removed", service: result.evicted });
+                }
                 this.emit({
                     type: result.kind === "added" ? "added" : "updated",
                     service: result.service,
@@ -214,6 +243,7 @@ export class MdnsRegistry {
             }
             this.pending.clear();
         }, COALESCE_MS);
+        this.coalesceTimer.unref?.();
     }
 
     getDetailCached(
@@ -248,5 +278,4 @@ export class MdnsRegistry {
 }
 
 // re-export the mutable service type for the existing tests / callers
-import type { MutableService } from "./parser";
 export type { MutableService } from "./parser";

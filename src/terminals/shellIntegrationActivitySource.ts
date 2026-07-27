@@ -16,7 +16,7 @@ import type { TerminalHandle } from "./types";
 
 export interface ShellExecutionLifecycleEvent {
     readonly terminal: TerminalHandle;
-    /** The command line, when the shell integration reported one. */
+    /** Optional source metadata. Activity reasons deliberately ignore it. */
     readonly commandLine?: string;
     /** Exit code, present on end events when the shell reported one. */
     readonly exitCode?: number;
@@ -30,15 +30,6 @@ export interface ShellIntegrationActivitySourceDeps {
     readonly onDidStart: LifecycleSubscriber;
     readonly onDidEnd: LifecycleSubscriber;
     readonly log?: (msg: string) => void;
-}
-
-/** Trim a command line for the diagnostic channel. */
-function summarize(commandLine: string | undefined): string {
-    if (!commandLine) {
-        return "<unknown>";
-    }
-    const oneLine = commandLine.replace(/\s+/g, " ").trim();
-    return oneLine.length > 40 ? `${oneLine.slice(0, 40)}…` : oneLine;
 }
 
 /**
@@ -61,7 +52,7 @@ export function createShellIntegrationActivitySource(
         const offStart = deps.onDidStart((event) => {
             emit({
                 terminal: event.terminal,
-                reason: `shell: started ${summarize(event.commandLine)}`,
+                reason: "shell: started",
             });
         });
         const offEnd = deps.onDidEnd((event) => {
@@ -69,7 +60,7 @@ export function createShellIntegrationActivitySource(
                 event.exitCode === undefined ? "" : ` exit=${event.exitCode}`;
             emit({
                 terminal: event.terminal,
-                reason: `shell: finished ${summarize(event.commandLine)}${code}`,
+                reason: `shell: finished${code}`,
             });
         });
         return () => {

@@ -6,6 +6,7 @@
 // TTL_GRACE_MULTIPLIER` (or `TTL_DEFAULT_SECONDS` when ttl is 0).
 
 import { MdnsStore } from "./store";
+import { effectiveTtlSeconds } from "./limits";
 
 /** Grace period as a multiple of a service's TTL (RFC 6762 §10.1 cache-flush). */
 export const TTL_GRACE_MULTIPLIER = 3;
@@ -63,7 +64,10 @@ export class MdnsExpirationSweeper {
         for (const key of keys) {
             const svc = this.store.getByKey(key);
             if (!svc) continue;
-            const ttl = svc.ttl || TTL_DEFAULT_SECONDS;
+            const ttl = effectiveTtlSeconds(
+                svc.ttl,
+                TTL_DEFAULT_SECONDS
+            );
             const graceMs = ttl * 1000 * TTL_GRACE_MULTIPLIER;
             if (now - svc.lastSeen > graceMs) {
                 const removed = this.store.remove(key);

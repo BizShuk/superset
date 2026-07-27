@@ -142,6 +142,7 @@ import {
     setPluginManager,
     setTerminalSpawner,
     getTerminalSpawner,
+    bindTerminalSpawner,
 } from "../src/crossModuleState";
 
 // A minimal `PluginContext` sufficient for the global-commands plugin
@@ -190,6 +191,19 @@ describe("terminalSpawner bridge", () => {
         setTerminalSpawner(fake);
         expect(getTerminalSpawner()).toBe(fake);
         setTerminalSpawner(undefined);
+        expect(getTerminalSpawner()).toBeUndefined();
+    });
+
+    it("bindTerminalSpawner clears only the spawner lease it installed", () => {
+        const first = vi.fn();
+        const second = vi.fn();
+        const firstLease = bindTerminalSpawner(first);
+        const secondLease = bindTerminalSpawner(second);
+
+        firstLease.dispose();
+        expect(getTerminalSpawner()).toBe(second);
+
+        secondLease.dispose();
         expect(getTerminalSpawner()).toBeUndefined();
     });
 

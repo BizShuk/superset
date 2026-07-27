@@ -29,7 +29,7 @@ import {
     installEditorFocusBridge,
 } from "./lifecycle";
 import { registerMermaidPreviewCommand } from "../mermaid/mermaidPreviewCommand";
-import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
+import { bindTerminalSpawner } from "../crossModuleState/terminalSpawner";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import {
@@ -206,7 +206,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // calls would hit the auto-PTY layer below and get disposed 150ms
     // later — which is exactly what made `go install` and `skills add`
     // silently no-op in 0.8.10/0.8.11.
-    setTerminalSpawner((name, cwd) => ptyFactory.spawn(name, cwd));
+    const terminalSpawnerLease = bindTerminalSpawner((name, cwd) =>
+        ptyFactory.spawn(name, cwd)
+    );
 
     // ── Mermaid preview command ───────────────────────────────
     //
@@ -297,6 +299,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         { dispose: () => activity.stop() },
         { dispose: () => watcher?.stop() },
         { dispose: () => ptyFactory.dispose() },
+        terminalSpawnerLease,
         openSub,
         closeSub,
         activeChangeSub,
@@ -314,10 +317,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     return {
         dispose() {
-            // Drop the cross-module spawner handle so a stale
-            // reference can't survive into a future activation cycle
-            // (e.g. window reload / extension restart).
-            setTerminalSpawner(undefined);
             for (const d of disposables) {
                 d.dispose();
             }

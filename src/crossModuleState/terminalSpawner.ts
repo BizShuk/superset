@@ -31,6 +31,26 @@ export function setTerminalSpawner(next: TerminalSpawner | undefined): void {
     spawner = next;
 }
 
+/**
+ * Publish one spawner as a lifecycle-bound lease. Disposing an older lease
+ * cannot clear a newer activation's spawner.
+ */
+export function bindTerminalSpawner(
+    next: TerminalSpawner
+): vscode.Disposable {
+    setTerminalSpawner(next);
+    let disposed = false;
+    return {
+        dispose(): void {
+            if (disposed) return;
+            disposed = true;
+            if (spawner === next) {
+                setTerminalSpawner(undefined);
+            }
+        },
+    };
+}
+
 /** Return the currently-registered spawner, or `undefined` if the
  *  terminals feature has not activated yet. */
 export function getTerminalSpawner(): TerminalSpawner | undefined {

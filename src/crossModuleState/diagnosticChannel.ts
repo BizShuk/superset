@@ -10,7 +10,7 @@ import type * as vscode from "vscode";
 
 let diagnosticChannel: vscode.OutputChannel | undefined;
 
-/** Set the active diagnostic channel. Called once by `extension.ts`. */
+/** Set or clear the active diagnostic channel. Owned by `extension.ts`. */
 export function setDiagnosticChannel(
     channel: vscode.OutputChannel | undefined
 ): void {

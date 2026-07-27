@@ -19,6 +19,7 @@ interface ManifestView {
     readonly name: string;
     readonly contextualTitle?: string;
     readonly visibility?: string;
+    readonly initialSize?: number;
 }
 
 interface SupersetManifest {
@@ -129,6 +130,48 @@ describe("Overall TODO manifest contributions", () => {
                 name: "Projects TODO",
                 contextualTitle: "Overall",
                 visibility: "visible",
+            },
+        ]);
+    });
+});
+
+describe("Superset view layout manifest contributions", () => {
+    it("declares the requested initial visibility and relative size for every view", () => {
+        expect(manifest.contributes.views.superset).toEqual([
+            {
+                id: "superset.terminals",
+                name: "Terminals",
+                contextualTitle: "SuperSet",
+                visibility: "visible",
+                initialSize: 1,
+            },
+            {
+                id: "superset.mdns",
+                name: "MDNS",
+                contextualTitle: "SuperSet",
+                visibility: "collapsed",
+                initialSize: 3,
+            },
+            {
+                id: "superset.topology",
+                name: "Topology",
+                contextualTitle: "SuperSet",
+                visibility: "collapsed",
+                initialSize: 3,
+            },
+            {
+                id: "superset.sessions",
+                name: "Sessions",
+                contextualTitle: "SuperSet",
+                visibility: "collapsed",
+                initialSize: 3,
+            },
+            {
+                id: "superset.todo",
+                name: "TODO",
+                contextualTitle: "SuperSet",
+                visibility: "visible",
+                initialSize: 4,
             },
         ]);
     });

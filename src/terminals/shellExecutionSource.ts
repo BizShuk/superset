@@ -11,8 +11,7 @@ type OnShellExecution = OutputWatcherDeps["onShellExecution"];
  * `execution.read()` is never called. We take only the lifecycle edges, so
  * no terminal bytes ever enter the extension host through this path.
  *
- * `commandLine` is read eagerly inside the event callback — the execution
- * object is only guaranteed valid for the lifetime of the event dispatch.
+ * Command text is deliberately not copied into activity events or diagnostics.
  */
 export function createVscodeLifecycleSubscribers(): {
     onDidStart: LifecycleSubscriber;
@@ -24,7 +23,6 @@ export function createVscodeLifecycleSubscribers(): {
                 (event) => {
                     cb({
                         terminal: event.terminal,
-                        commandLine: event.execution.commandLine?.value,
                     });
                 }
             );
@@ -35,7 +33,6 @@ export function createVscodeLifecycleSubscribers(): {
                 (event) => {
                     cb({
                         terminal: event.terminal,
-                        commandLine: event.execution.commandLine?.value,
                         exitCode: event.exitCode,
                     });
                 }
@@ -58,34 +55,26 @@ export function createShellExecutionSource(
     return (cb) => {
         const disposable = vscode.window.onDidStartTerminalShellExecution(
             (event) => {
-                log(
-                    `shell-exec.start: terminal="${event.terminal.name}" ` +
-                        `cmd="${event.execution.commandLine.value.slice(0, 60)}"`
-                );
+                log("shell-exec.start");
                 cb({
                     terminal: event.terminal,
                     execution: {
                         onData: (dataCb) => {
-                            log(
-                                `shell-exec.onData wired for "${event.terminal.name}"`
-                            );
+                            log("shell-exec.onData wired");
                             void (async () => {
                                 try {
                                     for await (const chunk of event.execution.read()) {
                                         dataCb(chunk);
                                         log(
-                                            `shell-exec.chunk ${chunk.length}B ` +
-                                                `for "${event.terminal.name}": ` +
-                                                `data=${JSON.stringify(chunk)}`
+                                            `shell-exec.chunk ${Buffer.byteLength(
+                                                chunk,
+                                                "utf8"
+                                            )}B`
                                         );
                                     }
-                                    log(
-                                        `shell-exec.stream closed for "${event.terminal.name}"`
-                                    );
-                                } catch (err) {
-                                    log(
-                                        `shell-exec.ERROR reading "${event.terminal.name}": ${err}`
-                                    );
+                                    log("shell-exec.stream closed");
+                                } catch {
+                                    log("shell-exec.ERROR reading stream");
                                 }
                             })();
                         },

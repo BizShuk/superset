@@ -1,4 +1,9 @@
 import type { MdnsService } from "./types";
+import {
+    boundedUniqueLatest,
+    MAX_SERVICE_VALUES,
+    mergeBoundedTxt,
+} from "./limits";
 
 /** Inputs needed to compute a service's network identity. */
 export type NetworkKeyInput = Pick<MdnsService, "host" | "port" | "type"> & {
@@ -30,16 +35,19 @@ export function networkKey(s: NetworkKeyInput): string {
  *   trip over.
  */
 export function mergeServices(a: MdnsService, b: MdnsService): MdnsService {
-    const aliases = Array.from(
-        new Set([...(a.aliases ?? []), a.name, b.name])
-    ).filter((n) => n !== a.name);
-
-    const addresses = Array.from(
-        new Set([...(a.addresses ?? []), ...(b.addresses ?? [])])
+    const aliases = boundedUniqueLatest(
+        [...(a.aliases ?? []), b.name].filter((name) => name !== a.name),
+        MAX_SERVICE_VALUES
     );
 
-    const subtypes = Array.from(
-        new Set([...(a.subtypes ?? []), ...(b.subtypes ?? [])])
+    const addresses = boundedUniqueLatest(
+        [...(a.addresses ?? []), ...(b.addresses ?? [])],
+        MAX_SERVICE_VALUES
+    );
+
+    const subtypes = boundedUniqueLatest(
+        [...(a.subtypes ?? []), ...(b.subtypes ?? [])],
+        MAX_SERVICE_VALUES
     );
 
     const ttl =
@@ -51,7 +59,7 @@ export function mergeServices(a: MdnsService, b: MdnsService): MdnsService {
         aliases,
         addresses,
         subtypes,
-        txt: { ...(a.txt ?? {}), ...(b.txt ?? {}) },
+        txt: mergeBoundedTxt(a.txt, b.txt),
         ttl,
         firstSeen: Math.min(a.firstSeen ?? 0, b.firstSeen ?? 0),
         lastSeen: Math.max(a.lastSeen ?? 0, b.lastSeen ?? 0),

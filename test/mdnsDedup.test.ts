@@ -129,4 +129,40 @@ describe("mergeServices", () => {
         expect(merged.ttl).toBe(60);
         expect(merged.subtypes).toEqual(["_printer", "_fax"]);
     });
+
+    it("bounds aliases, addresses, subtypes, and TXT metadata", () => {
+        const values = Array.from({ length: 40 }, (_, index) => `${index}`);
+        const a = {
+            name: "printer",
+            aliases: values.map((value) => `alias-${value}`),
+            host: "p.local",
+            port: 631,
+            type: "_ipp._tcp",
+            addresses: values.map((value) => `10.0.0.${value}`),
+            subtypes: values.map((value) => `_type-${value}`),
+            txt: Object.fromEntries(
+                Array.from({ length: 70 }, (_, index) => [
+                    `old-${index}`,
+                    `${index}`,
+                ])
+            ),
+        } as MdnsService;
+        const b = {
+            name: "printer-new",
+            host: "p.local",
+            port: 631,
+            type: "_ipp._tcp",
+            addresses: ["192.168.1.1"],
+            subtypes: ["_new"],
+            txt: { latest: "yes" },
+        } as MdnsService;
+
+        const merged = mergeServices(a, b);
+
+        expect(merged.aliases).toHaveLength(32);
+        expect(merged.addresses).toHaveLength(32);
+        expect(merged.subtypes).toHaveLength(32);
+        expect(Object.keys(merged.txt)).toHaveLength(64);
+        expect(merged.txt.latest).toBe("yes");
+    });
 });

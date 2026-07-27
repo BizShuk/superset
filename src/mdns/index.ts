@@ -9,6 +9,7 @@ import { resolveConnectCommand } from "../mdnsConnect";
 import { getTerminalSpawner } from "../crossModuleState";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
+import { joinShellCommand } from "../shellCommand";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const registry = new MdnsRegistry(new MulticastDnsTransport());
@@ -105,10 +106,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     /**
      * One-click Connect — resolves the service type to a connect
-     * command (ssh for `_ssh._tcp`, open for `_http(s)` / `_ipp(s)`)
-     * via `resolveConnectCommand`, then spawns a fresh PTY-backed
-     * terminal and writes the command into it. Falls back to a
-     * warning for unrecognised service types.
+     * action via `resolveConnectCommand`. Browser/printer URIs go through
+     * `openExternal`; only validated SSH argv reaches a PTY-backed terminal.
      */
     const connectCmd = vscode.commands.registerCommand(
         "superset.mdnsConnect",
@@ -117,8 +116,19 @@ export function register(ctx: FeatureContext): FeatureHandle {
             const plan = resolveConnectCommand(svc);
             if (!plan) {
                 vscode.window.showWarningMessage(
-                    `Superset: 未知 service type "${svc.type}",無法連線`
+                    `Superset: service "${svc.name}" 的連線資料無效或不安全`
                 );
+                return;
+            }
+            if (plan.kind === "external") {
+                const opened = await vscode.env.openExternal(
+                    vscode.Uri.parse(plan.uri, true)
+                );
+                if (!opened) {
+                    void vscode.window.showWarningMessage(
+                        `Superset: 無法開啟 ${plan.uri}`
+                    );
+                }
                 return;
             }
             const spawn = getTerminalSpawner();
@@ -136,7 +146,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             // Defer one tick so the shell prompt has time to mount
             // before we type the command — empirically 200ms is
             // enough for the PTY-backed host to open.
-            const initialCommand = [plan.cmd, ...plan.args].join(" ");
+            const initialCommand = joinShellCommand(plan.cmd, plan.args);
             await new Promise((r) => setTimeout(r, 200));
             terminal.sendText(initialCommand);
         }

@@ -14,6 +14,7 @@ export {
 export { setPluginManager, getPluginManager } from "./pluginManager";
 export {
     setTerminalSpawner,
+    bindTerminalSpawner,
     getTerminalSpawner,
     type TerminalSpawner,
 } from "./terminalSpawner";

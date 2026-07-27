@@ -83,6 +83,21 @@ describe("applyPtr", () => {
         );
         expect(svc.name).toBe("");
     });
+
+    it("ignores DNS names larger than 255 UTF-8 bytes", () => {
+        const svc = createMutableService();
+        applyPtr(
+            {
+                name: "_http._tcp.local",
+                type: "PTR",
+                ttl: 60,
+                data: `${"é".repeat(128)}._http._tcp.local`,
+            },
+            svc,
+            NOW
+        );
+        expect(svc.name).toBe("");
+    });
 });
 
 describe("applySrv", () => {
@@ -114,6 +129,35 @@ describe("applySrv", () => {
         );
         expect(svc.port).toBe(0);
     });
+
+    it("skips invalid ports and overlong targets", () => {
+        const invalidPort = createMutableService();
+        applySrv(
+            {
+                name: "x",
+                type: "SRV",
+                ttl: 60,
+                data: { port: 65_536, target: "host.local" },
+            },
+            invalidPort,
+            NOW
+        );
+        expect(invalidPort.port).toBe(0);
+
+        const invalidTarget = createMutableService();
+        applySrv(
+            {
+                name: "x",
+                type: "SRV",
+                ttl: 60,
+                data: { port: 80, target: `${"a".repeat(256)}.local` },
+            },
+            invalidTarget,
+            NOW
+        );
+        expect(invalidTarget.host).toBeUndefined();
+        expect(invalidTarget.port).toBe(0);
+    });
 });
 
 describe("applyTxt", () => {
@@ -134,6 +178,24 @@ describe("applyTxt", () => {
         const svc = createMutableService();
         applyTxt({ name: "x", type: "TXT", ttl: 60, data: buf }, svc, NOW);
         expect(svc.txt).toEqual({ k: "v" });
+    });
+
+    it("bounds TXT entry count and rejects oversized keys and values", () => {
+        const svc = createMutableService();
+        const data = Object.fromEntries([
+            ...Array.from({ length: 70 }, (_, index) => [
+                `key-${index}`,
+                `value-${index}`,
+            ]),
+            ["k".repeat(129), "oversized-key"],
+            ["oversized-value", "v".repeat(1025)],
+        ]);
+
+        applyTxt({ name: "x", type: "TXT", ttl: 60, data }, svc, NOW);
+
+        expect(Object.keys(svc.txt)).toHaveLength(64);
+        expect(svc.txt).not.toHaveProperty("k".repeat(129));
+        expect(svc.txt).not.toHaveProperty("oversized-value");
     });
 });
 
@@ -171,6 +233,39 @@ describe("applyAddress", () => {
         );
 
         expect(svc.addresses).toEqual(["10.0.0.1"]);
+    });
+
+    it("retains at most 32 valid IP addresses", () => {
+        const map = new Map<string, ReturnType<typeof createMutableService>>();
+        const svc = createMutableService();
+        svc.host = "host.local";
+        map.set("X", svc);
+
+        for (let index = 1; index <= 40; index += 1) {
+            applyAddress(
+                {
+                    name: "host.local.",
+                    type: "A",
+                    ttl: 60,
+                    data: `10.0.0.${index}`,
+                },
+                map,
+                NOW
+            );
+        }
+        applyAddress(
+            {
+                name: "host.local.",
+                type: "A",
+                ttl: 60,
+                data: "not-an-ip",
+            },
+            map,
+            NOW
+        );
+
+        expect(svc.addresses).toHaveLength(32);
+        expect(svc.addresses).not.toContain("not-an-ip");
     });
 });
 

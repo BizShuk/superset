@@ -6,7 +6,17 @@
 // `MdnsRegistry`; behaviour is identical so the existing 23-case
 // test suite passes without modification.
 
+import { isIP } from "node:net";
 import type { MdnsService } from "./types";
+import {
+    boundedUniqueLatest,
+    clampAdvertisedTtl,
+    isDnsName,
+    MAX_SERVICE_VALUES,
+    MAX_TXT_ENTRIES,
+    mergeBoundedTxt,
+    validServicePort,
+} from "./limits";
 
 /** Mutable in-progress service record. Owned by the registry's
  *  `pending` map; never escapes the parser. */
@@ -49,8 +59,10 @@ export function createMutableService(): MutableService {
 
 /** Track the minimum TTL across all records for a service. */
 export function trackMinTtl(current: number, incoming: number): number {
-    if (current === 0) return incoming;
-    return Math.min(current, incoming);
+    const boundedIncoming = clampAdvertisedTtl(incoming);
+    if (current === 0) return boundedIncoming;
+    if (boundedIncoming === 0) return current;
+    return Math.min(current, boundedIncoming);
 }
 
 /**
@@ -91,9 +103,9 @@ export function freezeMutable(s: MutableService): MdnsService {
         weight: s.weight,
         ttl: s.ttl,
         host: s.host,
-        addresses: s.addresses.slice(),
-        txt: { ...s.txt },
-        subtypes: s.subtypes.slice(),
+        addresses: boundedUniqueLatest(s.addresses),
+        txt: mergeBoundedTxt(s.txt),
+        subtypes: boundedUniqueLatest(s.subtypes),
         srcAddress: s.srcAddress,
         firstSeen: s.firstSeen,
         lastSeen: s.lastSeen,
@@ -117,7 +129,7 @@ export function applyPtr(
     now: number
 ): void {
     const data = r.data as string;
-    if (typeof data !== "string") return;
+    if (!isDnsName(r.name) || !isDnsName(data)) return;
 
     if (data === r.name) return; // skip self-referential
 
@@ -127,9 +139,10 @@ export function applyPtr(
         const subtype = extractSubtype(basename);
         if (subtype) {
             pending.type = stripSubtype(basename);
-            if (!pending.subtypes.includes(subtype)) {
-                pending.subtypes = [...pending.subtypes, subtype];
-            }
+            pending.subtypes = boundedUniqueLatest([
+                ...pending.subtypes,
+                subtype,
+            ]);
         } else {
             pending.type = basename;
         }
@@ -152,14 +165,19 @@ export function applySrv(
         priority?: number;
         weight?: number;
     };
-    if (!data || typeof data.port !== "number") return;
+    if (
+        !isDnsName(r.name) ||
+        !data ||
+        !validServicePort(data.port) ||
+        !isDnsName(data.target)
+    ) {
+        return;
+    }
 
     pending.port = data.port;
-    pending.priority = data.priority ?? 0;
-    pending.weight = data.weight ?? 0;
-    if (data.target) {
-        pending.host = data.target.replace(/\.$/i, "");
-    }
+    pending.priority = validUint16(data.priority) ? data.priority : 0;
+    pending.weight = validUint16(data.weight) ? data.weight : 0;
+    pending.host = data.target.replace(/\.$/i, "");
     pending.ttl = trackMinTtl(pending.ttl, r.ttl);
     pending.firstSeen = pending.firstSeen || now;
     pending.lastSeen = now;
@@ -173,14 +191,19 @@ export function applyTxt(
     now: number
 ): void {
     const data = r.data as Record<string, string> | Buffer | undefined;
-    if (!data) return;
+    if (!isDnsName(r.name) || !data) return;
 
-    let txt: Record<string, string> = {};
+    let txt: Record<string, string> = Object.create(null) as Record<
+        string,
+        string
+    >;
     if (Buffer.isBuffer(data)) {
         let off = 0;
-        while (off < data.length) {
+        let entries = 0;
+        while (off < data.length && entries < MAX_TXT_ENTRIES) {
             const len = data[off];
             if (len === 0) break;
+            if (off + 1 + len > data.length) break;
             const str = data
                 .slice(off + 1, off + 1 + len)
                 .toString("utf-8");
@@ -189,11 +212,12 @@ export function applyTxt(
                 txt[str.slice(0, eq)] = str.slice(eq + 1);
             }
             off += 1 + len;
+            entries += 1;
         }
     } else {
         txt = data;
     }
-    pending.txt = { ...(pending.txt ?? {}), ...txt };
+    pending.txt = mergeBoundedTxt(pending.txt, txt);
     pending.ttl = trackMinTtl(pending.ttl, r.ttl);
     pending.firstSeen = pending.firstSeen || now;
     pending.lastSeen = now;
@@ -207,7 +231,9 @@ export function applyAddress(
     now: number
 ): void {
     const data = r.data as string;
-    if (typeof data !== "string") return;
+    if (!isDnsName(r.name) || typeof data !== "string" || isIP(data) === 0) {
+        return;
+    }
 
     const addr = data;
     const hostname = r.name.replace(/\.$/i, "");
@@ -215,9 +241,10 @@ export function applyAddress(
     const self = pendingMap.get(hostname);
     if (self) {
         const existing = self.addresses ?? [];
-        if (!existing.includes(addr)) {
-            self.addresses = [...existing, addr];
-        }
+        self.addresses = boundedUniqueLatest(
+            [...existing, addr],
+            MAX_SERVICE_VALUES
+        );
         self.ttl = trackMinTtl(self.ttl, r.ttl);
         self.firstSeen = self.firstSeen || now;
         self.lastSeen = now;
@@ -226,12 +253,22 @@ export function applyAddress(
     for (const [, p] of pendingMap) {
         if (p.host === hostname) {
             const existing = p.addresses ?? [];
-            if (!existing.includes(addr)) {
-                p.addresses = [...existing, addr];
-            }
+            p.addresses = boundedUniqueLatest(
+                [...existing, addr],
+                MAX_SERVICE_VALUES
+            );
             p.ttl = trackMinTtl(p.ttl, r.ttl);
             p.firstSeen = p.firstSeen || now;
             p.lastSeen = now;
         }
     }
+}
+
+function validUint16(value: unknown): value is number {
+    return (
+        typeof value === "number" &&
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value <= 65_535
+    );
 }

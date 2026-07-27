@@ -49,20 +49,27 @@ describe("createShellIntegrationActivitySource", () => {
     it("emits on execution start", () => {
         const { events, fireStart } = setup();
         const a = fakeTerminal("a");
-        fireStart({ terminal: a, commandLine: "npm test" });
+        fireStart({
+            terminal: a,
+            commandLine: "TOKEN=super-secret npm test",
+        });
         expect(events).toHaveLength(1);
         expect(events[0].terminal).toBe(a);
-        expect(events[0].reason).toContain("started");
-        expect(events[0].reason).toContain("npm test");
+        expect(events[0].reason).toBe("shell: started");
+        expect(events[0].reason).not.toContain("super-secret");
     });
 
     it("emits on execution end with the exit code", () => {
         const { events, fireEnd } = setup();
         const a = fakeTerminal("a");
-        fireEnd({ terminal: a, commandLine: "npm test", exitCode: 1 });
+        fireEnd({
+            terminal: a,
+            commandLine: "TOKEN=super-secret npm test",
+            exitCode: 1,
+        });
         expect(events).toHaveLength(1);
-        expect(events[0].reason).toContain("finished");
-        expect(events[0].reason).toContain("exit=1");
+        expect(events[0].reason).toBe("shell: finished exit=1");
+        expect(events[0].reason).not.toContain("super-secret");
     });
 
     it("emits an end event even when the shell reported no exit code", () => {
@@ -82,19 +89,18 @@ describe("createShellIntegrationActivitySource", () => {
     it("handles a missing command line", () => {
         const { events, fireStart } = setup();
         fireStart({ terminal: fakeTerminal("a") });
-        expect(events[0].reason).toContain("<unknown>");
+        expect(events[0].reason).toBe("shell: started");
     });
 
-    it("collapses whitespace and truncates a long command line", () => {
+    it("never copies command text into the activity reason", () => {
         const { events, fireStart } = setup();
         fireStart({
             terminal: fakeTerminal("a"),
             commandLine: `  echo   one\n  two   ${"x".repeat(80)}  `,
         });
         const reason = events[0].reason;
-        expect(reason).not.toContain("\n");
-        expect(reason).not.toContain("  ");
-        expect(reason).toContain("…");
+        expect(reason).toBe("shell: started");
+        expect(reason).not.toContain("echo");
     });
 
     it("reports both edges of one execution", () => {

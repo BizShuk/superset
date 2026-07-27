@@ -22,19 +22,19 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 | 動作 | 指令 |
 | --- | --- |
-| 安裝相依套件 | `npm install` |
+| 依 lockfile 安裝相依套件 | `npm ci` |
 | 清理、編譯、打包並驗證 VSIX | `npm run build` |
 | 邊改邊編譯 | `npm run watch` |
 | 跑單元測試 | `npm test` |
 | 持續跑測試 | `npm run test:watch` |
-| 單獨打包 `.vsix` | `npx @vscode/vsce package` |
+| 單獨打包 `.vsix` | `npm run package` |
 | 產生 Sessions 面板假資料 | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
 
 執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。VS Code baseline 與 API 相容性決策見 [`docs/specs/2026-06-23-chore-vscode-baseline-alignment.md`](docs/specs/2026-06-23-chore-vscode-baseline-alignment.md)。
 
 ## 架構速覽 (Architecture)
 
-`src/extension.ts` 是 declarative composition root。它建立 `PluginManager`、注入共用 context，並依序啟用 plugin；`PluginManager` 負責生命週期、錯誤隔離、disposable、reset handler 與 Markdown extension 組合。`panelLayoutPlugin` 必須最後啟用，確保恢復 view focus 時其他 TreeView 已完成註冊。
+`src/extension.ts` 是 declarative composition root。它建立並持有 active `PluginManager`、注入共用 context，並依序啟用 plugin；root `deactivate()` 反向停用 plugin 並清除跨模組 singleton。`PluginManager` 負責生命週期、錯誤隔離、disposable、reset handler 與 Markdown extension 組合。`panelLayoutPlugin` 必須最後啟用，確保恢復 view focus 時其他 TreeView 已完成註冊。
 
 | 模組 | 職責 | 主要入口 |
 | --- | --- | --- |
@@ -64,11 +64,11 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - `TerminalRegistry` 是終端機狀態來源；既有 VS Code terminal 使用 Shell Integration fallback，PTY-backed terminal 透過 `node-pty` 取得完整 TUI data path。`markUnseen` 必須保持 idempotent。
 - Tree View visibility 一律由 `src/plugin/viewVisibility.ts#registerViewVisibility` 接線並解構 event 的 `visible` boolean。UI-only polling / watcher 必須隨 View visibility 啟停；terminal activity source `A` / `B`、PTY lifecycle 與 registry subscriptions 不屬於 UI-only work，不得因面板隱藏而停止。
 - Activity 偵測的預設路徑是`零位元組`的來源 `A`（`processActivitySource`，進程樹輪詢）與 `B`（`shellIntegrationActivitySource`，execution start/end edge）。來源 `B` 不得呼叫 `execution.read()`；讀取位元組的 `OutputWatcher` 只在 `superset.terminals.legacyOutputWatcher` 開啟時建立。抑制政策（不在 registry / 正在 focus / 最近 focus / 已是 unseen）只能存在於 `ActivityCoordinator` 一處，不得再複製回各來源。
-- 診斷日誌只在 `seen → unseen` 真的翻轉時輸出。被抑制的路徑是熱路徑，逐事件記錄會讓 OutputChannel 自己變成 EH 主執行緒的效能問題。
+- 診斷日誌只在 `seen → unseen` 真的翻轉時輸出。被抑制的路徑是熱路徑，逐事件記錄會讓 OutputChannel 自己變成 EH 主執行緒的效能問題；Shell Integration reason 與 legacy `OutputWatcher` 日誌不得包含 command text 或 output payload，只能保留 lifecycle edge、exit code 與 byte count。
 - 來源 `A` 每個 poll 只跑`一次` `ps`（供所有 terminal 共用），下一 tick 只在當前 tick settle 後排程，且 timer 必須 `unref()`。判定用累積 CPU 時間（`ps -o time=`）的 delta 而非 `%cpu`，並排除 shell 自身的 CPU —— 互動式 shell 光是重繪 prompt 就會累積，計入會讓每個閒置 terminal 看起來都在忙。
 - `node-pty` 是 runtime PTY binding（upstream `^1.1.0`）；不可換回 `@homebridge/node-pty-prebuilt-multiarch` fork 或在其他 fork 之間切換。不可在 `.vscodeignore` 排除 production `node_modules`。
 - `node-pty@1.1.0` 的 macOS `spawn-helper` 必須保持 executable bit。根 `postinstall` 以 `scripts/prepare-node-pty.js` 修復所有 Darwin prebuild，`scripts/verify-vsix.sh` 必須同時驗證 `darwin-x64` / `darwin-arm64` helper 在 VSIX 內為 executable；PTY spawn 例外必須回報 UI 並觸發 close，不得留下永久等待的 terminal。
-- `npm run clean` 必須先移除 generated `out/`，避免已刪 source 的 stale JavaScript 進入 VSIX。`.vscodeignore` 排除 workspace metadata、native `.pdb` 與 dependency source/test payload，但必須保留 `node-pty` runtime `lib/`、所有 platform `prebuilds/` 與 `pkg/resources/`；`scripts/verify-vsix.sh` 必須拒絕沒有對應 `src/*.ts` 的 packaged `out/*.js`。
+- `npm run clean` 必須先移除 generated `out/`，避免已刪 source 的 stale JavaScript 進入 VSIX。`npm run build` 必須以 `npm ci` 依 lockfile 重建 dependency tree，並使用 manifest 中 exact-pinned 的 `@vscode/vsce`，不得以未固定版本的 `npx` 下載打包器。`.vscodeignore` 排除 workspace metadata、native `.pdb` 與 dependency source/test payload，但必須保留 `node-pty` runtime `lib/`、所有 platform `prebuilds/` 與 `pkg/resources/`；`scripts/verify-vsix.sh` 必須拒絕沒有對應 `src/*.ts` 的 packaged `out/*.js`。
 - `PtyTerminalHost.pendingBytes` 的定義是`從 pty 收到、尚未交給 onDidWrite 的位元組`——本 class 自己持有的佇列深度。不得改回「已送下游、待 ack」的模型：`vscode.Pseudoterminal.onDidWrite` 是 fire-and-forget，renderer 不回 ack，那樣的計數器沒有東西能遞減，pty 一旦 pause 就永不 resume。
 - Flush 必須受 `MAX_FLUSH_BYTES` 限制並在殘留時重排。切片以 code unit 為界且切點落在 high surrogate 時回退一格；teardown 用的 `flushWriteBuffer` 則刻意不套 budget，扣住尾端等同遺失。
 - `onExit` 必須清掉 `proc` 與 `opened` 並設 `disposed`；`fireClose` 由 `closeFired` 保證只觸發一次。`disposed` 與 `opened` 是兩件事——只靠 `opened === false` 會讓 stray `open()` 復活一個使用者以為已死的 shell。`close()` 在 paused 時必須先補 `resume()` 再 kill，並於 `KILL_ESCALATION_MS` 後升級 `SIGKILL`。
@@ -89,7 +89,9 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - Editor Layout 的 `activeIndex` 只能來自 `activeTabGroup.viewColumn - 1`。`tabGroups.all` 是 group `建立順序`，descriptor 的 leaf 序是 `GRID_APPEARANCE` 深度優先順序，兩者在 split / 搬移後會分歧；用 `all.indexOf` 會放大錯誤的 group。
 - Editor Layout 的 signature guard 只比對`本次寫入 vs 上次寫入`，不得改成比對即時佈局 —— VS Code 會 clamp 最小寬高，requested 與 actual 本來就不同，比對即時佈局會讓 follow-active-group 無限重套。明確命令一律 `force`，事件驅動的重套才受 guard 約束。
 - `orientation` 只在 root 生效，巢狀層自動垂直於父層；`size` 是同層相對值。方向命名與 VS Code 選單相反，見 [`docs/terminology.md`](docs/terminology.md)。
-- mDNS service、network-key secondary index 與 expiration cleanup 必須同步更新，避免 stale index 或錯誤合併。
+- `PluginManager` activation 失敗時必須立即 dispose 該 plugin 已註冊的 partial disposables；root `deactivate()` 必須 await reverse teardown，並清除 manager、Tree View registry、diagnostic channel 與 terminal spawner singleton。
+- mDNS service、network-key secondary index 與 expiration cleanup 必須同步更新，避免 stale index 或錯誤合併。mDNS transport input 一律不可信：單包最多 `256` records、pending/store 各最多 `512` services、DNS name 最多 `255` UTF-8 bytes、alias/address/subtype 各最多 `32`、TXT 最多 `64` entries（key `128` bytes、value `1024` bytes），TTL 最高 `4500` 秒。
+- `Connect Action` 必須先驗證 service type、DNS/IP target、port 與 SSH user。HTTP(S)/IPP(S) 只能走 `vscode.env.openExternal`；SSH 只能以 `cmd + args` plan 經 `joinShellCommand` 引用後進 terminal。mDNS payload 不得直接串接 shell command。
 - Git hooks 只處理 `workspaceFolders[0]`；模板來源為 `pkg/resources/git/githooks/`。Install 採 copy-if-missing 後 Link，Status Bar 只做 Link；local `core.hooksPath` 只要非空即視為已連結。Repository 自用的 `.githooks/pre-push` 必須與內建模板保持一致。`pre-push` release tag 版本固定取 `max(最高 Git tag 的下一個 patch, package.json.version, .claude-plugin/plugin.json.version)`，缺少的 manifest 不納入候選。
 - Projects Setup 固定以 `~/projects` 為 root，不提供自訂路徑；13 個 repository（包含 `social`）的 ordered set 以 `pkg/resources/config/setup-projects.sh` 為 runtime source of truth。首次 clone 必須使用 `--recurse-submodules`，重跑只補做 recursive submodule sync/update，不 pull 或覆蓋既有 repository。
 - Extension 靜態資源統一放在 `pkg/resources/`；Git domain 模板放在 `pkg/resources/git/`。
@@ -107,7 +109,7 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 ## 測試 (Testing)
 
 - `npm test` 跑完整 Vitest suite。
-- `npm run build` 會 clean、`npm install`、TypeScript compile、VSIX package，最後執行 `scripts/verify-vsix.sh`。
+- `npm run build` 會 clean、`npm ci`、TypeScript compile、以 lockfile 內的 `@vscode/vsce` 打包 VSIX，最後執行 `scripts/verify-vsix.sh`。
 - 修改 manifest、activation order、TreeView registration 或 VSIX 打包內容時，除 unit tests 外必須跑完整 build。
 - 不在本檔維護易漂移的測試檔與 case 數；測試行為以 `test/` 與相關 specs 為準。
 
@@ -115,12 +117,14 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 
 - [`.github/workflows/release.yml`](.github/workflows/release.yml) 只在推送 `v<major>.<minor>.<patch>` tag 時執行。
 - Tag 必須與 `package.json` 的版本完全相符；workflow 會執行 build、測試與 VSIX 驗證。
+- Workflow 預設與 build job 只有 `contents: read`；checkout 不持久化 credentials。只有依賴 verified one-day artifact 的 release job 取得 `contents: write`，所有第三方 Actions 必須固定到完整 commit SHA。
 - GitHub Release 只上傳單一固定檔名 `superset.vsix` asset，不上傳其他 build 產物。
 
 ## 規格索引 (Specification Index)
 
 - Current module map：[`docs/specs/2026-07-20-architecture-current-modules.md`](docs/specs/2026-07-20-architecture-current-modules.md)
 - Visibility-scoped runtime 與 Sessions cache：[`docs/specs/2026-07-27-visibility-scoped-runtime-work.md`](docs/specs/2026-07-27-visibility-scoped-runtime-work.md)
+- Security hardening：[`docs/specs/2026-07-27-security-hardening.md`](docs/specs/2026-07-27-security-hardening.md)
 - Overall architecture：[`docs/specs/2026-07-02-architecture-master.md`](docs/specs/2026-07-02-architecture-master.md)
 - Plugin framework：[`docs/specs/2026-07-02-architecture-pluginization.md`](docs/specs/2026-07-02-architecture-pluginization.md)
 - Terminals / TUI / PTY：[`docs/specs/2026-06-20-terminal-dashboard-panel.md`](docs/specs/2026-06-20-terminal-dashboard-panel.md)、[`docs/specs/2026-07-02-architecture-terminals.md`](docs/specs/2026-07-02-architecture-terminals.md)

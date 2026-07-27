@@ -10,16 +10,22 @@ import type { MdnsService } from "./types";
 import { networkKey, mergeServices } from "./mdnsDedup";
 import { DetailCache } from "./mdnsDetailCache";
 import { buildMdnsDetailFields, type MdnsDetailField } from "./mdnsTreeSpec";
+import { MAX_SERVICE_VALUES, MAX_STORED_SERVICES } from "./limits";
 
 export type UpsertResult =
-    | { kind: "added"; service: MdnsService }
-    | { kind: "updated"; service: MdnsService };
+    | { kind: "added"; service: MdnsService; evicted?: MdnsService }
+    | { kind: "updated"; service: MdnsService; evicted?: MdnsService };
 
 export class MdnsStore {
     private services = new Map<string, MdnsService>();
     private byNetworkKey = new Map<string, string>();
     private canonKeyToNk = new Map<string, Set<string>>();
     private readonly detailCache = new DetailCache<MdnsDetailField[]>(60_000);
+    private readonly maxServices: number;
+
+    constructor(maxServices: number = MAX_STORED_SERVICES) {
+        this.maxServices = Math.max(1, Math.floor(maxServices));
+    }
 
     /** All services currently in the store, in insertion order. */
     getAll(): MdnsService[] {
@@ -47,7 +53,7 @@ export class MdnsStore {
             this.services.set(resolvedKey, merged);
 
             if (resolvedKey !== key) {
-                this.services.delete(key);
+                this.remove(key);
             }
 
             // Release any network keys the canonical row used to own
@@ -71,22 +77,21 @@ export class MdnsStore {
                 }
             }
 
-            this.byNetworkKey.set(nk, resolvedKey);
-            let nks = this.canonKeyToNk.get(resolvedKey);
-            if (!nks) {
-                nks = new Set<string>();
-                this.canonKeyToNk.set(resolvedKey, nks);
-            }
-            nks.add(nk);
+            this.rememberNetworkKey(resolvedKey, nk);
 
             return { kind: "updated", service: merged };
         }
 
         // First sight of this endpoint and name.
+        const oldestKey = this.services.keys().next().value;
+        const evicted =
+            this.services.size >= this.maxServices &&
+            typeof oldestKey === "string"
+                ? this.remove(oldestKey)
+                : undefined;
         this.services.set(key, service);
-        this.byNetworkKey.set(nk, key);
-        this.canonKeyToNk.set(key, new Set<string>([nk]));
-        return { kind: "added", service };
+        this.rememberNetworkKey(key, nk);
+        return { kind: "added", service, evicted };
     }
 
     /**
@@ -102,7 +107,9 @@ export class MdnsStore {
         const nks = this.canonKeyToNk.get(key);
         if (nks) {
             for (const n of nks) {
-                this.byNetworkKey.delete(n);
+                if (this.byNetworkKey.get(n) === key) {
+                    this.byNetworkKey.delete(n);
+                }
             }
             this.canonKeyToNk.delete(key);
         }
@@ -138,5 +145,26 @@ export class MdnsStore {
     ): void {
         const key = `${svc.name}|${svc.type}|${svc.host ?? ""}|${svc.port}`;
         this.detailCache.invalidate(key);
+    }
+
+    private rememberNetworkKey(canonKey: string, nk: string): void {
+        this.byNetworkKey.set(nk, canonKey);
+
+        let nks = this.canonKeyToNk.get(canonKey);
+        if (!nks) {
+            nks = new Set<string>();
+            this.canonKeyToNk.set(canonKey, nks);
+        }
+
+        nks.delete(nk);
+        nks.add(nk);
+        while (nks.size > MAX_SERVICE_VALUES) {
+            const oldest = nks.values().next().value;
+            if (oldest === undefined) break;
+            nks.delete(oldest);
+            if (this.byNetworkKey.get(oldest) === canonKey) {
+                this.byNetworkKey.delete(oldest);
+            }
+        }
     }
 }
