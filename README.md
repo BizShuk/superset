@@ -396,16 +396,16 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 若只需要安裝 skill repository，使用 `Superset: Install Skills`。Quick Pick 可直接選擇下列 repository；若清單沒有目標，選擇 `自訂 repository…`，再於 Input Box 輸入 `owner/repository`。確認後會執行 `skills add <repository>`：
 
-| 顯示名稱 | 用途 | GitHub repository |
-| --- | --- | --- |
-| `bizshuk/cc-plugin`（預設） | AI 編碼代理的全域設定、Skills、Agents 與記憶工具 | `bizshuk/cc-plugin` |
-| `anthropics/claude-plugins-official` | Anthropic 維護的 Claude Code 高品質 Plugin 目錄 | `anthropics/claude-plugins-official` |
-| `anthropics/skills` | Anthropic 的 Agent Skills 範例、規格與文件處理技能 | `anthropics/skills` |
-| `awesome-claude-code-subagents` | 涵蓋多種開發任務的 Claude Code 專用 Subagents 合集 | `VoltAgent/awesome-claude-code-subagents` |
-| `superpowers` | 以 Skills 驅動規劃、TDD、除錯與協作的開發方法 | `obra/superpowers` |
-| `understand-anything` | 把程式碼與文件轉成可搜尋、可提問的互動知識圖譜 | `Egonex-AI/Understand-Anything` |
-| `last30days` | 彙整近 30 天社群與網路討論，產出有來源的研究摘要 | `mvanhorn/last30days-skill` |
-| `ui-ux-pro-max-skill` | 為多平台 UI/UX 產生設計系統、樣式與實作建議 | `nextlevelbuilder/ui-ux-pro-max-skill` |
+| 顯示名稱                             | 用途                                               | GitHub repository                         |
+| ------------------------------------ | -------------------------------------------------- | ----------------------------------------- |
+| `bizshuk/cc-plugin`（預設）          | AI 編碼代理的全域設定、Skills、Agents 與記憶工具   | `bizshuk/cc-plugin`                       |
+| `anthropics/claude-plugins-official` | Anthropic 維護的 Claude Code 高品質 Plugin 目錄    | `anthropics/claude-plugins-official`      |
+| `anthropics/skills`                  | Anthropic 的 Agent Skills 範例、規格與文件處理技能 | `anthropics/skills`                       |
+| `awesome-claude-code-subagents`      | 涵蓋多種開發任務的 Claude Code 專用 Subagents 合集 | `VoltAgent/awesome-claude-code-subagents` |
+| `superpowers`                        | 以 Skills 驅動規劃、TDD、除錯與協作的開發方法      | `obra/superpowers`                        |
+| `understand-anything`                | 把程式碼與文件轉成可搜尋、可提問的互動知識圖譜     | `Egonex-AI/Understand-Anything`           |
+| `last30days`                         | 彙整近 30 天社群與網路討論，產出有來源的研究摘要   | `mvanhorn/last30days-skill`               |
+| `ui-ux-pro-max-skill`                | 為多平台 UI/UX 產生設計系統、樣式與實作建議        | `nextlevelbuilder/ui-ux-pro-max-skill`    |
 
 自訂輸入會先去除頭尾空白，並以單一 shell argument 安全傳給 `skills add`。按 `Esc` 關閉 Quick Pick 或 Input Box 都不會建立 Run Terminal。
 
@@ -442,16 +442,16 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 模式是`兩個方向各自`的 even／max `組合`，不是「選一個方向」：
 
-```
+```text
 mode = { horizontal: even | max } × { vertical: even | max }
 ```
 
-| 模式 | 左右方向 | 上下方向 | 在 `2×2` 網格上的效果 |
-| --- | --- | --- | --- |
-| `H·Even V·Even` | 均分 | 均分 | 四格等大 |
-| `H·Max V·Even` | 作用中欄放大 | 均分 | 作用中那`一欄`變寬（預設佔 80%），欄內兩列仍等高 |
-| `H·Even V·Max` | 均分 | 作用中列放大 | 兩欄等寬，作用中那`一列`變高 |
-| `H·Max V·Max` | 作用中欄放大 | 作用中列放大 | 作用中格子最大，其餘仍看得見 |
+| 模式            | 左右方向     | 上下方向     | 在 `2×2` 網格上的效果                            |
+| --------------- | ------------ | ------------ | ------------------------------------------------ |
+| `H·Even V·Even` | 均分         | 均分         | 四格等大                                         |
+| `H·Max V·Even`  | 作用中欄放大 | 均分         | 作用中那`一欄`變寬（預設佔 80%），欄內兩列仍等高 |
+| `H·Even V·Max`  | 均分         | 作用中列放大 | 兩欄等寬，作用中那`一列`變高                     |
+| `H·Max V·Max`   | 作用中欄放大 | 作用中列放大 | 作用中格子最大，其餘仍看得見                     |
 
 `Ctrl+Alt+V` 循環四個組合，`Ctrl+Alt+Shift+V` 開 Quick Pick 直接挑。狀態列右側永遠顯示`兩個方向`（例：`H·Max V·Even 2×2`），點擊等同 Quick Pick。
 
@@ -477,7 +477,7 @@ mode = { horizontal: even | max } × { vertical: even | max }
 | VSCode  | `^1.93.0`(需要 Shell Integration API 與 TabInputTerminal 穩定後的版本) |
 | Node.js | `>=20.0.0`(開發環境)                                                   |
 | npm     | 隨 Node 一起裝                                                         |
-| Git     | `Projects Setup`、Git Hooks 與 GitHub URL 功能                          |
+| Git     | `Projects Setup`、Git Hooks 與 GitHub URL 功能                         |
 
 ---
 
@@ -512,37 +512,37 @@ code --install-extension superset-*.vsix
 
 ## 指令速查 (Commands)
 
-| 指令                                            | 預設快捷鍵          | 用途                                                                     |
-| ----------------------------------------------- | ------------------- | ------------------------------------------------------------------------ |
-| `Superset: Open TUI Terminal`                   | —                   | 開 PTY-backed terminal(適合跑 TUI app)                                   |
-| `Superset: Go to Terminal`                      | `Ctrl+Alt+T`        | Fuzzy 跳轉到 terminal                                                    |
-| `Superset: Reset Caches`                        | —                   | 重置所有快取(有確認彈窗)                                                 |
-| `Superset: Scan Network Topology`               | —                   | 掃描網路拓撲                                                             |
-| `Superset: Refresh mDNS`                        | —                   | 重新整理 mDNS 面板                                                       |
-| `Superset: Copy Service Address`                | —                   | 複製 `host:port`                                                         |
-| `Superset: Connect`                             | —                   | 驗證 mDNS 連線資料後，以外部 URI 或 SSH terminal 連線                     |
-| `Superset: New Terminal`                        | `Ctrl+Shift+``      | 開新 terminal                                                            |
-| `Superset: New Group`                           | —                   | 新增 terminal 群組                                                       |
-| `Superset: Rename` / `Rename Group`             | `F2`(terminal 面板) | 重新命名                                                                 |
-| `Superset: Open README.todo`                    | —                   | 開啟專案 `README.todo`                                                   |
-| `Superset: Toggle Todo`                         | —                   | 切換該列完成狀態                                                         |
-| `Superset: Focus Panel` / `Focus Overall Panel` | —                   | 聚焦側欄面板                                                             |
-| `Superset: Show Diagnostic Logs`                | —                   | 開啟 Output Channel 看診斷 log                                           |
-| `Superset: Reset Soft (this commit)`            | —                   | Graph commit 右鍵移動 HEAD,保留 index / working tree                     |
-| `Superset: Reset Hard (this commit)`            | —                   | Graph commit 右鍵重置 HEAD / index / working tree                        |
-| `Copy GitHub URL`                               | —                   | Explorer 檔案右鍵複製固定 `master` GitHub URL                            |
-| `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                            |
-| `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                  |
-| `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link |
+| 指令                                            | 預設快捷鍵          | 用途                                                                          |
+| ----------------------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
+| `Superset: Open TUI Terminal`                   | —                   | 開 PTY-backed terminal(適合跑 TUI app)                                        |
+| `Superset: Go to Terminal`                      | `Ctrl+Alt+T`        | Fuzzy 跳轉到 terminal                                                         |
+| `Superset: Reset Caches`                        | —                   | 重置所有快取(有確認彈窗)                                                      |
+| `Superset: Scan Network Topology`               | —                   | 掃描網路拓撲                                                                  |
+| `Superset: Refresh mDNS`                        | —                   | 重新整理 mDNS 面板                                                            |
+| `Superset: Copy Service Address`                | —                   | 複製 `host:port`                                                              |
+| `Superset: Connect`                             | —                   | 驗證 mDNS 連線資料後，以外部 URI 或 SSH terminal 連線                         |
+| `Superset: New Terminal`                        | `Ctrl+Shift+``      | 開新 terminal                                                                 |
+| `Superset: New Group`                           | —                   | 新增 terminal 群組                                                            |
+| `Superset: Rename` / `Rename Group`             | `F2`(terminal 面板) | 重新命名                                                                      |
+| `Superset: Open README.todo`                    | —                   | 開啟專案 `README.todo`                                                        |
+| `Superset: Toggle Todo`                         | —                   | 切換該列完成狀態                                                              |
+| `Superset: Focus Panel` / `Focus Overall Panel` | —                   | 聚焦側欄面板                                                                  |
+| `Superset: Show Diagnostic Logs`                | —                   | 開啟 Output Channel 看診斷 log                                                |
+| `Superset: Reset Soft (this commit)`            | —                   | Graph commit 右鍵移動 HEAD,保留 index / working tree                          |
+| `Superset: Reset Hard (this commit)`            | —                   | Graph commit 右鍵重置 HEAD / index / working tree                             |
+| `Copy GitHub URL`                               | —                   | Explorer 檔案右鍵複製固定 `master` GitHub URL                                 |
+| `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                                 |
+| `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                       |
+| `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
 | `Superset: Install Default Tools`               | —                   | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond`、`autop`、`auth`、`proxy` CLI |
-| `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）   |
-| `Superset: Cycle Editor Layout Mode`            | `Ctrl+Alt+V`        | 循環四個 editor group 佈局模式                                           |
-| `Superset: Pick Editor Layout Mode`             | `Ctrl+Alt+Shift+V`  | Quick Pick 直接挑一個佈局模式                                            |
-| `Superset: Toggle Horizontal Editor Sizing`     | —                   | 只翻左右方向的 even／max                                                 |
-| `Superset: Toggle Vertical Editor Sizing`       | —                   | 只翻上下方向的 even／max                                                 |
-| `Superset: Transpose Editor Grid`               | —                   | 翻 root 方向，等同 NxM 網格轉置                                          |
-| `Superset: Pick Editor Grid Shape`              | —                   | 重塑 editor 網格形狀（唯一會改變格子數的命令）                           |
-| `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                   |
+| `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
+| `Superset: Cycle Editor Layout Mode`            | `Ctrl+Alt+V`        | 循環四個 editor group 佈局模式                                                |
+| `Superset: Pick Editor Layout Mode`             | `Ctrl+Alt+Shift+V`  | Quick Pick 直接挑一個佈局模式                                                 |
+| `Superset: Toggle Horizontal Editor Sizing`     | —                   | 只翻左右方向的 even／max                                                      |
+| `Superset: Toggle Vertical Editor Sizing`       | —                   | 只翻上下方向的 even／max                                                      |
+| `Superset: Transpose Editor Grid`               | —                   | 翻 root 方向，等同 NxM 網格轉置                                               |
+| `Superset: Pick Editor Grid Shape`              | —                   | 重塑 editor 網格形狀（唯一會改變格子數的命令）                                |
+| `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                        |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 
@@ -586,7 +586,7 @@ npm run package
 | `Topology` 掃描逾時                   | `netstat` / `scutil` / `arp` 執行慢(尤其 VPN 環境)   | 暫時無法解決(10s 熔斷);手動跑命令驗證輸出                                                         |
 | `Git hooks not linked` 一直顯示       | local `core.hooksPath` 未設定或 Link 失敗            | 點 Status Bar 或執行 `Superset: Link Git Hooks`;用 `git config --local --get core.hooksPath` 檢查 |
 | Install 沒處理預期的 folder           | Multi-root 視窗只處理第一個 opened folder            | 將目標 folder 移到第一位,或在單一 folder 視窗執行                                                 |
-| `Projects Setup` 留下失敗 terminal     | clone/submodule 失敗或同名路徑不是 Git repository    | 查看 terminal 的 failure list；修正 Git access 或衝突路徑後重跑                                  |
+| `Projects Setup` 留下失敗 terminal    | clone/submodule 失敗或同名路徑不是 Git repository    | 查看 terminal 的 failure list；修正 Git access 或衝突路徑後重跑                                   |
 | F2 改名沒寫回檔案                     | `README.todo` 唯讀或無寫入權限                       | 確認檔案可寫;檢查 Output Channel 錯誤                                                             |
 | `vsce package` 報 `Missing publisher` | `package.json` 缺 `publisher`                        | 預設填 `shuk`                                                                                     |
 | VSIX 安裝後沒生效                     | 沒重啟 VSCode                                        | 重新啟動視窗                                                                                      |
@@ -595,8 +595,8 @@ npm run package
 
 ## 已淘汰功能 (Deprecated Features)
 
-| 淘汰日期 | 功能 | 原始文件 | 說明 |
-| -------- | ---- | -------- | ---- |
+| 淘汰日期   | 功能                                                            | 原始文件                                         | 說明                                                                                                 |
+| ---------- | --------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | 2026-07-26 | 整併完成 — 41 份 `docs/specs/` 2026-06-20 ~ 2026-07-10 歷史文件 | `docs/specs/2026-06-20-*.md` ~ `2026-07-10-*.md` | 全部 contents 收進 [`docs/specs/2026-07-26-Summary.md`](docs/specs/2026-07-26-Summary.md);無功能淘汰 |
 
 ## 授權 (License)

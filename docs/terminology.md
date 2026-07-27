@@ -165,11 +165,11 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 
 ## Terminal Mermaid 術語
 
-| 術語                | 定義                                                                                   |
-| ------------------- | -------------------------------------------------------------------------------------- |
-| `Mermaid Preview`   | 將 body 寫入暫存 Markdown fenced block，再交給已安裝 Mermaid extension 渲染。           |
-| `Preview Temp File` | 每次 Mermaid Preview 建立的獨立 `superset-mermaid-*.md` 暫存檔。                       |
-| `Source Fallback`   | 沒有 Mermaid renderer 時，在 Editor 開啟 generated Markdown source。                   |
+| 術語                | 定義                                                                          |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `Mermaid Preview`   | 將 body 寫入暫存 Markdown fenced block，再交給已安裝 Mermaid extension 渲染。 |
+| `Preview Temp File` | 每次 Mermaid Preview 建立的獨立 `superset-mermaid-*.md` 暫存檔。              |
+| `Source Fallback`   | 沒有 Mermaid renderer 時，在 Editor 開啟 generated Markdown source。          |
 
 ## Sessions 術語
 
@@ -198,9 +198,9 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Sample Prefix Gate`           | clear/delete path 只允許處理 `sample-*.jsonl` 的內部安全檢查；不得只依賴 UI 呼叫端過濾。                                    |
 | `Malformed Line`               | 無法解析的 JSONL line；parser 略過並在 tooltip/summary 顯示 warning，不中止整個 session。                                   |
 | `Schema Version`               | Session JSONL contract version；未知 future version 必須 graceful degradation。                                             |
-| `Last Active`                  | last turn timestamp；只有 session 沒有 timestamped turn 時才 fallback 到 file mtime，用於排序及 relative age。             |
+| `Last Active`                  | last turn timestamp；只有 session 沒有 timestamped turn 時才 fallback 到 file mtime，用於排序及 relative age。              |
 | `Descendant Workspace Session` | bucket path 位於 current workspace root 下的 session；segment containment 不使用單純 string prefix。                        |
-| `Store Watcher`                | `src/sessions/store.ts#watchSessions`；Sessions View visible 時遞迴監看 store，新增 bucket 或 append turn 會刷新。           |
+| `Store Watcher`                | `src/sessions/store.ts#watchSessions`；Sessions View visible 時遞迴監看 store，新增 bucket 或 append turn 會刷新。          |
 
 ## TODO、Projects TODO 與 Plans 術語
 
@@ -263,43 +263,43 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 
 ## MDNS 與 mDNS 術語
 
-| 術語                        | 定義                                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| `MDNS View`                 | `superset.mdns` Tree View 的 manifest 顯示名稱。                                            |
-| `mDNS`                      | Multicast DNS discovery protocol。提到 protocol、transport 或 command 時使用此拼法。        |
-| `DNS-SD`                    | DNS-Based Service Discovery；以 PTR、SRV、TXT、A/AAAA records 描述服務。                    |
-| `mDNS Transport`            | 訂閱 multicast packets 並將 raw DNS records 交給 parser 的 I/O boundary。                   |
-| `Service Instance`          | 一筆具名 DNS-SD service advertisement，例如 printer 或 SSH service。                        |
-| `Instance Name`             | Service Instance 的完整名稱；first-seen name 會成為 Canonical Name。                        |
-| `Service Type`              | 服務協定類型，例如 `_http._tcp`。MDNS View 以此建立 top-level group。                       |
-| `Domain`                    | DNS domain，mDNS 通常為 `local`。                                                           |
-| `Host`                      | SRV target hostname。                                                                       |
-| `Address`                   | A/AAAA record 解析出的 IPv4 或 IPv6 address。                                               |
-| `Port`                      | SRV record 宣告的 TCP/UDP port。                                                            |
-| `Service Address`           | Copy action 使用的 `host:port` 表示。                                                       |
-| `TXT Properties`            | TXT record 的 key-value metadata。                                                          |
-| `Subtype`                   | PTR record 宣告的 service subtype。                                                         |
-| `Network Endpoint`          | 由 host/address、port 與 type 描述的實際服務端點。                                          |
-| `Network Key`               | `${host ?? addresses[0]}\|${port}\|${type}` secondary identity，用於 endpoint dedup。       |
-| `Canonical Service`         | 多個 network-identical instances 合併後保留的 service value。                               |
-| `Canonical Row`             | Canonical Service 在 MDNS View 中的唯一 Tree Item。                                         |
-| `Canonical Name`            | 同一 Network Key 第一次發現的 Instance Name。                                               |
-| `Alias`                     | 後續解析到同一 Network Key、被合併進 Canonical Service 的其他 Instance Name。               |
-| `Network-identity Dedup`    | 以 Network Key 合併重複 instances 的流程。                                                  |
-| `Pending Merge Window`      | Parser 暫存分散 DNS records、在發佈 service 前等待組合完整的時間窗。                        |
-| `mDNS Registry`             | 協調 transport records、pending merge、store 與 expiration sweeper 的 domain boundary。     |
-| `mDNS Store`                | 保存 Canonical Services、network-key indexes 與 detail cache 的 state owner。               |
-| `Forward Network-key Index` | Network Key → Canonical Row key 的 lookup。                                                 |
-| `Reverse Network-key Index` | Canonical Row key → Network Keys 的 lookup；更新或刪除 service 時用來釋放 stale slots。     |
-| `Detail Cache`              | MDNS service detail fields 的 cache；service update/remove/expire 時必須同步 invalidation。 |
-| `TTL`                       | DNS record time-to-live，以秒表示。service TTL 取組成 records 的 minimum TTL。              |
-| `Grace Period`              | service expiration threshold；目前為 `3 × TTL`，缺 TTL 時 fallback 120 秒。                 |
-| `Expiration Sweep`          | 週期性尋找超過 Grace Period 的 stale services 並同步移除 indexes。                          |
-| `Removed`                   | Transport 明確告知 service removal。                                                        |
-| `Expired`                   | Registry 因 TTL/last-seen 判定 service 過期。不得與 Removed 合併成同一事件語意。            |
-| `First Seen`                | Canonical Service 首次被發現的 timestamp。                                                  |
-| `Last Seen`                 | 最近一次持續 update 或 rediscovery 的 timestamp；merge 不得被較舊值倒退。                   |
-| `Source Address`            | 收到 multicast packet 的來源 IP，用於 network interface diagnosis。                         |
+| 術語                        | 定義                                                                                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MDNS View`                 | `superset.mdns` Tree View 的 manifest 顯示名稱。                                                                                                        |
+| `mDNS`                      | Multicast DNS discovery protocol。提到 protocol、transport 或 command 時使用此拼法。                                                                    |
+| `DNS-SD`                    | DNS-Based Service Discovery；以 PTR、SRV、TXT、A/AAAA records 描述服務。                                                                                |
+| `mDNS Transport`            | 訂閱 multicast packets 並將 raw DNS records 交給 parser 的 I/O boundary。                                                                               |
+| `Service Instance`          | 一筆具名 DNS-SD service advertisement，例如 printer 或 SSH service。                                                                                    |
+| `Instance Name`             | Service Instance 的完整名稱；first-seen name 會成為 Canonical Name。                                                                                    |
+| `Service Type`              | 服務協定類型，例如 `_http._tcp`。MDNS View 以此建立 top-level group。                                                                                   |
+| `Domain`                    | DNS domain，mDNS 通常為 `local`。                                                                                                                       |
+| `Host`                      | SRV target hostname。                                                                                                                                   |
+| `Address`                   | A/AAAA record 解析出的 IPv4 或 IPv6 address。                                                                                                           |
+| `Port`                      | SRV record 宣告的 TCP/UDP port。                                                                                                                        |
+| `Service Address`           | Copy action 使用的 `host:port` 表示。                                                                                                                   |
+| `TXT Properties`            | TXT record 的 key-value metadata。                                                                                                                      |
+| `Subtype`                   | PTR record 宣告的 service subtype。                                                                                                                     |
+| `Network Endpoint`          | 由 host/address、port 與 type 描述的實際服務端點。                                                                                                      |
+| `Network Key`               | `${host ?? addresses[0]}\|${port}\|${type}` secondary identity，用於 endpoint dedup。                                                                   |
+| `Canonical Service`         | 多個 network-identical instances 合併後保留的 service value。                                                                                           |
+| `Canonical Row`             | Canonical Service 在 MDNS View 中的唯一 Tree Item。                                                                                                     |
+| `Canonical Name`            | 同一 Network Key 第一次發現的 Instance Name。                                                                                                           |
+| `Alias`                     | 後續解析到同一 Network Key、被合併進 Canonical Service 的其他 Instance Name。                                                                           |
+| `Network-identity Dedup`    | 以 Network Key 合併重複 instances 的流程。                                                                                                              |
+| `Pending Merge Window`      | Parser 暫存分散 DNS records、在發佈 service 前等待組合完整的時間窗。                                                                                    |
+| `mDNS Registry`             | 協調 transport records、pending merge、store 與 expiration sweeper 的 domain boundary。                                                                 |
+| `mDNS Store`                | 保存 Canonical Services、network-key indexes 與 detail cache 的 state owner。                                                                           |
+| `Forward Network-key Index` | Network Key → Canonical Row key 的 lookup。                                                                                                             |
+| `Reverse Network-key Index` | Canonical Row key → Network Keys 的 lookup；更新或刪除 service 時用來釋放 stale slots。                                                                 |
+| `Detail Cache`              | MDNS service detail fields 的 cache；service update/remove/expire 時必須同步 invalidation。                                                             |
+| `TTL`                       | DNS record time-to-live，以秒表示。service TTL 取組成 records 的 minimum TTL。                                                                          |
+| `Grace Period`              | service expiration threshold；目前為 `3 × TTL`，缺 TTL 時 fallback 120 秒。                                                                             |
+| `Expiration Sweep`          | 週期性尋找超過 Grace Period 的 stale services 並同步移除 indexes。                                                                                      |
+| `Removed`                   | Transport 明確告知 service removal。                                                                                                                    |
+| `Expired`                   | Registry 因 TTL/last-seen 判定 service 過期。不得與 Removed 合併成同一事件語意。                                                                        |
+| `First Seen`                | Canonical Service 首次被發現的 timestamp。                                                                                                              |
+| `Last Seen`                 | 最近一次持續 update 或 rediscovery 的 timestamp；merge 不得被較舊值倒退。                                                                               |
+| `Source Address`            | 收到 multicast packet 的來源 IP，用於 network interface diagnosis。                                                                                     |
 | `Connect Action`            | `resolveConnectCommand` 驗證 mDNS 欄位後產生的 discriminated union；SSH 為 terminal `cmd + args`，HTTP(S)/IPP(S) 為 external URI，無效輸入回傳 `null`。 |
 
 ## Topology 術語
@@ -386,7 +386,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Transpose`             | 翻轉 Root Orientation。樹形不變，NxM 因此轉置，兩個方向的 Sizing 也跟著換層級。                                                   |
 | `Grid Shape`            | 網格形狀，與 Layout Mode 正交。以 Partition List 表達，`[2,2]` 是 2x2、`[2,2,1]` 是 ragged 五格。                                 |
 | `Partition List`        | Root 軸各 slot 各含幾個 Leaf Group 的整數陣列；總和必須等於實際 editor group 數。                                                 |
-| `Leaf Group`            | Layout descriptor 樹的葉節點，對應一個真實 editor group。                                                                        |
+| `Leaf Group`            | Layout descriptor 樹的葉節點，對應一個真實 editor group。                                                                         |
 | `Topology-preserving`   | 保形：只重寫 `size`，leaf 數、樹形與 orientation 都不變。四個 Layout Mode 一律走這條路徑。                                        |
 | `Reshape`               | 改變 leaf 數或樹形的操作；只有 Pick / Reset Editor Grid Shape 會做，且必須先 reconcile。                                          |
 | `Min Sibling Share`     | 非作用中兄弟節點在該層至少保有的比例；低於此值 VS Code 會 clamp 到最小群組尺寸，視覺上等同消失。                                  |
@@ -398,56 +398,56 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 
 ## 安裝、操作與診斷術語
 
-| 術語                           | 定義                                                                                                                          |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `Default Project Template`     | 初始化 standard ignore files、project directories 與 `AGENTS.md` symbolic link 的 bundled setup script。                      |
-| `Ignore Target`                | Default Project Template 可處理的 `git`、`gemini`、`claude` target，分別對應 `.gitignore`、`.geminiignore`、`.claudeignore`。 |
-| `Default Tools`                | `pm2`、`skills`、`dux`、`port`、`sessiond`、`autop`、`auth` 與 `proxy` 八個 CLI；各自在獨立 run terminal 以 `go install ...@master` 安裝。 |
-| `Skill Repository`             | 傳給 `skills add` 的 GitHub identifier。Quick Pick curated 清單與順序由 `src/installCommands.ts#SKILL_REPOSITORIES` 定義；`description` 顯示用途，`detail` 顯示 GitHub repository，`bizshuk/cc-plugin` 為預設，清單末尾的 `自訂 repository…` 會開啟 Input Box。 |
-| `Projects Setup`               | `Superset: Projects Setup`；建立固定 `~/projects` root，clone 標準 BizShuk repository set 並初始化 recursive submodules。     |
-| `Projects Setup Repository Set` | `ai`、`cc-plugin`、`data`、`env_setup`、`game`、`iphone`、`platform`、`playground`、`product`、`research`、`social`、`tools`、`web`。 |
-| `License Template`             | Superset 內嵌的 Apache-2.0、MIT 或 BSD-3-Clause `LICENSE` content。                                                           |
-| `Run Terminal`                 | Superset 為 setup、Git 或其他 shell action 建立的可見 terminal；成功時可自動 exit。                                           |
-| `Settings & Commands Overview` | `Superset: Open Settings` 動態產生的 registered-command Markdown overview；不是 native Settings editor。                      |
-| `Diagnostics Snapshot`         | `Superset: Show Diagnostics` 產生的一次性 subsystem Markdown snapshot。                                                       |
-| `Diagnostic Logs`              | `Superset` Output Channel 內持續追加的 timestamped runtime log。                                                              |
-| `Reset Caches`                 | 清除 `workspaceState` 中 `superset.*` keys，再依序執行各 plugin reset handlers。                                              |
-| `Reveal in Tree`               | 以 View ID 與 predicate 走訪 registered Tree View，聚焦並選取 matching Tree Item 的跨 feature command。                       |
-| `Focus View`                   | 顯示指定 View Container，再聚焦其中一個 registered View 的 command flow。                                                     |
-| `VSIX`                         | 可安裝的 VS Code extension package，由 `npm run build` 產生並驗證。                                                           |
-| `Extension Development Host`   | 按 `F5` 啟動、用來測試 extension 的隔離 VS Code window。                                                                      |
+| 術語                            | 定義                                                                                                                                                                                                                                                            |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Default Project Template`      | 初始化 standard ignore files、project directories 與 `AGENTS.md` symbolic link 的 bundled setup script。                                                                                                                                                        |
+| `Ignore Target`                 | Default Project Template 可處理的 `git`、`gemini`、`claude` target，分別對應 `.gitignore`、`.geminiignore`、`.claudeignore`。                                                                                                                                   |
+| `Default Tools`                 | `pm2`、`skills`、`dux`、`port`、`sessiond`、`autop`、`auth` 與 `proxy` 八個 CLI；各自在獨立 run terminal 以 `go install ...@master` 安裝。                                                                                                                      |
+| `Skill Repository`              | 傳給 `skills add` 的 GitHub identifier。Quick Pick curated 清單與順序由 `src/installCommands.ts#SKILL_REPOSITORIES` 定義；`description` 顯示用途，`detail` 顯示 GitHub repository，`bizshuk/cc-plugin` 為預設，清單末尾的 `自訂 repository…` 會開啟 Input Box。 |
+| `Projects Setup`                | `Superset: Projects Setup`；建立固定 `~/projects` root，clone 標準 BizShuk repository set 並初始化 recursive submodules。                                                                                                                                       |
+| `Projects Setup Repository Set` | `ai`、`cc-plugin`、`data`、`env_setup`、`game`、`iphone`、`platform`、`playground`、`product`、`research`、`social`、`tools`、`web`。                                                                                                                           |
+| `License Template`              | Superset 內嵌的 Apache-2.0、MIT 或 BSD-3-Clause `LICENSE` content。                                                                                                                                                                                             |
+| `Run Terminal`                  | Superset 為 setup、Git 或其他 shell action 建立的可見 terminal；成功時可自動 exit。                                                                                                                                                                             |
+| `Settings & Commands Overview`  | `Superset: Open Settings` 動態產生的 registered-command Markdown overview；不是 native Settings editor。                                                                                                                                                        |
+| `Diagnostics Snapshot`          | `Superset: Show Diagnostics` 產生的一次性 subsystem Markdown snapshot。                                                                                                                                                                                         |
+| `Diagnostic Logs`               | `Superset` Output Channel 內持續追加的 timestamped runtime log。                                                                                                                                                                                                |
+| `Reset Caches`                  | 清除 `workspaceState` 中 `superset.*` keys，再依序執行各 plugin reset handlers。                                                                                                                                                                                |
+| `Reveal in Tree`                | 以 View ID 與 predicate 走訪 registered Tree View，聚焦並選取 matching Tree Item 的跨 feature command。                                                                                                                                                         |
+| `Focus View`                    | 顯示指定 View Container，再聚焦其中一個 registered View 的 command flow。                                                                                                                                                                                       |
+| `VSIX`                          | 可安裝的 VS Code extension package，由 `npm run build` 產生並驗證。                                                                                                                                                                                             |
+| `Extension Development Host`    | 按 `F5` 啟動、用來測試 extension 的隔離 VS Code window。                                                                                                                                                                                                        |
 
 ## Plugin 與內部架構術語
 
-| 術語                          | 定義                                                                                                                 |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `Composition Root`            | `src/extension.ts`；建立 shared state 並宣告 plugin activation order。                                               |
-| `Feature`                     | 一個使用者或 domain 能力，程式放在 `src/<feature>/`。                                                                |
-| `Plugin`                      | 實作 `ExtensionPlugin`、把 Feature 接到 unified lifecycle 的 adapter。Feature 與 Plugin 不一定是同義詞。             |
-| `Plugin Manager`              | 依序 activate/deactivate plugins、隔離錯誤、收集 disposables/reset handlers 並組合 Markdown contributors。           |
-| `Plugin Context`              | Composition Root 注入 plugin 的受控 dependencies，包括 workspace、state、log、status 與 registration hooks。         |
-| `Activation Order`            | Plugin 啟用順序；Markdown composition、command availability 與 panel layout restore 依賴此順序。                     |
-| `Error Isolation`             | 單一 plugin activation failure 只標記該 plugin，不阻止 sibling plugins activation。                                  |
-| `Disposable`                  | Command、watcher、event subscription 或 View 的 teardown handle，由 Plugin Manager 管理。                            |
-| `Reset Handler`               | Plugin 註冊、由 Reset Caches 依序呼叫且個別隔離錯誤的 reset callback。                                               |
-| `Tree View Registry`          | 保存 View ID、TreeView 與 TreeDataProvider 的 cross-feature registry，支援 Reveal in Tree。                          |
+| 術語                          | 定義                                                                                                                              |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `Composition Root`            | `src/extension.ts`；建立 shared state 並宣告 plugin activation order。                                                            |
+| `Feature`                     | 一個使用者或 domain 能力，程式放在 `src/<feature>/`。                                                                             |
+| `Plugin`                      | 實作 `ExtensionPlugin`、把 Feature 接到 unified lifecycle 的 adapter。Feature 與 Plugin 不一定是同義詞。                          |
+| `Plugin Manager`              | 依序 activate/deactivate plugins、隔離錯誤、收集 disposables/reset handlers 並組合 Markdown contributors。                        |
+| `Plugin Context`              | Composition Root 注入 plugin 的受控 dependencies，包括 workspace、state、log、status 與 registration hooks。                      |
+| `Activation Order`            | Plugin 啟用順序；Markdown composition、command availability 與 panel layout restore 依賴此順序。                                  |
+| `Error Isolation`             | 單一 plugin activation failure 只標記該 plugin，不阻止 sibling plugins activation。                                               |
+| `Disposable`                  | Command、watcher、event subscription 或 View 的 teardown handle，由 Plugin Manager 管理。                                         |
+| `Reset Handler`               | Plugin 註冊、由 Reset Caches 依序呼叫且個別隔離錯誤的 reset callback。                                                            |
+| `Tree View Registry`          | 保存 View ID、TreeView 與 TreeDataProvider 的 cross-feature registry，支援 Reveal in Tree。                                       |
 | `View Visibility Boundary`    | `src/plugin/viewVisibility.ts#registerViewVisibility`；把 VS Code visibility event 轉為 boolean lifecycle 與 active-view report。 |
-| `Store`                       | Feature 的 in-memory state owner 與 domain mutation boundary；不等同 filesystem store。                              |
-| `Registry`                    | 以 identity 管理 live entities 與 lifecycle transitions 的 state owner，例如 TerminalRegistry、MdnsRegistry。        |
-| `Provider`                    | 將 domain elements 提供給 VS Code View API 的 adapter，例如 TreeDataProvider。                                       |
-| `Renderer`                    | 將 domain data 純轉換成 UI spec、Markdown 或 HTML 的邏輯。                                                           |
-| `Transformer`                 | 將一種 domain representation 純轉換成另一種 representation 的模組。                                                  |
-| `Parser`                      | 將 filesystem、protocol 或 text input 解析為 domain model 的純邏輯。                                                 |
-| `Source of Truth`             | 某一類 state 或規則唯一允許被視為 authoritative 的 owner。                                                           |
-| `Pure Domain Logic`           | 不 import `vscode`、可直接用 Vitest 驗證的 parser、store helper、renderer 或 transformer。                           |
-| `VS Code-bound Orchestration` | Command registration、TreeView creation、watcher 與 notification 等依賴 VS Code host 的接線層。                      |
-| `Cross-module State`          | Composition Root 建立、供少量 global commands 查找的 shared manager、channel 或 spawner reference。                  |
-| `Workspace State`             | VS Code 為 extension 管理、以 workspace 為 scope 的 persisted Memento。                                              |
-| `Global State`                | VS Code 為 extension 管理、跨 workspace 的 persisted Memento。                                                       |
-| `Panel Layout Persistence`    | 記錄最近 visible View ID，activation 後在所有 Tree Views registered 完成時恢復 focus。名稱是既有 module identifier。 |
-| `Static Resource`             | Extension 隨包附帶的非程式資產，統一放在 `pkg/resources/`。                                                          |
-| `Contract Test`               | 驗證 manifest、activation、provider output 或純函式 boundary 的 regression test。                                    |
-| `Full Build Verification`     | `npm run build` 的 clean output、install、compile、lean VSIX package 與 runtime-content verification 流程。          |
+| `Store`                       | Feature 的 in-memory state owner 與 domain mutation boundary；不等同 filesystem store。                                           |
+| `Registry`                    | 以 identity 管理 live entities 與 lifecycle transitions 的 state owner，例如 TerminalRegistry、MdnsRegistry。                     |
+| `Provider`                    | 將 domain elements 提供給 VS Code View API 的 adapter，例如 TreeDataProvider。                                                    |
+| `Renderer`                    | 將 domain data 純轉換成 UI spec、Markdown 或 HTML 的邏輯。                                                                        |
+| `Transformer`                 | 將一種 domain representation 純轉換成另一種 representation 的模組。                                                               |
+| `Parser`                      | 將 filesystem、protocol 或 text input 解析為 domain model 的純邏輯。                                                              |
+| `Source of Truth`             | 某一類 state 或規則唯一允許被視為 authoritative 的 owner。                                                                        |
+| `Pure Domain Logic`           | 不 import `vscode`、可直接用 Vitest 驗證的 parser、store helper、renderer 或 transformer。                                        |
+| `VS Code-bound Orchestration` | Command registration、TreeView creation、watcher 與 notification 等依賴 VS Code host 的接線層。                                   |
+| `Cross-module State`          | Composition Root 建立、供少量 global commands 查找的 shared manager、channel 或 spawner reference。                               |
+| `Workspace State`             | VS Code 為 extension 管理、以 workspace 為 scope 的 persisted Memento。                                                           |
+| `Global State`                | VS Code 為 extension 管理、跨 workspace 的 persisted Memento。                                                                    |
+| `Panel Layout Persistence`    | 記錄最近 visible View ID，activation 後在所有 Tree Views registered 完成時恢復 focus。名稱是既有 module identifier。              |
+| `Static Resource`             | Extension 隨包附帶的非程式資產，統一放在 `pkg/resources/`。                                                                       |
+| `Contract Test`               | 驗證 manifest、activation、provider output 或純函式 boundary 的 regression test。                                                 |
+| `Full Build Verification`     | `npm run build` 的 clean output、install、compile、lean VSIX package 與 runtime-content verification 流程。                       |
 
 ## Inactive Projects Module 術語
 

@@ -282,7 +282,7 @@ describe("terminalSpawner bridge", () => {
             );
             expect(cwd).toBe(os.homedir());
 
-            const sent = (terminals[index] as { sendText: ReturnType<typeof vi.fn> })
+            const sent = (terminals[index] as unknown as { sendText: ReturnType<typeof vi.fn> })
                 .sendText.mock.calls[0][0] as string;
             expect(sent).toBe(`${tool.cmd} && exit\r`);
         });
@@ -292,7 +292,7 @@ describe("terminalSpawner bridge", () => {
         // exits. The extension just sends the cmdline.
         terminals.forEach((terminal) => {
             expect(
-                (terminal as { dispose: ReturnType<typeof vi.fn> }).dispose
+                (terminal as unknown as { dispose: ReturnType<typeof vi.fn> }).dispose
             ).not.toHaveBeenCalled();
         });
 
@@ -350,7 +350,7 @@ describe("terminalSpawner bridge", () => {
         expect(cwd).toBe(os.homedir());
 
         const sent = (
-            terminal as { sendText: ReturnType<typeof vi.fn> }
+            terminal as unknown as { sendText: ReturnType<typeof vi.fn> }
         ).sendText.mock.calls[0][0] as string;
         expect(sent).toBe(
             `'bash' '/fake/pkg/resources/config/setup-projects.sh' '${path.join(
@@ -478,8 +478,8 @@ describe("terminalSpawner bridge", () => {
         expect(spawn.mock.calls[0][0]).toMatch(
             /^Superset: Install Skills \(bizshuk\/cc-plugin\) \(\d{2}:\d{2}:\d{2}\)$/
         );
-        expect((t as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
-        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
+        expect((t as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
+        const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
         expect(sent).toBe("skills add 'bizshuk/cc-plugin' && exit\r");
     });
@@ -506,7 +506,7 @@ describe("terminalSpawner bridge", () => {
         ).__commands.get("superset.skillInstall")!;
         await cb();
 
-        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
+        const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
         expect(sent).toBe("skills add 'anthropics/skills' && exit\r");
     });
@@ -558,7 +558,7 @@ describe("terminalSpawner bridge", () => {
         ).toBeUndefined();
 
         expect(spawn).toHaveBeenCalledTimes(1);
-        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
+        const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
         expect(sent).toBe("skills add 'example/custom-skills' && exit\r");
     });
@@ -603,7 +603,7 @@ describe("terminalSpawner bridge", () => {
         await cb({ repo: "  bizshuk/custom-skill  " });
 
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
-        const sent = (t as { sendText: ReturnType<typeof vi.fn> })
+        const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
         expect(sent).toBe("skills add 'bizshuk/custom-skill' && exit\r");
     });
@@ -674,7 +674,7 @@ describe("terminalSpawner bridge", () => {
         // existed when we checked. Every argv element (including
         // `bash`) goes through `quoteShellArg`, hence the `'...'` wrapping.
         const sent = (
-            t as { sendText: ReturnType<typeof vi.fn> }
+            t as unknown as { sendText: ReturnType<typeof vi.fn> }
         ).sendText.mock.calls[0][0] as string;
         expect(sent).toBe(
             "'bash' '/fake/pkg/resources/config/install-default-project.sh' 'git' 'gemini' 'claude' && exit\r"
@@ -683,7 +683,7 @@ describe("terminalSpawner bridge", () => {
         // Manual dispose must not happen — auto-PTY close is
         // driven by the `&& exit` self-termination.
         expect(
-            (t as { dispose: ReturnType<typeof vi.fn> }).dispose
+            (t as unknown as { dispose: ReturnType<typeof vi.fn> }).dispose
         ).not.toHaveBeenCalled();
     });
 
@@ -713,7 +713,7 @@ describe("terminalSpawner bridge", () => {
         const [, cwd] = spawn.mock.calls[0] as [string, string];
         expect(cwd).toBe("/ws");
         const sent = (
-            t as { sendText: ReturnType<typeof vi.fn> }
+            t as unknown as { sendText: ReturnType<typeof vi.fn> }
         ).sendText.mock.calls[0][0] as string;
         // Only `git` target — no `gemini` / `claude`. `args.targets`
         // is forwarded verbatim to the bash script (the script
