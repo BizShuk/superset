@@ -401,7 +401,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | `Default Project Template`     | 初始化 standard ignore files、project directories 與 `AGENTS.md` symbolic link 的 bundled setup script。                      |
 | `Ignore Target`                | Default Project Template 可處理的 `git`、`gemini`、`claude` target，分別對應 `.gitignore`、`.geminiignore`、`.claudeignore`。 |
-| `Default Tools`                | `pm2`、`skills`、`dux`、`port` 與 `sessiond` 五個 CLI；各自在獨立 run terminal 以 `go install ...@master` 安裝。          |
+| `Default Tools`                | `pm2`、`skills`、`dux`、`port`、`sessiond` 與 `autop` 六個 CLI；各自在獨立 run terminal 以 `go install ...@master` 安裝。 |
 | `Skill Repository`             | 傳給 `skills add` 的 GitHub identifier。Quick Pick curated 清單與順序由 `src/installCommands.ts#SKILL_REPOSITORIES` 定義；`description` 顯示用途，`detail` 顯示 GitHub repository，`bizshuk/cc-plugin` 為預設，清單末尾的 `自訂 repository…` 會開啟 Input Box。 |
 | `Projects Setup`               | `Superset: Projects Setup`；建立固定 `~/projects` root，clone 標準 BizShuk repository set 並初始化 recursive submodules。     |
 | `Projects Setup Repository Set` | `ai`、`cc-plugin`、`data`、`env_setup`、`game`、`iphone`、`platform`、`playground`、`product`、`research`、`social`、`tools`、`web`。 |
