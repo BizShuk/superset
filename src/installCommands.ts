@@ -69,6 +69,10 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
         label: "autop",
         cmd: "go install github.com/bizshuk/autop@master",
     },
+    {
+        label: "auth",
+        cmd: "go install github.com/bizshuk/auth@master",
+    },
 ] as const;
 
 const SKILL_REPOSITORIES: readonly CuratedSkillRepositoryPickItem[] = [

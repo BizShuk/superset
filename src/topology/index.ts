@@ -4,6 +4,7 @@ import { TopologyStore } from "./topologyStore";
 import { NodeTopologyScanner } from "./topologyScanner";
 import { TopologyTreeProvider } from "./treeProvider";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import { registerViewVisibility } from "../plugin/viewVisibility";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const store = new TopologyStore(new NodeTopologyScanner());
@@ -23,14 +24,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     });
 
     // Report active view for panel-layout persistence (plan §3).
-    const visibilitySub = view.onDidChangeVisibility((visible) => {
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                "superset.topology"
-            );
-        }
-    });
+    const visibilitySub = registerViewVisibility(view, "superset.topology");
 
     // Cross-panel reveal-in-tree wiring.
     const treeViewEntry = getTreeViewRegistry()?.register(

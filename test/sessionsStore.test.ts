@@ -1,4 +1,5 @@
 import {
+    appendFileSync,
     existsSync,
     mkdirSync,
     mkdtempSync,
@@ -8,13 +9,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import { afterAll, describe, it, expect } from "vitest";
+import { afterAll, describe, it, expect, vi } from "vitest";
 import {
     decodeWorkspace,
     encodeWorkspace,
     listSessionProjects,
     listSessions,
     parseSessionJsonl,
+    SessionStore,
     workspaceSessionsDir,
 } from "../src/sessions/store";
 import { buildSessionRow } from "../src/sessions/treeSpec";
@@ -163,6 +165,58 @@ describe("workspace session projects", () => {
 
         expect(api?.sessions[0].meta.workspace_path).toBe("/wrong/meta/path");
         expect(api?.projectPath).toBe(path.join(workspace, "apps", "api"));
+    });
+});
+
+describe("SessionStore cache and deletion boundary", () => {
+    it("parses an unchanged session once and invalidates after append", () => {
+        const root = mkdtempSync(path.join(tmpdir(), "superset-cache-"));
+        const workspace = "/workspace/cache";
+        const dir = workspaceSessionsDir(workspace, root);
+        const filePath = path.join(dir, "ingested.jsonl");
+        const parser = vi.fn(parseSessionJsonl);
+
+        try {
+            mkdirSync(dir, { recursive: true });
+            writeFileSync(filePath, jsonl(META, turn(1)));
+            const store = new SessionStore(() => root, parser);
+
+            const first = store.listSessionProjects(workspace);
+            const second = store.listSessionProjects(workspace);
+
+            expect(parser).toHaveBeenCalledTimes(1);
+            expect(second[0].sessions[0]).toBe(first[0].sessions[0]);
+
+            appendFileSync(filePath, jsonl(turn(2)));
+            const third = store.listSessionProjects(workspace);
+
+            expect(parser).toHaveBeenCalledTimes(2);
+            expect(third[0].sessions[0].turns).toHaveLength(2);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it("deletes sample fixtures without deleting ingested sessions", () => {
+        const root = mkdtempSync(path.join(tmpdir(), "superset-delete-"));
+        const workspace = "/workspace/delete";
+        const dir = workspaceSessionsDir(workspace, root);
+        const ingestedFile = path.join(dir, "ingested.jsonl");
+        const sampleFile = path.join(dir, "sample-fixture.jsonl");
+
+        try {
+            mkdirSync(dir, { recursive: true });
+            writeFileSync(ingestedFile, jsonl(META));
+            writeFileSync(sampleFile, jsonl(META));
+            const store = new SessionStore(() => root);
+
+            expect(store.deleteSession(ingestedFile)).toBe(false);
+            expect(existsSync(ingestedFile)).toBe(true);
+            expect(store.deleteSession(sampleFile)).toBe(true);
+            expect(existsSync(sampleFile)).toBe(false);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 });
 

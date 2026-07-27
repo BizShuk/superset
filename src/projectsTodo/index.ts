@@ -12,6 +12,7 @@ import {
 } from "../todo/planActions";
 import { formatPlanCopyText } from "../todo/plansSource";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import { registerViewVisibility } from "../plugin/viewVisibility";
 import {
     createTodoCommands,
     reportPlanActionError,
@@ -55,23 +56,15 @@ export function register(ctx: FeatureContext): FeatureHandle {
     });
 
     // Report active view for panel-layout persistence (plan §3).
-    const visibilitySub = view.onDidChangeVisibility((visible) => {
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                "superset.projectsTodo"
-            );
-        }
-    });
+    const visibilitySub = registerViewVisibility(
+        view,
+        "superset.projectsTodo"
+    );
 
-    const workspaceVisibilitySub = workspaceView.onDidChangeVisibility((visible) => {
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                "superset.workspaceTodo"
-            );
-        }
-    });
+    const workspaceVisibilitySub = registerViewVisibility(
+        workspaceView,
+        "superset.workspaceTodo"
+    );
 
     // Cross-panel reveal-in-tree wiring: a future TreeView click
     // e.g. from mDNS can focus a projectsTodo row via

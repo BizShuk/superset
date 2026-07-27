@@ -29,6 +29,8 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
     private unsubscribeRegistry?: () => void;
     private unsubscribeGroupStore?: () => void;
     private refreshTimer?: ReturnType<typeof setInterval>;
+    private started = false;
+    private visible = false;
     private unseen = new Set<TerminalHandle>();
 
     constructor(
@@ -38,9 +40,10 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
     ) {}
 
     start(): void {
-        if (this.unsubscribeRegistry) {
+        if (this.started) {
             return;
         }
+        this.started = true;
         this.refreshUnseenSet();
 
         this.unsubscribeRegistry = this.registry.onDidChange((change) => {
@@ -81,22 +84,42 @@ export class TerminalTreeProvider implements vscode.TreeDataProvider<TreeElement
             }
         });
 
-        if (this.refreshIntervalMs > 0) {
-            this.refreshTimer = setInterval(() => {
-                this.emitter.fire(undefined);
-            }, this.refreshIntervalMs);
-        }
+        this.syncRefreshTimer();
     }
 
     stop(): void {
+        this.started = false;
         this.unsubscribeRegistry?.();
         this.unsubscribeRegistry = undefined;
         this.unsubscribeGroupStore?.();
         this.unsubscribeGroupStore = undefined;
+        this.syncRefreshTimer();
+    }
+
+    /**
+     * The periodic tick only exists to observe user-initiated terminal
+     * renames, which matter solely while this Tree View is rendered.
+     * Registry-driven state remains subscribed whenever the provider is
+     * started.
+     */
+    setVisible(visible: boolean): void {
+        if (this.visible === visible) return;
+        this.visible = visible;
+        this.syncRefreshTimer();
+    }
+
+    private syncRefreshTimer(): void {
         if (this.refreshTimer !== undefined) {
             clearInterval(this.refreshTimer);
             this.refreshTimer = undefined;
         }
+        if (!this.started || !this.visible || this.refreshIntervalMs <= 0) {
+            return;
+        }
+        this.refreshTimer = setInterval(() => {
+            this.emitter.fire(undefined);
+        }, this.refreshIntervalMs);
+        this.refreshTimer.unref?.();
     }
 
     /**

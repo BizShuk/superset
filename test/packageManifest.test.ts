@@ -255,8 +255,8 @@ describe("Editor Layout manifest contributions", () => {
         const pick = keybindings.find(
             (k) => k.command === "superset.editorLayoutPick"
         );
-        expect(cycle?.key).toBe("cmd+opt+v");
-        expect(cycle?.mac).toBe("cmd+opt+v");
+        expect(cycle?.key).toBe("cmd+alt+v");
+        expect(cycle?.mac).toBe("cmd+alt+v");
         expect(cycle?.when).toBe("editorIsOpen");
         expect(pick?.key).toBe("ctrl+alt+shift+v");
         expect(pick?.when).toBe("editorIsOpen");

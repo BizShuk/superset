@@ -31,6 +31,7 @@ import {
 import { registerMermaidPreviewCommand } from "../mermaid/mermaidPreviewCommand";
 import { setTerminalSpawner } from "../crossModuleState/terminalSpawner";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import { registerViewVisibility } from "../plugin/viewVisibility";
 import {
     captureSnapshot,
     renderActivityMarkdown,
@@ -102,14 +103,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // Report active view for panel-layout persistence (plan §3). Only
     // `visible: true` transitions matter — when the panel hides, another
     // panel will report its own `true`, which becomes the new active.
-    const visibilitySub = treeView.onDidChangeVisibility((visible) => {
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                "superset.terminals"
-            );
-        }
-    });
+    const visibilitySub = registerViewVisibility(
+        treeView,
+        "superset.terminals",
+        (visible) => treeProvider.setVisible(visible)
+    );
 
     // Wire HighlightPresenter against the shared status bar.
     const statusBar = ctx.shared.statusBar;

@@ -32,3 +32,37 @@ CLAUDE.md
 tmp/**
 # LICENSE is kept — required by vsce for Marketplace validation;
 # other meta files above are documentation-only and stay excluded.
+
+# Workspace-only metadata and local runner files.
+.claudeignore
+.geminiignore
+.codegraphy/**
+.codex/**
+.githooks/**
+.vscode/**
+ecosystem.config.js
+run.sh
+
+# Runtime dependency pruning. Keep node-pty's lib/ and every platform
+# prebuild; remove only build/test/debug payload that cannot be loaded at
+# extension runtime.
+node_modules/**/*.pdb
+node_modules/node-pty/src/**
+node_modules/node-pty/deps/**
+node_modules/node-pty/scripts/**
+node_modules/node-pty/third_party/**
+node_modules/node-pty/binding.gyp
+node_modules/node-pty/lib/**/*.map
+node_modules/node-pty/lib/**/*.test.js
+node_modules/multicast-dns/.travis.yml
+node_modules/multicast-dns/appveyor.yml
+node_modules/multicast-dns/cli.js
+node_modules/multicast-dns/example.js
+node_modules/multicast-dns/test.js
+node_modules/thunky/.travis.yml
+node_modules/thunky/test.js
+
+# npm installs these optional-peer artifacts as extraneous in this lockfile;
+# neither is reachable from the production dependency graph.
+node_modules/@emnapi/**
+node_modules/tslib/**

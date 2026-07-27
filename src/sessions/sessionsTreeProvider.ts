@@ -5,7 +5,7 @@
 
 import * as path from "path";
 import * as vscode from "vscode";
-import { listSessionProjects, watchSessions } from "./store";
+import { SessionStore } from "./store";
 import { buildSessionRow } from "./treeSpec";
 import type { SessionProject, SessionRecord } from "./types";
 
@@ -36,22 +36,33 @@ export class SessionsTreeProvider
 
     constructor(
         private readonly workspaceFolder: string,
-        private readonly dataDirOverride: () => string | undefined
+        private readonly store: SessionStore
     ) {}
 
     start(): void {
         if (this.watcher) return;
         this.reload();
-        this.watcher = watchSessions(
+        this.watcher = this.store.watch(
             this.workspaceFolder,
-            () => this.refresh(),
-            this.dataDirOverride()
+            () => this.refresh()
         );
     }
 
-    dispose(): void {
+    stop(): void {
         this.watcher?.dispose();
         this.watcher = undefined;
+    }
+
+    setVisible(visible: boolean): void {
+        if (visible) {
+            this.start();
+        } else {
+            this.stop();
+        }
+    }
+
+    dispose(): void {
+        this.stop();
         this.emitter.dispose();
     }
 
@@ -61,10 +72,7 @@ export class SessionsTreeProvider
     }
 
     private reload(): void {
-        this.projects = listSessionProjects(
-            this.workspaceFolder,
-            this.dataDirOverride()
-        );
+        this.projects = this.store.listSessionProjects(this.workspaceFolder);
     }
 
     getTreeItem(element: SessionsElement): vscode.TreeItem {

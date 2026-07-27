@@ -181,6 +181,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Workspace Bucket`             | Store Root 下以 percent-encoded workspace path 命名的目錄。project identity 來自 decoded bucket path。                      |
 | `Session`                      | 一個 agent 工作階段；on-disk 形式是一個 append-only JSONL file。                                                            |
 | `Session Record`               | Superset 解析後的 meta、turns、file path、size、last-active time 與 malformed count 集合。                                  |
+| `Session Record Cache`         | `src/sessions/store.ts#SessionStore` 依 file size 與 mtime 重用 unchanged Session Record 的記憶體 cache。                   |
 | `Session Meta`                 | JSONL 第一行的 `meta` record，包含 agent、session ID、workspace、title、resume、created time 與 schema version。            |
 | `Turn`                         | JSONL 中 meta 之後的一筆 `turn` record；這是 storage contract 用語。                                                        |
 | `Round`                        | Session Summary 內呈現一個 Turn 的 `##` heading；這是 presentation 用語。不要將 JSON field 改名為 round。                   |
@@ -197,9 +198,9 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Sample Prefix Gate`           | clear/delete path 只允許處理 `sample-*.jsonl` 的內部安全檢查；不得只依賴 UI 呼叫端過濾。                                    |
 | `Malformed Line`               | 無法解析的 JSONL line；parser 略過並在 tooltip/summary 顯示 warning，不中止整個 session。                                   |
 | `Schema Version`               | Session JSONL contract version；未知 future version 必須 graceful degradation。                                             |
-| `Last Active`                  | last turn timestamp 與 file mtime 的較新值，用於排序及 relative age。                                                       |
+| `Last Active`                  | last turn timestamp；只有 session 沒有 timestamped turn 時才 fallback 到 file mtime，用於排序及 relative age。             |
 | `Descendant Workspace Session` | bucket path 位於 current workspace root 下的 session；segment containment 不使用單純 string prefix。                        |
-| `Store Watcher`                | 遞迴監看 session store 的 file watcher；新增 bucket 或 append turn 會刷新 Sessions View。                                   |
+| `Store Watcher`                | `src/sessions/store.ts#watchSessions`；Sessions View visible 時遞迴監看 store，新增 bucket 或 append turn 會刷新。           |
 
 ## TODO、Projects TODO 與 Plans 術語
 
@@ -401,7 +402,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
 | `Default Project Template`     | 初始化 standard ignore files、project directories 與 `AGENTS.md` symbolic link 的 bundled setup script。                      |
 | `Ignore Target`                | Default Project Template 可處理的 `git`、`gemini`、`claude` target，分別對應 `.gitignore`、`.geminiignore`、`.claudeignore`。 |
-| `Default Tools`                | `pm2`、`skills`、`dux`、`port`、`sessiond` 與 `autop` 六個 CLI；各自在獨立 run terminal 以 `go install ...@master` 安裝。 |
+| `Default Tools`                | `pm2`、`skills`、`dux`、`port`、`sessiond`、`autop` 與 `auth` 七個 CLI；各自在獨立 run terminal 以 `go install ...@master` 安裝。 |
 | `Skill Repository`             | 傳給 `skills add` 的 GitHub identifier。Quick Pick curated 清單與順序由 `src/installCommands.ts#SKILL_REPOSITORIES` 定義；`description` 顯示用途，`detail` 顯示 GitHub repository，`bizshuk/cc-plugin` 為預設，清單末尾的 `自訂 repository…` 會開啟 Input Box。 |
 | `Projects Setup`               | `Superset: Projects Setup`；建立固定 `~/projects` root，clone 標準 BizShuk repository set 並初始化 recursive submodules。     |
 | `Projects Setup Repository Set` | `ai`、`cc-plugin`、`data`、`env_setup`、`game`、`iphone`、`platform`、`playground`、`product`、`research`、`social`、`tools`、`web`。 |
@@ -430,6 +431,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Disposable`                  | Command、watcher、event subscription 或 View 的 teardown handle，由 Plugin Manager 管理。                            |
 | `Reset Handler`               | Plugin 註冊、由 Reset Caches 依序呼叫且個別隔離錯誤的 reset callback。                                               |
 | `Tree View Registry`          | 保存 View ID、TreeView 與 TreeDataProvider 的 cross-feature registry，支援 Reveal in Tree。                          |
+| `View Visibility Boundary`    | `src/plugin/viewVisibility.ts#registerViewVisibility`；把 VS Code visibility event 轉為 boolean lifecycle 與 active-view report。 |
 | `Store`                       | Feature 的 in-memory state owner 與 domain mutation boundary；不等同 filesystem store。                              |
 | `Registry`                    | 以 identity 管理 live entities 與 lifecycle transitions 的 state owner，例如 TerminalRegistry、MdnsRegistry。        |
 | `Provider`                    | 將 domain elements 提供給 VS Code View API 的 adapter，例如 TreeDataProvider。                                       |
@@ -445,7 +447,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Panel Layout Persistence`    | 記錄最近 visible View ID，activation 後在所有 Tree Views registered 完成時恢復 focus。名稱是既有 module identifier。 |
 | `Static Resource`             | Extension 隨包附帶的非程式資產，統一放在 `pkg/resources/`。                                                          |
 | `Contract Test`               | 驗證 manifest、activation、provider output 或純函式 boundary 的 regression test。                                    |
-| `Full Build Verification`     | `npm run build` 的 clean、install、compile、VSIX package 與 package-content verification 流程。                      |
+| `Full Build Verification`     | `npm run build` 的 clean output、install、compile、lean VSIX package 與 runtime-content verification 流程。          |
 
 ## Inactive Projects Module 術語
 

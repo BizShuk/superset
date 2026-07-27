@@ -13,6 +13,7 @@ import {
 import { formatPlanCopyText } from "./plansSource";
 import type { TodoItem } from "./types";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import { registerViewVisibility } from "../plugin/viewVisibility";
 import {
     createTodoCommands,
     reportPlanActionError,
@@ -74,14 +75,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     });
 
     // Report active view for panel-layout persistence (plan §3).
-    const visibilitySub = view.onDidChangeVisibility((visible) => {
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                "superset.todo"
-            );
-        }
-    });
+    const visibilitySub = registerViewVisibility(view, "superset.todo");
 
     // Wire into the cross-panel TreeViewRegistry so the
     // `superset.revealInTree` command can walk this panel's tree.

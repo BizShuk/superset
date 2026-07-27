@@ -8,6 +8,7 @@ import { buildMdnsDetailFields } from "./mdnsTreeSpec";
 import { resolveConnectCommand } from "../mdnsConnect";
 import { getTerminalSpawner } from "../crossModuleState";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import { registerViewVisibility } from "../plugin/viewVisibility";
 
 export function register(ctx: FeatureContext): FeatureHandle {
     const registry = new MdnsRegistry(new MulticastDnsTransport());
@@ -27,14 +28,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     });
 
     // Report active view for panel-layout persistence (plan §3).
-    const visibilitySub = view.onDidChangeVisibility((visible) => {
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                "superset.mdns"
-            );
-        }
-    });
+    const visibilitySub = registerViewVisibility(view, "superset.mdns");
 
     // Cross-panel reveal-in-tree wiring: mDNS tree is reachable
     // from `superset.revealInTree({ viewId: "superset.mdns", ... })`.

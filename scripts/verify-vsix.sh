@@ -5,7 +5,7 @@
 # Checks:
 #   1. Upstream node-pty is bundled and both macOS spawn-helper files retain
 #      executable POSIX modes.
-#   2. No dev-only paths (test/, src/, plans/, docs/) leaked into the VSIX.
+#   2. No source, workspace metadata, debug symbols, or stale compiled output.
 #   3. extension/package.json exists at the root of the extension folder.
 #   4. Required pkg/resources payload exists and no legacy resources path leaks.
 set -euo pipefail
@@ -19,9 +19,10 @@ fi
 
 # Resolve a single VSIX path even when the glob matches multiple files
 # (e.g. after a previous failed build).
-shopt -s nullglob
-matches=($VSIX)
-shopt -u nullglob
+matches=()
+while IFS= read -r match; do
+    matches+=("$match")
+done < <(compgen -G "$VSIX")
 if [[ ${#matches[@]} -eq 0 ]]; then
     echo "✗ No VSIX matched pattern: $VSIX" >&2
     exit 1
@@ -69,12 +70,56 @@ done
 
 # 2. Dev-only paths must not appear inside the extension/ folder.
 
-for forbidden in test/ src/ plans/ docs/; do
+for forbidden in \
+    test/ \
+    src/ \
+    plans/ \
+    docs/ \
+    .codegraphy/ \
+    .codex/ \
+    .githooks/ \
+    .vscode/; do
     if grep -qE "extension/$forbidden" "$VSIX_LISTING"; then
         echo "✗ Forbidden path extension/$forbidden leaked into $VSIX" >&2
         exit 1
     fi
 done
+
+for forbidden_file in \
+    .claudeignore \
+    .geminiignore \
+    ecosystem.config.js \
+    run.sh; do
+    if grep -qE "extension/${forbidden_file}$" "$VSIX_LISTING"; then
+        echo "✗ Forbidden file extension/$forbidden_file leaked into $VSIX" >&2
+        exit 1
+    fi
+done
+
+if grep -qE 'extension/node_modules/.*\.pdb$' "$VSIX_LISTING"; then
+    echo "✗ Native debug symbols leaked into $VSIX" >&2
+    exit 1
+fi
+
+for extraneous in @emnapi/ tslib/; do
+    if grep -qF "extension/node_modules/$extraneous" "$VSIX_LISTING"; then
+        echo "✗ Extraneous package $extraneous leaked into $VSIX" >&2
+        exit 1
+    fi
+done
+
+# A clean compile must not retain JavaScript emitted from a source file that
+# has since been removed. This catches stale modules even when their folder
+# name is not known in advance.
+while IFS= read -r compiled_path; do
+    relative_path="${compiled_path#extension/out/}"
+    source_path="src/${relative_path%.js}.ts"
+    source_tsx="${source_path%.ts}.tsx"
+    if [[ ! -f "$source_path" && ! -f "$source_tsx" ]]; then
+        echo "✗ Stale compiled file $compiled_path has no source" >&2
+        exit 1
+    fi
+done < <(awk '$NF ~ /^extension\/out\/.*\.js$/ { print $NF }' "$VSIX_LISTING")
 
 # 3. extension/package.json must exist.
 if ! grep -qE "extension/package\.json$" "$VSIX_LISTING"; then

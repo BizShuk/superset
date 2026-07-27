@@ -124,108 +124,236 @@ function lastActivity(turns: readonly SessionTurn[], mtimeMs: number): number {
     return Number.isFinite(parsed) ? parsed : mtimeMs;
 }
 
-/**
- * Every session recorded for `workspacePath`, newest first. A missing
- * directory is the normal "no sessions yet" state, not an error.
- */
-export function listSessions(
-    workspacePath: string,
-    override?: string
-): SessionRecord[] {
-    return listSessionsInDir(workspaceSessionsDir(workspacePath, override));
+type SessionParser = typeof parseSessionJsonl;
+
+interface CachedSession {
+    readonly sizeBytes: number;
+    readonly mtimeMs: number;
+    readonly record: SessionRecord;
 }
 
 /**
- * Session-bearing workspace buckets at or below `workspacePath`.
+ * Filesystem boundary for the Sessions feature.
  *
- * The bucket path is the project identity. Meta is deliberately not used for
- * grouping because malformed or stale records must not escape their bucket.
+ * `sessiond` records are append-only, so unchanged size + mtime identifies a
+ * record that can safely reuse its parsed object. One store instance is shared
+ * by the Tree View and summary renderer; watcher refreshes therefore stat every
+ * candidate but only read and parse files that changed.
  */
-export function listSessionProjects(
-    workspacePath: string,
-    override?: string
-): SessionProject[] {
-    const root = sessionsRoot(override);
-    let entries: fs.Dirent[];
-    try {
-        entries = fs.readdirSync(root, { withFileTypes: true });
-    } catch {
-        return [];
+export class SessionStore {
+    private readonly cache = new Map<string, CachedSession>();
+    private readonly cachedFilesByDir = new Map<string, Set<string>>();
+    private cacheRoot?: string;
+
+    constructor(
+        private readonly dataDirOverride: () => string | undefined = () =>
+            undefined,
+        private readonly parse: SessionParser = parseSessionJsonl
+    ) {}
+
+    /** Every session recorded for `workspacePath`, newest first. */
+    listSessions(workspacePath: string): SessionRecord[] {
+        return this.listSessionsInDir(
+            workspaceSessionsDir(workspacePath, this.currentOverride())
+        );
     }
 
-    const projects: SessionProject[] = [];
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const projectPath = decodeWorkspace(entry.name);
-        if (!isWorkspaceOrDescendant(workspacePath, projectPath)) continue;
+    /**
+     * Session-bearing workspace buckets at or below `workspacePath`.
+     *
+     * The bucket path is the project identity. Meta is deliberately not used
+     * for grouping because malformed or stale records must not escape their
+     * bucket.
+     */
+    listSessionProjects(workspacePath: string): SessionProject[] {
+        const root = this.root();
+        let entries: fs.Dirent[];
+        try {
+            entries = fs.readdirSync(root, { withFileTypes: true });
+        } catch {
+            return [];
+        }
 
-        const sessions = listSessionsInDir(path.join(root, entry.name));
-        if (sessions.length === 0) continue;
-        projects.push({ projectPath, sessions });
+        const projects: SessionProject[] = [];
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const projectPath = decodeWorkspace(entry.name);
+            if (!isWorkspaceOrDescendant(workspacePath, projectPath)) continue;
+
+            const sessions = this.listSessionsInDir(path.join(root, entry.name));
+            if (sessions.length === 0) continue;
+            projects.push({ projectPath, sessions });
+        }
+
+        projects.sort((a, b) => {
+            if (a.projectPath === workspacePath) return -1;
+            if (b.projectPath === workspacePath) return 1;
+            return path
+                .relative(workspacePath, a.projectPath)
+                .localeCompare(path.relative(workspacePath, b.projectPath));
+        });
+        return projects;
     }
 
-    projects.sort((a, b) => {
-        if (a.projectPath === workspacePath) return -1;
-        if (b.projectPath === workspacePath) return 1;
-        return path
-            .relative(workspacePath, a.projectPath)
-            .localeCompare(path.relative(workspacePath, b.projectPath));
-    });
-    return projects;
+    /** Read one session, reusing its parsed record while metadata is stable. */
+    readSession(filePath: string): SessionRecord | undefined {
+        try {
+            const stat = fs.statSync(filePath);
+            const cached = this.cache.get(filePath);
+            if (
+                cached?.sizeBytes === stat.size &&
+                cached.mtimeMs === stat.mtimeMs
+            ) {
+                return cached.record;
+            }
+
+            const text = fs.readFileSync(filePath, "utf8");
+            const record = this.parse(
+                text,
+                filePath,
+                stat.size,
+                stat.mtimeMs
+            );
+            this.remember(filePath, {
+                sizeBytes: stat.size,
+                mtimeMs: stat.mtimeMs,
+                record,
+            });
+            return record;
+        } catch {
+            this.forget(filePath);
+            return undefined;
+        }
+    }
+
+    /**
+     * Remove a generated sample fixture. Ingested session files are read-only
+     * even if a caller bypasses the UI's context filtering.
+     */
+    deleteSession(filePath: string): boolean {
+        if (!/^sample-.*\.jsonl$/.test(path.basename(filePath))) {
+            return false;
+        }
+        try {
+            fs.rmSync(filePath);
+            this.forget(filePath);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    watch(
+        workspacePath: string,
+        onChange: () => void
+    ): { dispose(): void } {
+        return watchSessions(
+            workspacePath,
+            onChange,
+            this.currentOverride()
+        );
+    }
+
+    clearCache(): void {
+        this.cache.clear();
+        this.cachedFilesByDir.clear();
+    }
+
+    private root(): string {
+        const root = sessionsRoot(this.currentOverride());
+        if (this.cacheRoot !== root) {
+            this.clearCache();
+            this.cacheRoot = root;
+        }
+        return root;
+    }
+
+    private currentOverride(): string | undefined {
+        return this.dataDirOverride();
+    }
+
+    private listSessionsInDir(dir: string): SessionRecord[] {
+        let entries: string[];
+        try {
+            entries = fs.readdirSync(dir);
+        } catch {
+            this.evictMissing(dir, new Set());
+            return [];
+        }
+
+        const observed = new Set<string>();
+        const records: SessionRecord[] = [];
+        for (const name of entries) {
+            if (!name.endsWith(".jsonl")) continue;
+            const filePath = path.join(dir, name);
+            observed.add(filePath);
+            const record = this.readSession(filePath);
+            if (record) records.push(record);
+        }
+
+        this.evictMissing(dir, observed);
+        records.sort((a, b) => b.lastActiveMs - a.lastActiveMs);
+        return records;
+    }
+
+    private remember(filePath: string, entry: CachedSession): void {
+        this.cache.set(filePath, entry);
+        const dir = path.dirname(filePath);
+        const files = this.cachedFilesByDir.get(dir) ?? new Set<string>();
+        files.add(filePath);
+        this.cachedFilesByDir.set(dir, files);
+    }
+
+    private forget(filePath: string): void {
+        this.cache.delete(filePath);
+        const dir = path.dirname(filePath);
+        const files = this.cachedFilesByDir.get(dir);
+        files?.delete(filePath);
+        if (files?.size === 0) this.cachedFilesByDir.delete(dir);
+    }
+
+    private evictMissing(dir: string, observed: ReadonlySet<string>): void {
+        const cached = this.cachedFilesByDir.get(dir);
+        if (!cached) return;
+        for (const filePath of [...cached]) {
+            if (!observed.has(filePath)) this.forget(filePath);
+        }
+    }
 }
 
 function isWorkspaceOrDescendant(root: string, candidate: string): boolean {
     if (!root || !candidate) return false;
     const relative = path.relative(path.resolve(root), path.resolve(candidate));
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    return (
+        relative === "" ||
+        (!relative.startsWith("..") && !path.isAbsolute(relative))
+    );
 }
 
-function listSessionsInDir(dir: string): SessionRecord[] {
-    let entries: string[];
-    try {
-        entries = fs.readdirSync(dir);
-    } catch {
-        return [];
-    }
+/** Compatibility helper for pure callers that do not need a retained cache. */
+export function listSessions(
+    workspacePath: string,
+    override?: string
+): SessionRecord[] {
+    return new SessionStore(() => override).listSessions(workspacePath);
+}
 
-    const records: SessionRecord[] = [];
-    for (const name of entries) {
-        if (!name.endsWith(".jsonl")) continue;
-        const filePath = path.join(dir, name);
-        try {
-            const stat = fs.statSync(filePath);
-            const text = fs.readFileSync(filePath, "utf8");
-            records.push(
-                parseSessionJsonl(text, filePath, stat.size, stat.mtimeMs)
-            );
-        } catch {
-            // Unreadable or deleted mid-scan — skip rather than fail the panel.
-        }
-    }
-
-    records.sort((a, b) => b.lastActiveMs - a.lastActiveMs);
-    return records;
+/** Compatibility helper for pure callers that do not need a retained cache. */
+export function listSessionProjects(
+    workspacePath: string,
+    override?: string
+): SessionProject[] {
+    return new SessionStore(() => override).listSessionProjects(workspacePath);
 }
 
 /** Read a single session file, or `undefined` if it vanished. */
 export function readSession(filePath: string): SessionRecord | undefined {
-    try {
-        const stat = fs.statSync(filePath);
-        const text = fs.readFileSync(filePath, "utf8");
-        return parseSessionJsonl(text, filePath, stat.size, stat.mtimeMs);
-    } catch {
-        return undefined;
-    }
+    return new SessionStore().readSession(filePath);
 }
 
-/** Remove a session's backing file. Returns false if it was already gone. */
+/** Delete sample data only; ingested session records are always read-only. */
 export function deleteSession(filePath: string): boolean {
-    try {
-        fs.rmSync(filePath, { force: true });
-        return true;
-    } catch {
-        return false;
-    }
+    return new SessionStore().deleteSession(filePath);
 }
 
 /**

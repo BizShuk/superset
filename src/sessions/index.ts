@@ -12,6 +12,7 @@
 import * as vscode from "vscode";
 import type { FeatureContext, FeatureHandle } from "../shared";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import { registerViewVisibility } from "../plugin/viewVisibility";
 import { renderSessionMarkdown } from "./markdown";
 import { ensureMarkdownDocument } from "./openSummary";
 import {
@@ -19,7 +20,7 @@ import {
     sampleCoverage,
     seedSampleSessions,
 } from "./sampleData";
-import { deleteSession, readSession, workspaceSessionsDir } from "./store";
+import { SessionStore, workspaceSessionsDir } from "./store";
 import {
     SESSION_DOC_SCHEME,
     sessionDocUri,
@@ -36,11 +37,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
             .getConfiguration("superset")
             .get<string>("sessions.dataDir") || undefined;
 
+    const sessionStore = new SessionStore(dataDirOverride);
     const provider = new SessionsTreeProvider(
         ctx.workspaceFolder,
-        dataDirOverride
+        sessionStore
     );
-    provider.start();
 
     const view = vscode.window.createTreeView(VIEW_ID, {
         treeDataProvider: provider,
@@ -48,14 +49,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // Report active view for panel-layout persistence (same contract as the
     // TODO / mDNS panels).
-    const visibilitySub = view.onDidChangeVisibility((visible) => {
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                VIEW_ID
-            );
-        }
-    });
+    const visibilitySub = registerViewVisibility(
+        view,
+        VIEW_ID,
+        (visible) => provider.setVisible(visible)
+    );
 
     const treeViewEntry = getTreeViewRegistry()?.register(
         VIEW_ID,
@@ -83,7 +81,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             if (!filePath) {
                 return "# Session 已不存在\n\n檔案已被刪除或移動。";
             }
-            const record = readSession(filePath);
+            const record = sessionStore.readSession(filePath);
             if (!record) {
                 return "# Session 已不存在\n\n檔案已被刪除或移動。";
             }
@@ -190,7 +188,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
                     "Delete"
                 );
                 if (answer !== "Delete") return;
-                if (!deleteSession(record.filePath)) {
+                if (!sessionStore.deleteSession(record.filePath)) {
                     void vscode.window.showErrorMessage(
                         `刪除失敗: ${record.filePath}`
                     );
@@ -236,7 +234,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }),
     ];
 
-    ctx.resetHandlers.push(() => refreshAll());
+    ctx.resetHandlers.push(() => {
+        sessionStore.clearCache();
+        refreshAll();
+    });
 
     return {
         dispose() {
@@ -254,4 +255,3 @@ export function register(ctx: FeatureContext): FeatureHandle {
 function asSession(element?: SessionsElement) {
     return element && element.kind === "session" ? element.record : undefined;
 }
-

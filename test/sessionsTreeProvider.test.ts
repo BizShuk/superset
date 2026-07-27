@@ -31,7 +31,7 @@ vi.mock("vscode", () => {
 });
 
 import { SessionsTreeProvider } from "../src/sessions/sessionsTreeProvider";
-import { workspaceSessionsDir } from "../src/sessions/store";
+import { SessionStore, workspaceSessionsDir } from "../src/sessions/store";
 
 const roots: string[] = [];
 
@@ -79,7 +79,10 @@ describe("SessionsTreeProvider project grouping", () => {
         writeSession(dataRoot, path.join(workspace, "apps", "api"), "api-session");
         writeSession(dataRoot, path.join(workspace, "packages", "api"), "pkg-session");
 
-        const provider = new SessionsTreeProvider(workspace, () => dataRoot);
+        const provider = new SessionsTreeProvider(
+            workspace,
+            new SessionStore(() => dataRoot)
+        );
         provider.refresh();
         const projects = provider.getChildren();
 
@@ -101,10 +104,34 @@ describe("SessionsTreeProvider project grouping", () => {
     it("keeps the global empty placeholder when no project has sessions", () => {
         const dataRoot = mkdtempSync(path.join(tmpdir(), "sessions-tree-empty-"));
         roots.push(dataRoot);
-        const provider = new SessionsTreeProvider("/workspace/utils", () => dataRoot);
+        const provider = new SessionsTreeProvider(
+            "/workspace/utils",
+            new SessionStore(() => dataRoot)
+        );
 
         provider.refresh();
 
         expect(provider.getChildren()).toEqual([{ kind: "empty" }]);
+    });
+
+    it("loads only while visible and retains the last snapshot when hidden", () => {
+        const dataRoot = mkdtempSync(path.join(tmpdir(), "sessions-visible-"));
+        roots.push(dataRoot);
+        const workspace = "/workspace/visible";
+        writeSession(dataRoot, workspace, "visible-session");
+        const provider = new SessionsTreeProvider(
+            workspace,
+            new SessionStore(() => dataRoot)
+        );
+
+        expect(provider.getChildren()).toEqual([{ kind: "empty" }]);
+
+        provider.setVisible(true);
+        expect(provider.getChildren()[0].kind).toBe("project");
+
+        provider.setVisible(false);
+        expect(provider.getChildren()[0].kind).toBe("project");
+
+        provider.dispose();
     });
 });
