@@ -73,6 +73,10 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
         label: "auth",
         cmd: "go install github.com/bizshuk/auth@master",
     },
+    {
+        label: "proxy",
+        cmd: "go install github.com/bizshuk/proxy@master",
+    },
 ] as const;
 
 const SKILL_REPOSITORIES: readonly CuratedSkillRepositoryPickItem[] = [

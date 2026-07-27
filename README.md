@@ -383,7 +383,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ### 12. Default Tools — Go CLI 安裝
 
-`Superset: Install Default Tools` 會依序為目前使用者安裝七個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
+`Superset: Install Default Tools` 會依序為目前使用者安裝八個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
 
 - `pm2` — `github.com/bizshuk/pm2@master`
 - `skills` — `github.com/bizshuk/skills@master`
@@ -392,6 +392,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 - `sessiond` — `github.com/bizshuk/sessiond@master`
 - `autop` — `github.com/bizshuk/autop@master`
 - `auth` — `github.com/bizshuk/auth@master`
+- `proxy` — `github.com/bizshuk/proxy@master`
 
 若只需要安裝 skill repository，使用 `Superset: Install Skills`。Quick Pick 可直接選擇下列 repository；若清單沒有目標，選擇 `自訂 repository…`，再於 Input Box 輸入 `owner/repository`。確認後會執行 `skills add <repository>`：
 
@@ -533,7 +534,7 @@ code --install-extension superset-*.vsix
 | `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                            |
 | `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                  |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link |
-| `Superset: Install Default Tools`               | —                   | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond`、`autop`、`auth` CLI      |
+| `Superset: Install Default Tools`               | —                   | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond`、`autop`、`auth`、`proxy` CLI |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）   |
 | `Superset: Cycle Editor Layout Mode`            | `Ctrl+Alt+V`        | 循環四個 editor group 佈局模式                                           |
 | `Superset: Pick Editor Layout Mode`             | `Ctrl+Alt+Shift+V`  | Quick Pick 直接挑一個佈局模式                                            |
