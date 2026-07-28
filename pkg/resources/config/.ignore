@@ -49,7 +49,7 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 $RECYCLE.BIN/
-_~
+*~
 
 # ── B. Editor / IDE ─────────────────────────────────────────────────────────
 
@@ -60,12 +60,12 @@ _~
 !.vscode/launch.json
 !.vscode/extensions.json
 .idea/
-_.iml
-_.swp
-_.swo
-_.swn
-_.sublime-project
-_.sublime-workspace
+*.iml
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
 .fleet/
 .cursor/
 .codium/
@@ -82,8 +82,8 @@ jspm_packages/
 .yarn/
 .pnp.*
 .pnpm-store/
-.pnpm-debug.log_
-yarn-debug.log_
+.pnpm-debug.log*
+yarn-debug.log*
 yarn-error.log*
 npm-debug.log*
 .eslintcache
@@ -109,20 +109,20 @@ out/
 dist/
 build/
 lib/
-_.js.map
-_.mjs.map
-_.cjs.map
-_.d.ts.map
+*.js.map
+*.mjs.map
+*.cjs.map
+*.d.ts.map
 *.d.ts
 
 # Bundle / minified
 
-_.min.js
-_.min.mjs
-_.min.css
-_.bundle.js
-_.chunk.js
-_.hot-update.js
+*.min.js
+*.min.mjs
+*.min.css
+*.bundle.js
+*.chunk.js
+*.hot-update.js
 *.hot-update.json
 
 # Coverage
@@ -145,12 +145,12 @@ coverage/
 
 # Binaries
 
-_.exe
-_.exe~
-_.dll
-_.so
-_.dylib
-_.test
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
 *.out
 
 # Go workspace
@@ -171,19 +171,19 @@ vendor/
 
 # Cobra / stringer generated
 
-__debug_bin
+*_debug_bin
 *_string.go
-__stringer.go
+*_stringer.go
 
 # ── E. Python / Rust / JVM ───────────────────────────────────────────────────
 
 # Python
 
-__pycache__/
-_.py[cod]
-_$py.class
-_.egg
-_.egg-info/
+*_pycache__/
+*.py[cod]
+*$py.class
+*.egg
+*.egg-info/
 .eggs/
 .pytest_cache/
 .mypy_cache/
@@ -205,24 +205,24 @@ Cargo.lock.bak
 
 # JVM
 
-_.class
-_.jar
-_.war
-_.ear
+*.class
+*.jar
+*.war
+*.ear
 .gradle/
 build/
 hs_err_pid*
 
 # ── F. Build / Dist / Packages ───────────────────────────────────────────────
 
-_.vsix
-_.tgz
-_.tar.gz
-_.zip
-_.dmg
-_.deb
-_.rpm
-_.app
+*.vsix
+*.tgz
+*.tar.gz
+*.zip
+*.dmg
+*.deb
+*.rpm
+*.app
 
 # ── G. Tests / Coverage (general) ───────────────────────────────────────────
 
@@ -232,8 +232,8 @@ playwright/.cache/
 cypress/videos/
 cypress/screenshots/
 junit.xml
-_.trx
-_.coverage
+*.trx
+*.coverage
 *.lcov
 
 # ── H. Logs / Runtime dumps ──────────────────────────────────────────────────
@@ -246,8 +246,8 @@ logs/
 !yarn-error.log
 !npm-debug.log*
 .pids
-_.pid
-_.seed
+*.pid
+*.seed
 *.pid.lock
 
 # Heap / core dumps
@@ -259,7 +259,7 @@ core.*
 # ── I. Secrets / Env / Local config ─────────────────────────────────────────
 
 .env
-.env._
+.env.*
 !.env.example
 .env.tmp
 .env.local
@@ -291,8 +291,8 @@ agent.sock
 
 # GPG / PGP
 
-_.asc
-_.gpg
+*.asc
+*.gpg
 *.pgp
 secring.gpg
 pubring.gpg
@@ -300,12 +300,12 @@ pubring.gpg
 
 # SSL / TLS
 
-_.pem
-_.key
-_.crt
-_.cer
-_.csr
-_.p12
+*.pem
+*.key
+*.crt
+*.cer
+*.csr
+*.p12
 *.pfx
 keystore.jks
 truststore.jks
@@ -407,12 +407,12 @@ downloads/
 backup/
 backups/
 archive/
-_.bak
-_.tmp
-_.temp
-_.orig
-_.rej
-_.swp
+*.bak
+*.tmp
+*.temp
+*.orig
+*.rej
+*.swp
 *.patch
 
 # Task / planning scratch (常見散落)
