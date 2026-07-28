@@ -6,7 +6,7 @@
 
 # 用於 `.gitignore` / `.geminiignore` / `.claudeignore` (後兩者為 LLM 語境過濾)
 
-# 安裝: `bash resources/config/install-ignore.sh` (見同目錄腳本)
+# 安裝: `bash pkg/resources/config/install-default-project.sh`
 
 #
 
@@ -218,8 +218,8 @@ hs_err_pid*
 
 # ── F. Build / Dist / Packages ───────────────────────────────────────────────
 
-_.vsix
-_.tgz
+*.vsix
+*.tgz
 _.tar.gz
 _.zip
 _.dmg
@@ -431,3 +431,4 @@ plans/draft.md
 # Submodule artifacts (本專案使用 git submodule)
 
 .md-tree-highlight/
+superset-0.22.10.vsix
