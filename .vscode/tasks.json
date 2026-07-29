@@ -1,40 +1,11 @@
 {
     "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Install Antigravity/VSCode Extension",
-            "type": "shell",
-            "command": "agy-ide --install-extension *.vsix --force",
-            "problemMatcher": [],
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared",
-                "focus": true,
-                "clear": true,
-                "close": true
-            }
-        },
-        {
-            "type": "npm",
-            "script": "build",
-            "options": {
-                "env": {
-                    "PATH": "/Users/bytedance/.local/nvm/versions/node/v24.11.1/bin:/Users/bytedance/.local/npm-global/bin:${env:PATH}"
-                }
-            },
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": ["$tsc"],
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared",
-                "echo": true,
-                "clear": true,
-                "close": true
-            },
-            "label": "npm: build"
-        }
-    ]
+    "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true,
+        "clear": true,
+        "close": true
+    },
+    "tasks": []
 }
