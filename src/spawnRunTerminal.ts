@@ -19,12 +19,10 @@ export interface SpawnRunTerminalOptions {
      *  shell self-terminates (the install commands want this — once
      *  `go install` finishes, the shell wrapper has no further work). */
     closeOnSuccess?: boolean;
-    /** Working directory for the spawned terminal. Defaults to the
-     *  user's home directory. Callers that need to write files
-     *  relative to CWD (e.g. install-default-project.sh writing
-     *  `.gitignore`) MUST pass the target directory explicitly —
-     *  otherwise the files land in `~/`. */
     cwd?: string;
+    /** When `true` (default), the spawned terminal does not take editor/view
+     *  focus. Pass `false` to explicitly move focus to the terminal panel. */
+    preserveFocus?: boolean;
 }
 
 /**
@@ -37,7 +35,7 @@ export interface SpawnRunTerminalOptions {
  * typically a command-palette handler where swallowing is friendlier
  * than crashing the panel.
  *
- * Errors during `terminal.show(true)` / `sendText` are caught and
+ * Errors during `terminal.show(...)` / `sendText` are caught and
  * logged to the diagnostic channel — they never poison the caller's
  * promise chain.
  */
@@ -58,9 +56,10 @@ export async function spawnRunTerminal(
         ? `${cmdline} && exit`
         : cmdline;
     const cwd = options.cwd ?? os.homedir();
+    const preserveFocus = options.preserveFocus ?? true;
     const terminal = spawn(`${baseName} (${stamp})`, cwd);
     try {
-        terminal.show(true);
+        terminal.show(preserveFocus);
         await new Promise((resolve) => setTimeout(resolve, 200));
         terminal.sendText(finalCmdline + "\r");
     } catch (err) {

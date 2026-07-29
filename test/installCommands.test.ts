@@ -137,6 +137,7 @@ import * as os from "os";
 import * as path from "path";
 import * as fs from "node:fs";
 import { globalCommandsPlugin } from "../src/globalCommandsPlugin";
+import { spawnRunTerminal } from "../src/spawnRunTerminal";
 import {
     setDiagnosticChannel,
     setPluginManager,
@@ -478,7 +479,7 @@ describe("terminalSpawner bridge", () => {
         expect(spawn.mock.calls[0][0]).toMatch(
             /^Superset: Install Skills \(bizshuk\/cc-plugin\) \(\d{2}:\d{2}:\d{2}\)$/
         );
-        expect((t as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
+        expect((t as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(false);
         const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
         expect(sent).toBe("skills add 'bizshuk/cc-plugin' && exit\r");
@@ -685,6 +686,33 @@ describe("terminalSpawner bridge", () => {
         expect(
             (t as unknown as { dispose: ReturnType<typeof vi.fn> }).dispose
         ).not.toHaveBeenCalled();
+    });
+
+    it("spawnRunTerminal passes preserveFocus correctly to terminal.show", async () => {
+        const tDefault = {
+            name: "test-default",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+        const tFocused = {
+            name: "test-focused",
+            show: vi.fn(),
+            sendText: vi.fn(),
+            dispose: vi.fn(),
+        } as unknown as vscode.Terminal;
+
+        let spawnCount = 0;
+        setTerminalSpawner(vi.fn().mockImplementation(() => {
+            spawnCount++;
+            return spawnCount === 1 ? tDefault : tFocused;
+        }));
+
+        await spawnRunTerminal("Test Default", "echo default");
+        expect((tDefault as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
+
+        await spawnRunTerminal("Test Focused", "echo focus", { preserveFocus: false });
+        expect((tFocused as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(false);
     });
 
     it("installDefaultProject forwards `args.targets` to the script verbatim", async () => {

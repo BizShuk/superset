@@ -241,7 +241,7 @@ async function skillInstall(
     await spawnRunTerminal(
         `Superset: Install Skills (${repo})`,
         `skills add ${quoteShellArg(repo)}`,
-        { closeOnSuccess: true }
+        { closeOnSuccess: true, preserveFocus: false }
     );
     ctx.log(`globalCommands: skillInstall dispatched (${repo})`);
 }
