@@ -13,6 +13,7 @@ import {
 import { formatPlanCopyText } from "../todo/plansSource";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
+import { invokeTodoStoreMutation } from "./storeDispatch";
 import {
     createTodoCommands,
     reportPlanActionError,
@@ -235,8 +236,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         if (!sub) return;
         // sub-store types are TodoStore; the factory calls into the
         // adapter shape, which matches TodoStore's mutation surface.
-        const fn = (sub as unknown as Record<string, (...a: unknown[]) => unknown>)[kind];
-        if (typeof fn === "function") await fn(item, ...rest);
+        await invokeTodoStoreMutation(sub, kind, item, ...rest);
     };
 
     // Pick a project path — prefer the row's `projectPath`, fall
