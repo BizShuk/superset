@@ -14,6 +14,7 @@ import { sessionsPlugin } from "./sessions/plugin";
 import { projectsTodoPlugin } from "./projectsTodo/plugin";
 import { gitPlugin } from "./git/plugin";
 import { editorLayoutPlugin } from "./editorLayout/plugin";
+import { diskUsagePlugin } from "./diskUsage/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
 import { panelLayoutPlugin } from "./panelLayout/plugin";
 import {
@@ -43,8 +44,8 @@ let teardownPromise: Promise<void> | undefined;
  * `ExtensionPlugin`, the `PluginManager` owns lifecycle, error
  * isolation, disposable collection, and reset-handler fan-out.
  *
- * Adding a new feature no longer requires editing this file — drop
- * the plugin into the list (or load it dynamically).
+ * Adding a new feature only requires adding its plugin to this declarative
+ * list (or loading it dynamically); lifecycle code stays in PluginManager.
  */
 export async function activate(
     context: vscode.ExtensionContext
@@ -116,6 +117,7 @@ export async function activate(
         projectsTodoPlugin,
         gitPlugin,
         editorLayoutPlugin,
+        diskUsagePlugin,
         globalCommandsPlugin,
         panelLayoutPlugin,
     ];

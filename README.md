@@ -25,6 +25,7 @@ a
 | Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒 | 使用 repository-local hooks 的開發者 |
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
+| `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
 
 ---
 
@@ -467,6 +468,15 @@ mode = { horizontal: even | max } × { vertical: even | max }
 - VS Code 對群組有最小寬高限制，`superset.editorLayout.maxRatio` 是`比例提示`而非保證值。
 - 佈局命令只作用於`目前視窗`的 editor 區域；`Move Editor into New Window` 開出來的浮動視窗各有自己的網格。
 - 設定 `superset.editorLayout.maxRatio` 控制 `max` 方向上作用中群組的佔比，預設 `0.8`，可調範圍 `0.5`–`0.9`。其餘設定：`defaultShape`、`followActiveGroup`、`restoreOnActivate`。
+
+---
+
+### 15. Disk Usage — Status Bar 磁碟容量
+
+啟用 Superset 後，Status Bar 右側會顯示第一個 workspace 所在 volume 的已使用比例，例如
+`$(database) Disk 80%`。Hover tooltip 會列出 used、free 與 total capacity；資料每 30 秒刷新一次。
+
+這是 volume-level usage，不是 workspace folder 本身的檔案大小。若作業系統拒絕讀取該 volume，Status Bar 會顯示 `Disk —` 並在 tooltip 保留錯誤原因。
 
 ---
 

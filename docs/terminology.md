@@ -66,6 +66,7 @@ Container，因此 `Primary Side Bar` 描述的是預設位置，不是永久位
 | `Editor`             | 編輯器         | 顯示檔案、Markdown summary 或其他 editor-backed 內容的主要區域。                    |
 | `Status Bar`         | 狀態列         | 視窗底部顯示狀態及捷徑的區域。                                                      |
 | `Status Bar Item`    | 狀態列項目     | Status Bar 內由 extension 建立、可帶 command 與 tooltip 的項目。                    |
+| `Disk Usage Status Item` | 磁碟用量狀態列項目 | Superset 顯示第一個 workspace volume 已使用比例、free 與 total capacity 的 Status Bar Item。 |
 | `Command Palette`    | 命令面板       | 以 command title 搜尋及執行命令的 VS Code UI。                                      |
 | `Quick Pick`         | 快速選擇器     | 從候選清單選取一項的浮動 UI。                                                       |
 | `Input Box`          | 輸入框         | 輸入文字、名稱或 repository identifier 的浮動 UI。                                  |
