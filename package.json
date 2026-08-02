@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.22.13",
+    "version": "0.22.14",
     "scripts": {
         "clean": "rm -rf out && rm -f *.vsix",
         "build": "npm run clean && npm ci && tsc && npm run package && bash scripts/verify-vsix.sh",
@@ -24,6 +24,9 @@
         "vscode": "^1.93.0",
         "node": ">=20.0.0"
     },
+    "extensionKind": [
+        "workspace"
+    ],
     "enabledApiProposals": [
         "contribSourceControlHistoryItemMenu"
     ],
