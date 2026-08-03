@@ -208,7 +208,7 @@ describe("terminalSpawner bridge", () => {
         expect(getTerminalSpawner()).toBeUndefined();
     });
 
-    it("installDefaultTools spawns eight separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
+    it("installDefaultTools spawns nine separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
         const expectedTools = [
             {
                 label: "pm2",
@@ -242,6 +242,10 @@ describe("terminalSpawner bridge", () => {
                 label: "proxy",
                 cmd: "go install github.com/bizshuk/proxy@master",
             },
+            {
+                label: "mdserver",
+                cmd: "go install github.com/bizshuk/mdserver@master",
+            },
         ];
         const makeTerminal = () =>
             ({
@@ -259,7 +263,8 @@ describe("terminalSpawner bridge", () => {
             .mockReturnValueOnce(terminals[4])
             .mockReturnValueOnce(terminals[5])
             .mockReturnValueOnce(terminals[6])
-            .mockReturnValueOnce(terminals[7]);
+            .mockReturnValueOnce(terminals[7])
+            .mockReturnValueOnce(terminals[8]);
         setTerminalSpawner(spawn);
         setDiagnosticChannel(vscode.window.createOutputChannel("test"));
         setPluginManager(undefined);

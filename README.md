@@ -384,7 +384,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ### 12. Default Tools — Go CLI 安裝
 
-`Superset: Install Default Tools` 會依序為目前使用者安裝八個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
+`Superset: Install Default Tools` 會依序為目前使用者安裝九個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
 
 - `pm2` — `github.com/bizshuk/pm2@master`
 - `skills` — `github.com/bizshuk/skills@master`
@@ -394,6 +394,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 - `autop` — `github.com/bizshuk/autop@master`
 - `auth` — `github.com/bizshuk/auth@master`
 - `proxy` — `github.com/bizshuk/proxy@master`
+- `mdserver` — `github.com/bizshuk/mdserver@master`
 
 若只需要安裝 skill repository，使用 `Superset: Install Skills`。Quick Pick 可直接選擇下列 repository；若清單沒有目標，選擇 `自訂 repository…`，再於 Input Box 輸入 `owner/repository`。確認後會執行 `skills add <repository>`：
 

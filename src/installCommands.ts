@@ -77,6 +77,10 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
         label: "proxy",
         cmd: "go install github.com/bizshuk/proxy@master",
     },
+    {
+        label: "mdserver",
+        cmd: "go install github.com/bizshuk/mdserver@master",
+    },
 ] as const;
 
 const SKILL_REPOSITORIES: readonly CuratedSkillRepositoryPickItem[] = [
