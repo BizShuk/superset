@@ -1,8 +1,9 @@
 // CLI Launcher 每一列右側顯示的 git 狀態:目前分支與待處理的行數增減。
 //
-// 面板的 description 欄原本重複顯示路徑 (label 已經是 basename、tooltip 也有完整
-// 路徑),資訊量低;改成 `<branch>(+<新增行>,-<刪除行>)`,挑 cwd 時一眼看得出來
-// 在哪個分支、手上還有多少沒收的改動。
+// 面板的 description 欄原本重複顯示路徑 (label 已經是 basename),資訊量低;改成
+// `<branch>(+<新增行>,-<刪除行>)`,挑 cwd 時一眼看得出來在哪個分支、手上還有多少
+// 沒收的改動。停在預設分支 (`master` / `main`) 且零改動時 description 留空 ——
+// 那是常態,一整排 `master(+0,-0)` 只會把真正在動的 repo 淹掉;tooltip 仍給完整值。
 //
 // 只有`資料夾自己`是 repository (含 submodule / worktree 的 `.git` 檔) 才會執行
 // git。刻意不讓 git 沿著父層往上找:`~/projects/platform` 不是 repo 時若往上找會
@@ -69,10 +70,15 @@ export function parseNumstat(output: string): DiffLineCounts {
 }
 
 /**
- * 格式化成 description 字串 `<branch>(+<新增>,-<刪除>)`。
+ * 預設分支名;停在預設分支且沒有改動是「沒事發生」的常態,不值得佔用 description。
+ */
+const DEFAULT_BRANCHES = new Set(["master", "main"]);
+
+/**
+ * 格式化成完整字串 `<branch>(+<新增>,-<刪除>)`。
  *
  * 沒有 git 資訊 (不是 repository、讀取失敗) 時回傳空字串。乾淨的 repo 仍然顯示
- * `master(+0,-0)` —— 分支名本身就是有用資訊,不能因為沒有改動就整列消失。
+ * `master(+0,-0)` —— 這是 tooltip 用的完整形式,分支名本身就是有用資訊。
  */
 export function formatGitFolderStatus(
     status: GitFolderStatus | undefined
@@ -81,6 +87,34 @@ export function formatGitFolderStatus(
         return "";
     }
     return `${status.branch}(+${status.added},-${status.removed})`;
+}
+
+/**
+ * 這個資料夾是不是「預設分支 + 零改動」的靜止狀態。
+ *
+ * 只有這一種組合會從 description 隱藏;`w-*` 分支即使乾淨仍要顯示,因為
+ * 「現在站在哪個 worktree 分支」本身就是要挑 cwd 的人在找的資訊。
+ */
+export function isQuietGitFolderStatus(
+    status: GitFolderStatus | undefined
+): boolean {
+    return (
+        status !== undefined &&
+        status.added === 0 &&
+        status.removed === 0 &&
+        DEFAULT_BRANCHES.has(status.branch)
+    );
+}
+
+/**
+ * 格式化成面板 description 用的字串。與 `formatGitFolderStatus` 的差別只有一個:
+ * 靜止狀態 (預設分支 + 零改動) 回傳空字串,讓一整排沒在動的 repo 不佔版面;
+ * 完整資訊仍留在 tooltip。
+ */
+export function formatGitFolderDescription(
+    status: GitFolderStatus | undefined
+): string {
+    return isQuietGitFolderStatus(status) ? "" : formatGitFolderStatus(status);
 }
 
 /** 資料夾自己是不是 repository。`.git` 可能是目錄,也可能是 submodule 的檔案。 */

@@ -7,7 +7,7 @@
 import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { expandHome, type CLIEntry } from "./entries";
+import { expandHome, isHiddenPath, type CLIEntry } from "./entries";
 
 /** 掃描深度固定為兩層;更深的層級對「挑一個 cwd 啟動 CLI」沒有幫助。 */
 export const SCAN_DEPTH = 2;
@@ -82,10 +82,15 @@ async function isDirectory(target: string): Promise<boolean> {
 /**
  * 掃描所有 root,回傳 top level 節點與各自的第二層子節點。
  * 多個 root 之間以絕對路徑去重,先出現的 root 優先。
+ *
+ * `hidden` 是使用者手動從面板移除的路徑 (`superset.cliLauncher.hidden`):
+ * 兩層掃描一定會撈到不想要的資料夾,這是把它們拿掉的唯一機制。命中的第一層
+ * 直接跳過 (連帶省下它的 `readdir`),第二層則逐個濾掉。
  */
 export async function scanRoots(
     roots: readonly string[],
-    homeDir: string
+    homeDir: string,
+    hidden: readonly string[] = []
 ): Promise<ScannedFolder[]> {
     const seen = new Set<string>();
     const folders: ScannedFolder[] = [];
@@ -97,14 +102,16 @@ export async function scanRoots(
         }
 
         for (const layer1 of await listSubdirectories(root)) {
-            if (seen.has(layer1)) {
+            if (seen.has(layer1) || isHiddenPath(layer1, hidden)) {
                 continue;
             }
             seen.add(layer1);
             const children = await listSubdirectories(layer1);
             folders.push({
                 entry: toEntry(layer1),
-                children: children.map(toEntry),
+                children: children
+                    .filter((child) => !isHiddenPath(child, hidden))
+                    .map(toEntry),
             });
         }
     }

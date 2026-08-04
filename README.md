@@ -26,7 +26,7 @@ a
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
-| `CLI` 面板                | 列出 `~/projects` 兩層資料夾、subsequence 過濾、顯示 git 分支與行數增減,一鍵在該路徑開 claude / codex / grok | 常在多個專案間切換跑 agent CLI 的人 |
+| `CLI` 面板                | 列出 `~/projects` 兩層資料夾、Git summary 與 path terminals；可過濾、啟動 agent CLI、展開並聚焦既有 terminal | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -489,7 +489,9 @@ Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects
 CLI
 ├── ai                                ← 第一層,可展開
 │   └── sessiond   master(+4,-2)      ← 第二層,leaf
-├── tools          w-cli-git(+180,-165)
+├── tools          🟡 2 · w-cli-git(+180,-165)
+│   ├── tools · claude   running      ← CLI-created terminal,點擊可聚焦
+│   ├── tools · codex    idle
 │   ├── autop
 │   └── pm2
 └── web
@@ -501,15 +503,33 @@ root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形�
 #### git 分支與行數增減
 
 每一列名稱右側顯示`該資料夾自己`的 git 狀態,格式為
-`<分支>(+<新增或修改行數>,-<刪除行數>)`,例如 `master(+0,-0)`:
+`<分支>(+<新增或修改行數>,-<刪除行數>)`,例如 `w-cli-git(+180,-165)`:
 
 - 行數是 `git diff HEAD` 的加總,`staged` 與 `unstaged` 一起算;`未追蹤`檔案不
   在 `git diff` 範圍內,因此不計入。二進位檔案略過。
 - 只有資料夾本身是 repository(含 submodule)時才顯示;不會沿父層往上找,
   所以 `~/projects/platform` 不會顯示 `~/projects` 的狀態。
-- 乾淨的 repository 仍會顯示 `<分支>(+0,-0)` —— 分支名本身就是有用資訊。
-  detached HEAD 時顯示短 commit hash。
-- 完整路徑移到 hover tooltip;第二層的狀態在展開時才讀取。
+- 停在預設分支(`master` / `main`)且`零改動`時 description 留空 —— 那是常態,
+  一整排 `master(+0,-0)` 只會把真正在動的 repo 淹掉。其他情況一律顯示,包含
+  乾淨的 `w-*` 分支(站在哪個分支本身就是資訊)。detached HEAD 時顯示短 commit hash。
+- Hover tooltip 只有兩行:完整的 git 狀態(含被 description 省略的靜止狀態)與
+  `CLI terminals: <數量>`。第二層的狀態在展開時才讀取。
+- 面板`可見`時每 30 秒自動重刷一次,外部 commit / checkout / stash 的結果不必手動
+  `Refresh` 也會跟上;面板隱藏時停止,不在背景重掃。
+
+#### Path terminal 清單
+
+CLI Launcher 在目前 Extension Host runtime 內記住自己建立的 terminals。path 有 terminal
+時,git 資訊前會顯示 `🟡 <總數>`,例如 `🟡 2 · master(+4,-2)`；沒有 terminal
+時維持原本的 git description,不顯示 `🟡 0`。
+
+展開 path 後,terminal rows 排在第二層資料夾之前。每列 description 顯示
+`running` 或 `idle`：CLI command 送出後到配對的 Shell Integration end event 之前
+都算 `running`。點擊 terminal row 會直接聚焦該 editor-area terminal,互動與 Superset
+`Terminals` View 一致。
+
+只計入 CLI Launcher 本次 runtime 建立的 terminals；Extension Host reload 前留下的
+分頁與其他方式開啟的 terminals 不會靠 cwd 猜測或自動接管。
 
 #### 逐步操作
 
@@ -521,11 +541,25 @@ root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形�
 4. 按住 `Cmd` / `Ctrl` 多選數列再按快捷鍵,每個路徑各開一個 terminal,只有最後一個
    會搶焦點。
 5. 右鍵 → `Open Terminal at Path` 只開 terminal 不跑任何 CLI。
-6. 標題列按鈕:`Filter Paths`(過濾路徑)、`Pin Path`(釘一個 root 以外的路徑到
+6. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉(見下一節)。
+7. 標題列按鈕:`Filter Paths`(過濾路徑)、`Pin Path`(釘一個 root 以外的路徑到
    最上面)、`Copy All Paths`(把面板所有路徑逐行複製到剪貼簿)、`Refresh`
    (重新掃描)。過濾生效時才多出一顆 `Clear Filter`。
 
-點擊一列`不會`啟動任何東西 —— 只做選取與展開,避免瀏覽時誤開一堆 terminal。
+點擊 path row`不會`啟動任何東西 —— 只做選取與展開；點擊展開後的 terminal row
+則會聚焦既有 terminal,不會另外 launch。
+
+#### 從面板移除路徑
+
+固定掃兩層一定會撈到不想在清單裡看到的資料夾。右鍵任一列 → `Remove from Panel`
+即可把它拿掉,兩種來源的處理方式不同,但操作是同一個:
+
+- 釘選的路徑 → 從 `superset.cliLauncher.entries` 移除。
+- 掃描出來的資料夾 → 寫進 `superset.cliLauncher.hidden`,連同`其下的子路徑`一起
+  不再列出。
+
+移除只影響面板,`不會`動到磁碟上的資料夾。要放回來:標題列 `...` →
+`Restore Hidden Paths`(可多選),或直接編輯 `superset.cliLauncher.hidden`。
 
 #### 專案過濾 (subsequence match)
 
@@ -556,9 +590,10 @@ root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形�
 | --- | --- | --- |
 | `superset.cliLauncher.roots` | `["~/projects"]` | 要掃描的根目錄;設成 `[]` 即關閉掃描 |
 | `superset.cliLauncher.entries` | `[]` | 手動釘選的路徑,排在掃描結果之前 |
+| `superset.cliLauncher.hidden` | `[]` | 從面板移除的掃描路徑,連同其子路徑隱藏 |
 | `superset.cliLauncher.agentCommands` | `{}` | 覆寫三顆按鈕的命令,可含旗標 |
 
-三個設定都是 `application` scope,寫入 User settings,不隨 workspace 切換而變。
+四個設定都是 `application` scope,寫入 User settings,不隨 workspace 切換而變。
 按鈕沒反應時,`Superset: Show Diagnostic Logs` 會列出解析到的項目與實際送進
 terminal 的字串。
 
@@ -648,7 +683,7 @@ code --install-extension superset-*.vsix
 ```bash
 npm ci                   # 依 lockfile 安裝相依
 npm run build            # 型別檢查 + tsc 編譯 + vsce package + verify-vsix
-npm run watch            # 邊改邊編譯
+npm run dev              # 邊改邊編譯
 npm test                 # 跑全部單元測試 (Vitest)
 npm run test:watch       # watch 模式
 ```
@@ -663,7 +698,7 @@ npm run test:watch       # watch 模式
 ### 打包
 
 ```bash
-npm run package
+npm run build:vsix
 ```
 
 產出 `superset-<version>.vsix`(不含任何 native binding，內容由

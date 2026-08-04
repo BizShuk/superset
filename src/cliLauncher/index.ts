@@ -13,10 +13,13 @@ import { AGENT_IDS, type AgentId } from "./command";
 import {
     addEntry,
     CONFIG_SECTION,
+    hidePath,
     loadAgentCommands,
     loadEntries,
+    loadHiddenPaths,
     loadRoots,
     removeEntry,
+    unhidePath,
 } from "./config";
 import {
     collapseHome,
@@ -28,7 +31,10 @@ import { filterCLIEntries } from "./filter";
 import { log, setCLILauncherLog } from "./log";
 import { scanRoots } from "./scan";
 import { initTerminalTracking, launchAll } from "./terminal";
-import { CLIEntryTreeItem, CLILauncherTreeProvider } from "./tree";
+import {
+    CLILauncherTreeProvider,
+    type CLILauncherTreeItem,
+} from "./tree";
 
 export const VIEW_ID = "superset.cliLauncher.paths";
 
@@ -45,18 +51,21 @@ export const AGENT_COMMAND_IDS: Record<AgentId, string> = {
 export function register(ctx: FeatureContext): FeatureHandle {
     // feature 不自建 Output Channel;診斷全部進共用的 "Superset" channel。
     setCLILauncherLog(ctx.shared.log);
-    initTerminalTracking(ctx.subscriptions);
+    const terminalTracker = initTerminalTracking(ctx.subscriptions);
 
-    const provider = new CLILauncherTreeProvider();
+    const provider = new CLILauncherTreeProvider(terminalTracker);
     // 多選:inline 按鈕仍作用在單列,但選取多列後的命令 (含 ctrl+1/2/3)
     // 會一次啟動全部。keybinding 觸發時沒有命令參數,只能靠 `view.selection`。
-    const view = vscode.window.createTreeView<CLIEntryTreeItem>(VIEW_ID, {
+    const view = vscode.window.createTreeView<CLILauncherTreeItem>(VIEW_ID, {
         treeDataProvider: provider,
         showCollapseAll: true,
         canSelectMany: true,
     });
 
-    const visibilitySub = registerViewVisibility(view, VIEW_ID);
+    // 面板可見時才每 30 秒重掃一次;git 狀態沒有事件來源,只能定期重讀。
+    const visibilitySub = registerViewVisibility(view, VIEW_ID, (visible) =>
+        provider.setVisible(visible)
+    );
     const treeViewEntry = getTreeViewRegistry()?.register(
         VIEW_ID,
         view as unknown as vscode.TreeView<unknown>,
@@ -112,6 +121,12 @@ export function register(ctx: FeatureContext): FeatureHandle {
             }
         ),
         vscode.commands.registerCommand(
+            "superset.cliLauncherRestoreHidden",
+            async () => {
+                await restoreHiddenInteractively();
+            }
+        ),
+        vscode.commands.registerCommand(
             "superset.cliLauncherOpen",
             async (target: unknown, targets?: unknown[]) => {
                 await runCommand(
@@ -153,6 +168,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherAddPath",
             "superset.cliLauncherRemovePath",
+            "superset.cliLauncherRestoreHidden",
             "superset.cliLauncherOpen",
             ...AGENT_IDS.map((agent) => AGENT_COMMAND_IDS[agent]),
         ].join(", ")}`
@@ -185,7 +201,7 @@ function setFilterContext(active: boolean): Thenable<unknown> {
  */
 function applyFilter(
     provider: CLILauncherTreeProvider,
-    view: vscode.TreeView<CLIEntryTreeItem>,
+    view: vscode.TreeView<CLILauncherTreeItem>,
     raw: string
 ): void {
     provider.setFilter(raw);
@@ -204,7 +220,7 @@ function applyFilter(
  */
 async function filterInteractively(
     provider: CLILauncherTreeProvider,
-    view: vscode.TreeView<CLIEntryTreeItem>
+    view: vscode.TreeView<CLILauncherTreeItem>
 ): Promise<void> {
     const input = await vscode.window.showInputBox({
         title: "CLI: 過濾路徑",
@@ -224,7 +240,7 @@ interface CommandContext {
     /** 多選時 VS Code 額外帶入的整份選取。 */
     targets?: unknown[];
     /** keybinding 觸發時沒有任何參數,只能回頭問 tree view 目前選了什麼。 */
-    view: vscode.TreeView<CLIEntryTreeItem>;
+    view: vscode.TreeView<CLILauncherTreeItem>;
 }
 
 /**
@@ -323,7 +339,7 @@ async function listAllEntries(): Promise<CLIEntry[]> {
     const seen = new Set(pinned.map((entry) => entry.path));
     const entries = [...pinned];
 
-    for (const folder of await scanRoots(loadRoots(), home)) {
+    for (const folder of await scanRoots(loadRoots(), home, loadHiddenPaths())) {
         for (const candidate of [folder.entry, ...folder.children]) {
             if (!seen.has(candidate.path)) {
                 seen.add(candidate.path);
@@ -420,45 +436,96 @@ async function addPathInteractively(): Promise<void> {
     }
 }
 
+/**
+ * `Remove from Panel`:把一列從面板拿掉。兩層掃描一定會撈到不想要的資料夾,
+ * 所以掃描出來的列也要能移除,而不是只有釘選的列。
+ *
+ * 兩種來源的移除方式不同,但對使用者是同一個動作:
+ *  - 釘選的路徑 → 從 `superset.cliLauncher.entries` 移除。
+ *  - 掃描出來的資料夾 → 寫進 `superset.cliLauncher.hidden`,連同其子路徑隱藏。
+ *    磁碟上的資料夾不會被動到,`Restore Hidden Paths` 可以還原。
+ */
 async function removePathInteractively(target: unknown): Promise<void> {
-    // 只有釘選的路徑能移除;掃描出來的資料夾要靠
-    // `superset.cliLauncher.roots` 調整。
-    const entry = toCLIEntry(target) ?? (await pickPinnedEntry());
+    const entry = toCLIEntry(target) ?? (await pickRemovableEntry());
     if (!entry) {
         return;
     }
 
+    const pinned = loadEntries().some((item) => item.path === entry.path);
+    const action = pinned ? "取消釘選" : "從面板移除";
     const confirmed = await vscode.window.showWarningMessage(
-        `取消釘選「${entry.label}」?`,
+        pinned
+            ? `取消釘選「${entry.label}」?`
+            : `把「${entry.label}」從 CLI 面板移除?資料夾本身不會被刪除。`,
         { modal: true },
-        "取消釘選"
+        action
     );
-    if (confirmed !== "取消釘選") {
+    if (confirmed !== action) {
         return;
     }
 
-    if (!(await removeEntry(entry.path))) {
+    const removed = pinned
+        ? await removeEntry(entry.path)
+        : await hidePath(entry.path);
+    log(
+        `superset.cliLauncherRemovePath: ${
+            pinned ? "unpinned" : "hidden"
+        } ${entry.path} — ${removed ? "ok" : "no change"}`
+    );
+    if (!removed) {
         await vscode.window.showInformationMessage(
-            "CLI: 此資料夾來自 superset.cliLauncher.roots 掃描,不在釘選清單內。"
+            "CLI: 此路徑已不在面板清單內。"
         );
     }
 }
 
-async function pickPinnedEntry(): Promise<CLIEntry | undefined> {
-    const pinned = loadEntries();
-    if (pinned.length === 0) {
-        await vscode.window.showInformationMessage("CLI: 沒有釘選的路徑。");
+/** Command Palette 呼叫時沒有命令參數:候選 = 釘選 + 目前掃描到的資料夾。 */
+async function pickRemovableEntry(): Promise<CLIEntry | undefined> {
+    const entries = await listAllEntries();
+    if (entries.length === 0) {
+        await vscode.window.showInformationMessage("CLI: 沒有可移除的路徑。");
         return undefined;
     }
 
     const home = os.homedir();
     const picked = await vscode.window.showQuickPick(
-        pinned.map((entry) => ({
+        entries.map((entry) => ({
             label: entry.label,
             description: collapseHome(entry.path, home),
             entry,
         })),
-        { placeHolder: "選擇要取消釘選的路徑" }
+        { placeHolder: "選擇要從 CLI 面板移除的路徑" }
     );
     return picked?.entry;
+}
+
+/**
+ * `Restore Hidden Paths`:把移除掉的掃描路徑放回面板。沒有這個出口,移除就等於
+ * 只能手動編輯 settings 才救得回來。
+ */
+async function restoreHiddenInteractively(): Promise<void> {
+    const hidden = loadHiddenPaths();
+    if (hidden.length === 0) {
+        await vscode.window.showInformationMessage(
+            "CLI: 沒有被移除的路徑。"
+        );
+        return;
+    }
+
+    const home = os.homedir();
+    const picked = await vscode.window.showQuickPick(
+        hidden.map((target) => ({
+            label: collapseHome(target, home),
+            target,
+        })),
+        { placeHolder: "選擇要放回面板的路徑", canPickMany: true }
+    );
+    if (!picked || picked.length === 0) {
+        return;
+    }
+
+    for (const item of picked) {
+        await unhidePath(item.target);
+    }
+    log(`superset.cliLauncherRestoreHidden: restored ${picked.length} paths`);
 }

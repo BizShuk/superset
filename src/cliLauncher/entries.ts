@@ -135,6 +135,73 @@ export function normalizeRootPaths(raw: unknown, homeDir: string): string[] {
 }
 
 /**
+ * 正規化「從面板移除」的路徑清單 (`superset.cliLauncher.hidden`)。形狀與
+ * `roots` 相同:只收字串,展開 `~` 後去重。
+ */
+export function normalizeHiddenPaths(raw: unknown, homeDir: string): string[] {
+    return normalizeRootPaths(raw, homeDir);
+}
+
+/**
+ * 這個路徑是不是被移除掉了。命中自己或任一祖先都算 —— 移掉
+ * `~/projects/platform` 之後,它底下的第二層不該又從別的入口冒出來。
+ */
+export function isHiddenPath(
+    target: string,
+    hidden: readonly string[]
+): boolean {
+    return hidden.some(
+        (value) => target === value || target.startsWith(`${value}/`)
+    );
+}
+
+/**
+ * 把路徑加進 raw hidden 陣列 (以 `~` 縮寫形式寫回設定)。已經在清單裡時回傳
+ * `undefined`,呼叫端據此略過寫入。
+ */
+export function appendHiddenPath(
+    raw: unknown,
+    newPath: string,
+    homeDir: string
+): string[] | undefined {
+    const resolved = expandHome(newPath, homeDir);
+    if (resolved === "") {
+        return undefined;
+    }
+    if (normalizeHiddenPaths(raw, homeDir).includes(resolved)) {
+        return undefined;
+    }
+
+    const kept = Array.isArray(raw)
+        ? raw.filter((item): item is string => typeof item === "string")
+        : [];
+    return [...kept, collapseHome(resolved, homeDir)];
+}
+
+/**
+ * 從 raw hidden 陣列移除指定路徑 (以展開後路徑比對)。找不到時回傳 `undefined`,
+ * 避免無謂地寫回設定。
+ */
+export function removeHiddenPath(
+    raw: unknown,
+    targetPath: string,
+    homeDir: string
+): string[] | undefined {
+    if (!Array.isArray(raw)) {
+        return undefined;
+    }
+
+    const resolved = expandHome(targetPath, homeDir);
+    if (!normalizeHiddenPaths(raw, homeDir).includes(resolved)) {
+        return undefined;
+    }
+    return raw.filter(
+        (item): item is string =>
+            typeof item === "string" && expandHome(item, homeDir) !== resolved
+    );
+}
+
+/**
  * 正規化 settings 陣列。無效項目 (非字串／非物件、路徑空白) 直接丟棄,
  * 相同路徑只保留第一筆,順序維持使用者設定的順序。
  */

@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+    formatGitFolderDescription,
     formatGitFolderStatus,
     parseNumstat,
 } from "../src/cliLauncher/gitStatus";
@@ -58,5 +59,39 @@ describe("formatGitFolderStatus", () => {
         expect(
             formatGitFolderStatus({ branch: "", added: 5, removed: 5 })
         ).toBe("");
+    });
+});
+
+describe("formatGitFolderDescription", () => {
+    it("hides the default branch when there is nothing pending", () => {
+        for (const branch of ["master", "main"]) {
+            expect(
+                formatGitFolderDescription({ branch, added: 0, removed: 0 })
+            ).toBe("");
+        }
+    });
+
+    it("keeps the default branch as soon as there are changes", () => {
+        expect(
+            formatGitFolderDescription({
+                branch: "master",
+                added: 1,
+                removed: 0,
+            })
+        ).toBe("master(+1,-0)");
+    });
+
+    it("keeps a clean non-default branch — which branch you are on is the point", () => {
+        expect(
+            formatGitFolderDescription({
+                branch: "w-cli-git",
+                added: 0,
+                removed: 0,
+            })
+        ).toBe("w-cli-git(+0,-0)");
+    });
+
+    it("renders nothing without git information", () => {
+        expect(formatGitFolderDescription(undefined)).toBe("");
     });
 });

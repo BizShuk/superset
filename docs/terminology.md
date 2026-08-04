@@ -336,13 +336,20 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Scan Root`            | `superset.cliLauncher.roots` 中的一個根目錄。root 本身不是節點，只列出其下的 Layer 1／Layer 2。                         |
 | `Layer 1` / `Layer 2`  | `<root>/<layer1>` 為 top-level item，`<root>/<layer1>/<layer2>` 為其 leaf child。掃描深度固定兩層。                     |
 | `Pinned Path`          | `superset.cliLauncher.entries` 手動釘選的路徑，排在掃描結果之前，contextValue 為 `superset.cliLauncher.entry`，可 Unpin。 |
-| `Scanned Folder`       | 由 Scan Root 掃描而來的資料夾，contextValue 為 `superset.cliLauncher.folder`；沒有 Unpin 語意，只能改 roots。            |
+| `Scanned Folder`       | 由 Scan Root 掃描而來的資料夾，contextValue 為 `superset.cliLauncher.folder`；移除方式是 Hidden Path，不是改 roots。      |
 | `Agent Button`         | 每列固定三顆 inline button（`claude` / `codex` / `grok`），命令內容由 `agentCommands` 決定，數量與順序不可動態調整。     |
 | `Agent Command`        | 送進 terminal 的實際命令字串，預設為同名 CLI，可含旗標。                                                                |
 | `Launch`               | 建立或重用 terminal → 送出 `cd '<path>' && <agent command>` 的一次操作；不是 spawn 一個 child process。                 |
 | `Terminal Reuse Key`   | `(path, agent)` 組合。以顯示名稱比對不算數 —— 不同路徑的 basename 會撞名。                                              |
 | `Busy Terminal`        | 已送出非空命令、尚未收到配對 shell execution end 的 terminal（`pending` / `running`）；busy 期間一律開新 terminal。      |
 | `Shell Readiness`      | 新 terminal 等待 `onDidChangeTerminalShellIntegration` 的最長 3 秒視窗，逾時仍以 `sendText` 送出。                       |
+| `CLI-owned Terminal`   | 目前 Extension Host runtime 由 CLI Launcher 建立並追蹤的 terminal；不包含 reload 前既有或其他來源的 terminal。          |
+| `Path Terminal Indicator` | Path description 最前面的 `🟡 <count>`；只在 count 大於零時顯示，後方才接 git summary。                              |
+| `CLI Terminal State`   | Terminal child row 的二態 description：內部 `pending` / `running` 顯示 `running`，內部 `idle` 顯示 `idle`。              |
+| `Hidden Path`          | `superset.cliLauncher.hidden` 中的一個路徑；該路徑`與其所有子路徑`都不再列出。只影響面板，不動磁碟上的資料夾。          |
+| `Remove from Panel`    | `superset.cliLauncherRemovePath` 的顯示名稱。作用在 Pinned Path 是移出 `entries`，作用在 Scanned Folder 是寫入 `hidden`。 |
+| `Quiet Git Status`     | 分支為 `master` / `main` 且行數增減皆為零的靜止狀態；description 略過不顯示，tooltip 仍保留完整值。                      |
+| `Auto Refresh`         | View 可見時每 30 秒一次的全樹重刷（`AUTO_REFRESH_INTERVAL_MS`）；面板隱藏即停止，不在背景重掃。                          |
 
 ## Markdown 與 Preview 術語
 

@@ -214,7 +214,12 @@ describe("CLI Launcher manifest contributions", () => {
             "Open Terminal at Path"
         );
         expect(titles.get("superset.cliLauncherAddPath")).toBe("Pin Path");
-        expect(titles.get("superset.cliLauncherRemovePath")).toBe("Unpin Path");
+        expect(titles.get("superset.cliLauncherRemovePath")).toBe(
+            "Remove from Panel"
+        );
+        expect(titles.get("superset.cliLauncherRestoreHidden")).toBe(
+            "Restore Hidden Paths"
+        );
         expect(titles.get("superset.cliLauncherCopyAllPaths")).toBe(
             "Copy All Paths"
         );
@@ -283,16 +288,23 @@ describe("CLI Launcher manifest contributions", () => {
             expect(item.when).toBe(`view == ${VIEW_ID} && (${rowKinds})`);
         }
 
-        // Unpin is pinned-only — scanned folders are removed by editing roots.
-        const unpin = manifest.contributes.menus["view/item/context"].find(
+        // Remove works on both row kinds: pinned rows unpin, scanned rows go
+        // into superset.cliLauncher.hidden. A two-layer scan always turns up
+        // folders the user does not want listed.
+        const remove = manifest.contributes.menus["view/item/context"].find(
             (m) => m.command === "superset.cliLauncherRemovePath"
         );
-        expect(unpin?.when).toBe(
-            `view == ${VIEW_ID} && viewItem == superset.cliLauncher.entry`
+        expect(remove?.when).toBe(`view == ${VIEW_ID} && (${rowKinds})`);
+
+        // Restore is the way back — without it, removing means hand-editing
+        // settings.
+        const restore = manifest.contributes.menus["view/title"].find(
+            (m) => m.command === "superset.cliLauncherRestoreHidden"
         );
+        expect(restore?.when).toBe(`view == ${VIEW_ID}`);
     });
 
-    it("declares the three application-scoped settings", () => {
+    it("declares the four application-scoped settings", () => {
         const configuration = manifest.contributes
             .configuration as ManifestConfigBlock[];
         const block = configuration.find(
@@ -302,6 +314,7 @@ describe("CLI Launcher manifest contributions", () => {
         expect(Object.keys(block!.properties).sort()).toEqual([
             "superset.cliLauncher.agentCommands",
             "superset.cliLauncher.entries",
+            "superset.cliLauncher.hidden",
             "superset.cliLauncher.roots",
         ]);
         // Path lists are system-level, not per-workspace.

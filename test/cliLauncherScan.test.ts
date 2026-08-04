@@ -138,5 +138,40 @@ describe("filesystem scanning", () => {
         it("returns an empty list when no roots are configured", async () => {
             expect(await scanRoots([], "/Users/tester")).toEqual([]);
         });
+
+        it("drops a hidden layer 1 folder together with its children", async () => {
+            const folders = await scanRoots([root], "/Users/tester", [
+                path.join(root, "tools"),
+            ]);
+
+            expect(folders.map((folder) => folder.entry.label)).toEqual([
+                "empty",
+                "linked",
+                "stock",
+            ]);
+            expect(JSON.stringify(folders)).not.toContain("superset");
+        });
+
+        it("drops a hidden layer 2 folder but keeps its parent", async () => {
+            const folders = await scanRoots([root], "/Users/tester", [
+                path.join(root, "tools/gosdk"),
+            ]);
+            const tools = folders.find(
+                (folder) => folder.entry.label === "tools"
+            );
+
+            expect(tools?.children.map((child) => child.label)).toEqual([
+                "superset",
+            ]);
+        });
+
+        it("does not treat a name prefix as a hidden ancestor", async () => {
+            const folders = await scanRoots([root], "/Users/tester", [
+                path.join(root, "too"),
+            ]);
+            expect(folders.map((folder) => folder.entry.label)).toContain(
+                "tools"
+            );
+        });
     });
 });

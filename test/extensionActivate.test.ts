@@ -264,6 +264,7 @@ describe("extension activation via PluginManager", () => {
             "superset.cliLauncherOpen",
             "superset.cliLauncherAddPath",
             "superset.cliLauncherRemovePath",
+            "superset.cliLauncherRestoreHidden",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherRefresh",
             "superset.cliLauncherFilter",

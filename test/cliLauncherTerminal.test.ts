@@ -69,6 +69,21 @@ const {
 });
 
 vi.mock("vscode", () => ({
+    EventEmitter: class EventEmitter<T> {
+        private listeners = new Set<(event: T) => void>();
+        event = (listener: (event: T) => void) => {
+            this.listeners.add(listener);
+            return { dispose: () => this.listeners.delete(listener) };
+        };
+        fire(event: T): void {
+            for (const listener of this.listeners) {
+                listener(event);
+            }
+        }
+        dispose(): void {
+            this.listeners.clear();
+        }
+    },
     window: {
         get terminals() {
             return terminals;
@@ -118,6 +133,15 @@ import {
     launchAll,
 } from "../src/cliLauncher/terminal";
 
+interface TrackerInspection {
+    getByPath(path: string): Array<{
+        terminal: FakeTerminal;
+        phase: "idle" | "pending" | "running";
+    }>;
+}
+
+let tracker: TrackerInspection;
+
 const ENTRY = {
     id: "/opt/web",
     label: "web",
@@ -154,8 +178,8 @@ beforeEach(() => {
     endExecutionListeners.length = 0;
     terminalCreationState.withShellIntegration = true;
     createTerminal.mockClear();
-    // 清空 module-level 追蹤狀態並重新掛 lifecycle 監聽。
-    initTerminalTracking([]);
+    // 換成新的 runtime tracker 並重新掛 lifecycle 監聽。
+    tracker = initTerminalTracking([]) as unknown as TrackerInspection;
 });
 
 describe("launch", () => {
@@ -273,6 +297,33 @@ describe("launch", () => {
             `cd '/opt/web' && claude`,
             true
         );
+    });
+
+    it("retains every busy terminal for the same path and agent", async () => {
+        await launch(ENTRY, "claude", { agent: "claude" });
+        await launch(ENTRY, "claude", { agent: "claude" });
+
+        expect(tracker.getByPath(ENTRY.path)).toEqual([
+            expect.objectContaining({
+                terminal: terminals[0],
+                phase: "pending",
+            }),
+            expect.objectContaining({
+                terminal: terminals[1],
+                phase: "pending",
+            }),
+        ]);
+
+        startExecution(terminals[0]);
+        endExecution(terminals[0]);
+        expect(
+            tracker.getByPath(ENTRY.path).map((tracked) => tracked.phase)
+        ).toEqual(["idle", "pending"]);
+
+        closeTerminal(terminals[1]);
+        expect(
+            tracker.getByPath(ENTRY.path).map((tracked) => tracked.terminal)
+        ).toEqual([terminals[0]]);
     });
 
     it("does not share terminals between entries with the same label", async () => {

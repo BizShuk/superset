@@ -7,9 +7,12 @@ import * as os from "node:os";
 import * as vscode from "vscode";
 import {
     appendEntryPath,
+    appendHiddenPath,
     normalizeEntries,
+    normalizeHiddenPaths,
     normalizeRootPaths,
     removeEntryPath,
+    removeHiddenPath,
     type CLIEntry,
     type RawCLIEntry,
 } from "./entries";
@@ -18,6 +21,7 @@ import { resolveAgentCommands, type AgentCommands } from "./command";
 export const CONFIG_SECTION = "superset.cliLauncher";
 const ENTRIES_KEY = "entries";
 const ROOTS_KEY = "roots";
+const HIDDEN_KEY = "hidden";
 const AGENT_COMMANDS_KEY = "agentCommands";
 
 /** 預設掃描 `~/projects`,對齊「兩層佈局」的目錄慣例。 */
@@ -44,6 +48,43 @@ export function loadRoots(): string[] {
         .getConfiguration(CONFIG_SECTION)
         .get<unknown>(ROOTS_KEY, DEFAULT_ROOTS);
     return normalizeRootPaths(raw, homeDir());
+}
+
+function rawHidden(): unknown {
+    return vscode.workspace
+        .getConfiguration(CONFIG_SECTION)
+        .get<unknown>(HIDDEN_KEY, []);
+}
+
+/** 讀取被使用者從面板移除的掃描路徑。 */
+export function loadHiddenPaths(): string[] {
+    return normalizeHiddenPaths(rawHidden(), homeDir());
+}
+
+async function writeHidden(next: string[]): Promise<void> {
+    await vscode.workspace
+        .getConfiguration(CONFIG_SECTION)
+        .update(HIDDEN_KEY, next, vscode.ConfigurationTarget.Global);
+}
+
+/** 把掃描出來的路徑從面板移除;已經移除過時回傳 `false`,不動設定。 */
+export async function hidePath(targetPath: string): Promise<boolean> {
+    const next = appendHiddenPath(rawHidden(), targetPath, homeDir());
+    if (!next) {
+        return false;
+    }
+    await writeHidden(next);
+    return true;
+}
+
+/** 還原被移除的路徑;不在清單裡時回傳 `false`,不動設定。 */
+export async function unhidePath(targetPath: string): Promise<boolean> {
+    const next = removeHiddenPath(rawHidden(), targetPath, homeDir());
+    if (!next) {
+        return false;
+    }
+    await writeHidden(next);
+    return true;
 }
 
 /** 讀取三顆 agent 按鈕實際要執行的命令。 */

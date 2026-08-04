@@ -2,16 +2,18 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.27.0",
+    "version": "0.30.0",
     "scripts": {
-        "clean": "rm -rf out && rm -f *.vsix",
-        "dev": "npm run watch",
-        "build": "npm run clean && npm ci && tsc && npm run package && bash scripts/verify-vsix.sh",
-        "watch": "tsc --watch",
-        "package": "vsce package",
+        "dev": "tsc --watch",
         "test": "vitest run",
         "test:watch": "vitest",
-        "deploy": "agy-ide --install-extension *.vsix --force"
+        "build": "npm run clean && npm ci && tsc && npm run build:vsix && bash scripts/verify-vsix.sh",
+        "build:vsix": "vsce package",
+        "deploy": "agy-ide --install-extension *.vsix --force",
+        "clean": "rm -rf out && rm -f *.vsix",
+        "run:setup": "./scripts/run.sh",
+        "run:seed-sessions": "./scripts/seed-sessions.sh",
+        "run:mermaid-sample": "./scripts/mermaid-sample.sh"
     },
     "publisher": "shuk",
     "repository": {
@@ -144,6 +146,15 @@
                             ]
                         },
                         "markdownDescription": "手動釘選的路徑,排在掃描結果之前。字串簡寫等同 `{ \"path\": \"...\" }`;重複路徑只保留第一筆,格式錯誤的項目直接忽略。"
+                    },
+                    "superset.cliLauncher.hidden": {
+                        "type": "array",
+                        "scope": "application",
+                        "default": [],
+                        "items": {
+                            "type": "string"
+                        },
+                        "markdownDescription": "從面板移除的掃描路徑 (右鍵 `Remove from Panel` 會寫進這裡)。命中的路徑連同其子路徑都不再列出;資料夾本身不受影響,`CLI: Restore Hidden Paths` 可還原。只作用於 `#superset.cliLauncher.roots#` 掃描結果,釘選的路徑請直接從 `#superset.cliLauncher.entries#` 移除。"
                     },
                     "superset.cliLauncher.agentCommands": {
                         "type": "object",
@@ -747,9 +758,15 @@
             },
             {
                 "command": "superset.cliLauncherRemovePath",
-                "title": "Unpin Path",
+                "title": "Remove from Panel",
                 "category": "CLI",
                 "icon": "$(trash)"
+            },
+            {
+                "command": "superset.cliLauncherRestoreHidden",
+                "title": "Restore Hidden Paths",
+                "category": "CLI",
+                "icon": "$(history)"
             },
             {
                 "command": "superset.cliLauncherRefresh",
@@ -1061,6 +1078,11 @@
                     "command": "superset.cliLauncherRefresh",
                     "when": "view == superset.cliLauncher.paths",
                     "group": "navigation@5"
+                },
+                {
+                    "command": "superset.cliLauncherRestoreHidden",
+                    "when": "view == superset.cliLauncher.paths",
+                    "group": "1_manage@1"
                 }
             ],
             "view/item/context": [
@@ -1346,7 +1368,7 @@
                 },
                 {
                     "command": "superset.cliLauncherRemovePath",
-                    "when": "view == superset.cliLauncher.paths && viewItem == superset.cliLauncher.entry",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
                     "group": "2_modify@1"
                 }
             ],

@@ -1,12 +1,16 @@
 import { describe, it, expect } from "vitest";
 import {
     appendEntryPath,
+    appendHiddenPath,
     collapseHome,
     expandHome,
     formatPathList,
+    isHiddenPath,
     normalizeEntries,
+    normalizeHiddenPaths,
     normalizeRootPaths,
     removeEntryPath,
+    removeHiddenPath,
     toCLIEntry,
 } from "../src/cliLauncher/entries";
 
@@ -221,5 +225,76 @@ describe("removeEntryPath", () => {
 
     it("returns undefined when nothing matched", () => {
         expect(removeEntryPath(["/opt/web"], "/opt/other", HOME)).toBeUndefined();
+    });
+});
+
+describe("normalizeHiddenPaths", () => {
+    it("expands tildes and drops duplicates and non-strings", () => {
+        expect(
+            normalizeHiddenPaths(
+                ["~/projects/app", "/Users/tester/projects/app", 42, "  "],
+                HOME
+            )
+        ).toEqual(["/Users/tester/projects/app"]);
+    });
+
+    it("returns an empty list for a non-array", () => {
+        expect(normalizeHiddenPaths("nope", HOME)).toEqual([]);
+    });
+});
+
+describe("isHiddenPath", () => {
+    it("matches the path itself", () => {
+        expect(isHiddenPath("/opt/web", ["/opt/web"])).toBe(true);
+    });
+
+    it("matches any descendant of a hidden folder", () => {
+        expect(isHiddenPath("/opt/web/api", ["/opt/web"])).toBe(true);
+    });
+
+    it("does not match a sibling sharing the name prefix", () => {
+        expect(isHiddenPath("/opt/website", ["/opt/web"])).toBe(false);
+    });
+
+    it("is false with nothing hidden", () => {
+        expect(isHiddenPath("/opt/web", [])).toBe(false);
+    });
+});
+
+describe("appendHiddenPath", () => {
+    it("appends the tilde form and keeps existing values", () => {
+        expect(
+            appendHiddenPath(["/opt/web"], "/Users/tester/projects/app", HOME)
+        ).toEqual(["/opt/web", "~/projects/app"]);
+    });
+
+    it("returns undefined when the path is already hidden", () => {
+        expect(
+            appendHiddenPath(
+                ["~/projects/app"],
+                "/Users/tester/projects/app",
+                HOME
+            )
+        ).toBeUndefined();
+    });
+
+    it("returns undefined for a blank path", () => {
+        expect(appendHiddenPath([], "   ", HOME)).toBeUndefined();
+    });
+});
+
+describe("removeHiddenPath", () => {
+    it("removes the matching path regardless of tilde form", () => {
+        expect(
+            removeHiddenPath(
+                ["~/projects/app", "/opt/web"],
+                "/Users/tester/projects/app",
+                HOME
+            )
+        ).toEqual(["/opt/web"]);
+    });
+
+    it("returns undefined when nothing matched", () => {
+        expect(removeHiddenPath(["/opt/web"], "/opt/other", HOME)).toBeUndefined();
     });
 });
