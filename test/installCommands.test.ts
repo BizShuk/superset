@@ -1,15 +1,14 @@
-// Tests for the global-commands install commands. These are the ones
-// that previously opened a plain `vscode.window.createTerminal` and
-// got bitten by the auto-PTY layer (it disposes the original terminal
-// 150ms after creating its PTY-backed replacement, racing
-// `terminal.sendText` and silently swallowing the command). The fix
-// routes them through the terminals module's PTY-backed spawner via
-// `terminalSpawner.ts`. As of 0.8.13 the install commands accept
-// `{ closeOnSuccess: true }` — the cmdline is suffixed with
-// `&& exit` so the shell self-terminates on success; the PTY host's
-// `proc.onExit` then drives VSCode to remove the terminal tab. On
-// non-zero exit the `&&` short-circuits and the terminal stays open
-// for the user to read the error.
+// Tests for the global-commands install commands. Each one opens its
+// terminal through the terminals module's shared spawner
+// (`terminalSpawner.ts`) rather than calling
+// `vscode.window.createTerminal` directly, so every Superset-opened
+// terminal carries the same creation options and the command can still
+// be dispatched when the terminals feature has not activated (the
+// spawner is absent and the command reports it). The install commands
+// pass `{ closeOnSuccess: true }` — the cmdline is suffixed with
+// `&& exit` so the shell self-terminates on success and VSCode removes
+// the terminal tab. On non-zero exit the `&&` short-circuits and the
+// terminal stays open for the user to read the error.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -290,12 +289,12 @@ describe("terminalSpawner bridge", () => {
 
             const sent = (terminals[index] as unknown as { sendText: ReturnType<typeof vi.fn> })
                 .sendText.mock.calls[0][0] as string;
-            expect(sent).toBe(`${tool.cmd} && exit\r`);
+            expect(sent).toBe(`${tool.cmd} && exit`);
         });
 
         // No manual dispose from the extension — auto-close is
-        // driven by the PTY host's onExit handler when the shell
-        // exits. The extension just sends the cmdline.
+        // driven by the shell exiting on `&& exit`. The extension
+        // just sends the cmdline.
         terminals.forEach((terminal) => {
             expect(
                 (terminal as unknown as { dispose: ReturnType<typeof vi.fn> }).dispose
@@ -303,8 +302,8 @@ describe("terminalSpawner bridge", () => {
         });
 
         // Most importantly: vscode.window.createTerminal was NOT
-        // called. A plain terminal would be disposed 150ms later by
-        // the auto-PTY layer.
+        // called directly — terminal creation stays behind the shared
+        // spawner so options cannot drift per call site.
         expect(
             (vscode.window as unknown as { createTerminal: ReturnType<typeof vi.fn> })
                 .createTerminal
@@ -362,7 +361,7 @@ describe("terminalSpawner bridge", () => {
             `'bash' '/fake/pkg/resources/config/setup-projects.sh' '${path.join(
                 os.homedir(),
                 "projects"
-            )}' && exit\r`
+            )}' && exit`
         );
         expect(vscode.window.showInputBox).not.toHaveBeenCalled();
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
@@ -487,7 +486,7 @@ describe("terminalSpawner bridge", () => {
         expect((t as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(false);
         const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add 'bizshuk/cc-plugin' && exit\r");
+        expect(sent).toBe("skills add 'bizshuk/cc-plugin' && exit");
     });
 
     it("skillInstall installs the selected Anthropic repository", async () => {
@@ -514,7 +513,7 @@ describe("terminalSpawner bridge", () => {
 
         const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add 'anthropics/skills' && exit\r");
+        expect(sent).toBe("skills add 'anthropics/skills' && exit");
     });
 
     it("skillInstall accepts a custom repository from the dropdown", async () => {
@@ -566,7 +565,7 @@ describe("terminalSpawner bridge", () => {
         expect(spawn).toHaveBeenCalledTimes(1);
         const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add 'example/custom-skills' && exit\r");
+        expect(sent).toBe("skills add 'example/custom-skills' && exit");
     });
 
     it("skillInstall cancels when custom repository input is dismissed", async () => {
@@ -611,7 +610,7 @@ describe("terminalSpawner bridge", () => {
         expect(vscode.window.showQuickPick).not.toHaveBeenCalled();
         const sent = (t as unknown as { sendText: ReturnType<typeof vi.fn> })
             .sendText.mock.calls[0][0] as string;
-        expect(sent).toBe("skills add 'bizshuk/custom-skill' && exit\r");
+        expect(sent).toBe("skills add 'bizshuk/custom-skill' && exit");
     });
 
     it("skillInstall cancels when the user dismisses the dropdown", async () => {
@@ -683,11 +682,11 @@ describe("terminalSpawner bridge", () => {
             t as unknown as { sendText: ReturnType<typeof vi.fn> }
         ).sendText.mock.calls[0][0] as string;
         expect(sent).toBe(
-            "'bash' '/fake/pkg/resources/config/install-default-project.sh' 'git' 'gemini' 'claude' && exit\r"
+            "'bash' '/fake/pkg/resources/config/install-default-project.sh' 'git' 'gemini' 'claude' && exit"
         );
 
-        // Manual dispose must not happen — auto-PTY close is
-        // driven by the `&& exit` self-termination.
+        // Manual dispose must not happen — the terminal closes when
+        // the shell self-terminates on `&& exit`.
         expect(
             (t as unknown as { dispose: ReturnType<typeof vi.fn> }).dispose
         ).not.toHaveBeenCalled();
@@ -752,7 +751,7 @@ describe("terminalSpawner bridge", () => {
         // is forwarded verbatim to the bash script (the script
         // itself handles per-target iteration).
         expect(sent).toBe(
-            "'bash' '/fake/pkg/resources/config/install-default-project.sh' 'git' && exit\r"
+            "'bash' '/fake/pkg/resources/config/install-default-project.sh' 'git' && exit"
         );
         expect(sent).not.toMatch(/gemini/);
         expect(sent).not.toMatch(/claude/);

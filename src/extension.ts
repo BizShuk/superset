@@ -162,14 +162,14 @@ export function deactivate(): Promise<void> {
             // `PluginContext.registerDisposable()` writes to manager-owned
             // pools, not `ExtensionContext.subscriptions`. This call is the
             // authoritative shutdown path for mDNS, TreeView refresh timers,
-            // file watchers, PTYs, commands, and status items.
+            // file watchers, commands, and status items.
             await runtime.activation.catch(() => undefined);
             runtime.log("deactivate start");
             await runtime.manager.deactivateAll();
             runtime.log("deactivate complete");
         } finally {
             // Drop module-level roots after feature teardown so no stale
-            // manager/view/provider/PTY factory can survive a window reload.
+            // manager/view/provider/spawner can survive a window reload.
             setTerminalSpawner(undefined);
             setTreeViewRegistry(undefined);
             setPluginManager(undefined);

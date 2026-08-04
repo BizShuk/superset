@@ -107,7 +107,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     /**
      * One-click Connect — resolves the service type to a connect
      * action via `resolveConnectCommand`. Browser/printer URIs go through
-     * `openExternal`; only validated SSH argv reaches a PTY-backed terminal.
+     * `openExternal`; only validated SSH argv reaches a terminal.
      */
     const connectCmd = vscode.commands.registerCommand(
         "superset.mdnsConnect",
@@ -145,7 +145,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             terminal.show(true);
             // Defer one tick so the shell prompt has time to mount
             // before we type the command — empirically 200ms is
-            // enough for the PTY-backed host to open.
+            // enough for the shell to open.
             const initialCommand = joinShellCommand(plan.cmd, plan.args);
             await new Promise((r) => setTimeout(r, 200));
             terminal.sendText(initialCommand);

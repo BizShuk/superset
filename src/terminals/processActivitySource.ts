@@ -3,8 +3,8 @@
 // Detects "this terminal is doing something" by watching each shell's
 // descendant processes instead of its output bytes. Costs one `ps` invocation
 // per poll for *all* terminals combined, and nothing at all when no terminal
-// is tracked. Contrast with the PTY path, which pays proportional to output
-// volume on the extension-host main thread.
+// is tracked. Contrast with any byte-reading path, which pays proportional to
+// output volume on the extension-host main thread.
 //
 // This is the source that covers full-screen TUIs (`claude`, `codex`, `vim`,
 // `htop`). Shell integration cannot see inside them — the execution stays open

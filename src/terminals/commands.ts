@@ -19,8 +19,8 @@ const GROUP_COLORS: GroupColor[] = [
 export interface TerminalCommandDeps {
     readonly registry: TerminalRegistry;
     readonly treeProvider: { refresh(): void };
-    /** Spawn a PTY-backed terminal (delegates to PtyTerminalFactory). */
-    readonly spawnPty: (name: string, cwd: string) => vscode.Terminal;
+    /** Open a native VS Code terminal (see `nativeTerminal.ts`). */
+    readonly spawnTerminal: (name: string, cwd: string) => vscode.Terminal;
     /** Resolve the workspace cwd for newly spawned terminals. */
     readonly getCwd: () => string;
 }
@@ -29,7 +29,7 @@ export interface TerminalCommandDeps {
 export function registerTerminalCommands(
     deps: TerminalCommandDeps
 ): vscode.Disposable[] {
-    const { registry, treeProvider, spawnPty, getCwd } = deps;
+    const { registry, treeProvider, spawnTerminal, getCwd } = deps;
     const guarded = (
         terminal: vscode.Terminal | undefined
     ): terminal is vscode.Terminal => !!terminal && registry.has(terminal);
@@ -67,9 +67,6 @@ export function registerTerminalCommands(
                 treeProvider.refresh();
             }
         ),
-        vscode.commands.registerCommand("superset.openTuiTerminal", () => {
-            spawnPty("Superset TUI", getCwd()).show();
-        }),
         // Cross-panel shortcut for revealing a specific `vscode.Terminal`
         // in the terminals TreeView. The full version is
         // `superset.revealInTree` (in globalCommandsPlugin), which takes
@@ -100,7 +97,7 @@ export function registerTerminalCommands(
             }
         ),
         vscode.commands.registerCommand("superset.newTerminal", () => {
-            spawnPty("bash", getCwd()).show();
+            spawnTerminal("bash", getCwd()).show();
         }),
         vscode.commands.registerCommand("superset.jumpToTerminal", async () => {
             const all = registry.getAll();

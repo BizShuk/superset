@@ -1,112 +1,48 @@
 // Lifecycle bridges for the terminals feature — extracted from
-// `index.ts` as Plan 2 Stage C so the 50-line `onDidOpenTerminal`
-// PTY-replace logic and the 50-line `onDidChangeActiveTextEditor`
-// tab-focus logic can each be reasoned about (and tested) in
-// isolation. Both functions return `vscode.Disposable`; the
-// composition root collects them into the `disposables` list so a
-// single `dispose()` call tears everything down.
+// `index.ts` as Plan 2 Stage C so the `onDidOpenTerminal` tracking
+// logic and the 50-line `onDidChangeActiveTextEditor` tab-focus logic
+// can each be reasoned about (and tested) in isolation. Both
+// functions return `vscode.Disposable`; the composition root collects
+// them into the `disposables` list so a single `dispose()` call tears
+// everything down.
 
 import * as vscode from "vscode";
-import { decideAutoReplace, shouldTrackTerminal } from "./autoReplace";
+import { shouldTrackTerminal } from "./terminalFilter";
 import type { TerminalRegistry } from "./terminalRegistry";
-import type { PtyTerminalFactory } from "./ptyTerminalFactory";
 import type { WatchedTerminalTracker } from "./watchedTerminalTracker";
 
-export interface AutoPtyReplacerDeps {
+export interface TerminalOpenTrackerDeps {
     registry: TerminalRegistry;
-    ptyFactory: PtyTerminalFactory;
-    getCwd: () => string;
     log: (msg: string) => void;
 }
 
 /**
- * Subscribe to `vscode.window.onDidOpenTerminal` and auto-replace
- * non-PTY terminals with PTY-backed ones when the auto-replace
- * policy says so. Skips PTY-backed terminals (already wired) and
- * agent-owned terminals (excluded by `shouldTrackTerminal`).
+ * Subscribe to `vscode.window.onDidOpenTerminal` and add every
+ * user-facing terminal to the registry.
  *
- * The replacement dance is: spawn a fresh PTY-backed terminal via
- * `ptyFactory.spawn`, then dispose the original 150ms later. The
- * delay is the empirical minimum for VSCode to attach the new
- * terminal to the panel before the old one's dispose teardown
- * leaves it dangling.
+ * Terminals are VS Code's own — Superset observes them, it never
+ * replaces or re-creates one. Whoever opened the terminal (the user,
+ * another extension, one of Superset's own commands) keeps the shell
+ * they asked for, including its location, custom shell path and any
+ * pseudoterminal an extension supplied.
+ *
+ * The single exclusion is agent-owned terminals (e.g. `Antigravity
+ * Agent`): silent background workers, not work surfaces, so they never
+ * enter the registry and get no row in the panel.
  */
-export function installAutoPtyReplacer(
-    deps: AutoPtyReplacerDeps
+export function installTerminalOpenTracker(
+    deps: TerminalOpenTrackerDeps
 ): vscode.Disposable {
-    const { registry, ptyFactory, getCwd, log } = deps;
-    // Pending dispose-the-original timers. Tracked so teardown cancels them:
-    // an untracked timer fires against an already-disposed terminal if the
-    // feature is disposed inside the 150ms window.
-    const pending = new Set<ReturnType<typeof setTimeout>>();
-    const sub = vscode.window.onDidOpenTerminal((terminal) => {
-        if (ptyFactory.isPtyBacked(terminal)) {
-            registry.add(terminal);
-            return;
-        }
-        // Agent-owned terminals (e.g. Antigravity Agent) are
-        // excluded from the panel entirely — they are silent
-        // background workers, not work surfaces.
+    const { registry, log } = deps;
+    return vscode.window.onDidOpenTerminal((terminal) => {
         if (!shouldTrackTerminal(terminal.name)) {
             log(
                 `[skip-track] onOpen "${terminal.name}": agent-owned (excluded from panel)`
             );
             return;
         }
-        const opts = (terminal.creationOptions ?? {}) as Record<
-            string,
-            unknown
-        >;
-        log(
-            `[auto-pty] onOpen "${terminal.name}" ` +
-                `creationOptions=${JSON.stringify({
-                    location: opts.location,
-                    shellPath: opts.shellPath,
-                    shellArgs: opts.shellArgs,
-                    hideFromUser: opts.hideFromUser,
-                    hasPty: Boolean(opts.pty),
-                })}`
-        );
-        const decision = decideAutoReplace(
-            {
-                location: opts.location,
-                shellPath: opts.shellPath as string | undefined,
-                shellArgs: opts.shellArgs as string | string[] | undefined,
-                hideFromUser: opts.hideFromUser as boolean | undefined,
-                pty: opts.pty,
-            },
-            terminal.name
-        );
-        if (!decision.replace) {
-            log(
-                `[auto-pty] skip "${terminal.name}": ${decision.reason} ` +
-                    `(OutputWatcher fallback)`
-            );
-            registry.add(terminal);
-            return;
-        }
-
-        log(
-            `[auto-pty] replacing "${terminal.name}" ` +
-                `(${decision.reason}) with PTY-backed terminal`
-        );
-        const pterm = ptyFactory.spawn(terminal.name, getCwd());
-        pterm.show();
-        const timer = setTimeout(() => {
-            pending.delete(timer);
-            terminal.dispose();
-        }, 150);
-        pending.add(timer);
+        registry.add(terminal);
     });
-    return {
-        dispose() {
-            for (const timer of pending) {
-                clearTimeout(timer);
-            }
-            pending.clear();
-            sub.dispose();
-        },
-    };
 }
 
 export interface EditorFocusBridgeDeps<Terminal> {

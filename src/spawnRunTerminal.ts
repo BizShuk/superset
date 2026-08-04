@@ -1,4 +1,4 @@
-// spawnRunTerminal — opens a fresh PTY-backed terminal and runs a
+// spawnRunTerminal — opens a fresh native terminal and runs a
 // command in it. Used by the install commands (installDefaultTools,
 // skillInstall, projectsSetup, installDefaultProject) and anything else that needs
 // to dispatch work to a user-visible terminal without blocking the
@@ -61,7 +61,11 @@ export async function spawnRunTerminal(
     try {
         terminal.show(preserveFocus);
         await new Promise((resolve) => setTimeout(resolve, 200));
-        terminal.sendText(finalCmdline + "\r");
+        // `sendText` appends the platform newline itself. The explicit
+        // trailing `\r` this used to carry was for the pseudoterminal's
+        // `handleInput`, which took raw key bytes; a native terminal would
+        // read it as a second Enter and leave a stray prompt behind.
+        terminal.sendText(finalCmdline);
     } catch (err) {
         getDiagnosticChannel()?.appendLine(
             `[superset] spawnRunTerminal failed for "${cmdline}": ${

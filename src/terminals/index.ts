@@ -4,14 +4,11 @@ import { TerminalRegistry } from "./terminalRegistry";
 import { OutputWatcher } from "./outputWatcher";
 import { TerminalTreeProvider } from "./treeProvider";
 import { HighlightPresenter } from "./highlightPresenter";
-import { shouldTrackTerminal } from "./autoReplace";
+import { shouldTrackTerminal } from "./terminalFilter";
 import { GroupStore } from "./groupStore";
 import { WatchedTerminalTracker } from "./watchedTerminalTracker";
 import { createTerminalDragAndDropController } from "./dragAndDrop";
-import {
-    PtyTerminalFactory,
-    createNodePtySpawner,
-} from "./ptyTerminalFactory";
+import { createNativeTerminal } from "./nativeTerminal";
 import {
     createShellExecutionSource,
     createVscodeLifecycleSubscribers,
@@ -25,7 +22,7 @@ import {
     registerGroupCommands,
 } from "./commands";
 import {
-    installAutoPtyReplacer,
+    installTerminalOpenTracker,
     installEditorFocusBridge,
 } from "./lifecycle";
 import { registerMermaidPreviewCommand } from "../mermaid/mermaidPreviewCommand";
@@ -188,27 +185,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
         `OutputWatcher ${legacyWatcherEnabled ? "started (legacy)" : "disabled"}`
     );
 
-    // PTY-backed terminal factory (100% TUI interception).
-    const ptyFactory = new PtyTerminalFactory({
-        registry,
-        getWatched: () => tracker.watched,
-        isRecentlyActive: (terminal) =>
-            tracker.isRecentlyActive(terminal as vscode.Terminal),
-        spawn: createNodePtySpawner(),
-        log,
-    });
     const getCwd = () =>
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
 
-    // Publish the spawner so other features (install commands in
-    // globalCommandsPlugin) can create a PTY-backed terminal without
-    // re-implementing the factory. Plain `vscode.window.createTerminal`
-    // calls would hit the auto-PTY layer below and get disposed 150ms
-    // later — which is exactly what made `go install` and `skills add`
-    // silently no-op in 0.8.10/0.8.11.
-    const terminalSpawnerLease = bindTerminalSpawner((name, cwd) =>
-        ptyFactory.spawn(name, cwd)
-    );
+    // Publish the spawner so other features (install commands, mDNS
+    // connect, git hooks) open terminals the same way this panel does,
+    // instead of each calling `vscode.window.createTerminal` with its
+    // own options. The terminal itself is VS Code's own.
+    const terminalSpawnerLease = bindTerminalSpawner(createNativeTerminal);
 
     // ── Mermaid preview command ───────────────────────────────
     //
@@ -221,18 +205,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // ── Lifecycle subscriptions ──────────────────────────
 
-    const openSub = installAutoPtyReplacer({
-        registry,
-        ptyFactory,
-        getCwd,
-        log,
-    });
+    const openSub = installTerminalOpenTracker({ registry, log });
 
     const closeSub = vscode.window.onDidCloseTerminal((terminal) => {
         registry.remove(terminal);
-        // Shed the factory's reference too, otherwise every terminal ever
-        // spawned stays alive for the life of the window.
-        ptyFactory.forget(terminal);
     });
 
     const activeChangeSub = vscode.window.onDidChangeActiveTerminal((terminal) => {
@@ -256,8 +232,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // temporary Markdown document and opens it in the markdown
     // preview. Closes the gap where the panel only surfaces a
     // boolean "unseen" indicator — the user gets a per-terminal
-    // table (PID, cwd, hidden, PTY, unseen) plus per-terminal
-    // details in one read.
+    // table (PID, cwd, hidden, unseen) plus per-terminal details in
+    // one read.
     const activitySummaryCmd = vscode.commands.registerCommand(
         "superset.terminalActivitySummary",
         async () => {
@@ -278,7 +254,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         ...registerTerminalCommands({
             registry,
             treeProvider,
-            spawnPty: (name, cwd) => ptyFactory.spawn(name, cwd),
+            spawnTerminal: createNativeTerminal,
             getCwd,
         }),
         ...registerGroupCommands(groupStore),
@@ -298,7 +274,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
         ctx.shared.statusBar,
         { dispose: () => activity.stop() },
         { dispose: () => watcher?.stop() },
-        { dispose: () => ptyFactory.dispose() },
         terminalSpawnerLease,
         openSub,
         closeSub,

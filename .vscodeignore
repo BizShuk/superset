@@ -43,17 +43,9 @@ tmp/**
 ecosystem.config.js
 run.sh
 
-# Runtime dependency pruning. Keep node-pty's lib/ and every platform
-# prebuild; remove only build/test/debug payload that cannot be loaded at
-# extension runtime.
+# Runtime dependency pruning. Remove only build/test/debug payload that
+# cannot be loaded at extension runtime.
 node_modules/**/*.pdb
-node_modules/node-pty/src/**
-node_modules/node-pty/deps/**
-node_modules/node-pty/scripts/**
-node_modules/node-pty/third_party/**
-node_modules/node-pty/binding.gyp
-node_modules/node-pty/lib/**/*.map
-node_modules/node-pty/lib/**/*.test.js
 node_modules/multicast-dns/.travis.yml
 node_modules/multicast-dns/appveyor.yml
 node_modules/multicast-dns/cli.js

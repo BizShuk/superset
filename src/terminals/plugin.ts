@@ -4,18 +4,15 @@
 // `.hide()` / `.text` on it from `onDidChangeActiveTerminal` and
 // `onDidCloseTerminal` handlers — a stub would throw on those.
 //
-// Heavy lifting (TreeView, commands, PTY factory, lifecycle
-// subscriptions, drag-and-drop, watcher) still lives in `./index.ts`
-// as a plain `register(ctx: FeatureContext)` function. This adapter
-// builds a `FeatureContext` out of a `PluginContext`, hands it to
+// Heavy lifting (TreeView, commands, lifecycle subscriptions,
+// drag-and-drop, watcher) still lives in `./index.ts` as a plain
+// `register(ctx: FeatureContext)` function. This adapter builds a
+// `FeatureContext` out of a `PluginContext`, hands it to
 // `register()`, and bridges every disposable the legacy register
 // pushes into `ctx.subscriptions` into the plugin's managed pool.
 //
-// Deeper refactors (`PtyProcessController` / `TerminalLifecycleCoordinator`
-// / `GroupRepository`) listed in `plans/architecture-terminals.md`
-// remain out of scope here:
-// - `PtyProcess` is already a clean interface (`ptyTerminalHost.ts`)
-//   with `deps.spawn` injection — equivalent to a `PtyProcessController`.
+// Deeper refactors (`TerminalLifecycleCoordinator` / `GroupRepository`)
+// listed in `plans/architecture-terminals.md` remain out of scope here:
 // - `GroupStore` is pure in-memory with no `workspaceState` coupling,
 //   so a `GroupRepository` layer would be empty.
 // - `TerminalLifecycleCoordinator` would require extracting ~140

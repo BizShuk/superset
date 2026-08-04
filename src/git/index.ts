@@ -6,7 +6,7 @@
 // spawning, and SCM panel refresh.
 //
 // Both commands dispatch through `spawnRunTerminal` so the user
-// sees the git operation in a PTY-backed terminal and can Ctrl-C
+// sees the git operation in a real terminal and can Ctrl-C
 // if needed — same pattern as `installCommands.ts`. `reset --hard`
 // requires a modal confirmation because it's destructive;
 // `reset --soft` does not, since it only moves the HEAD pointer.

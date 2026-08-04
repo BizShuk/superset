@@ -1,7 +1,7 @@
 // Shared contract for terminal-activity detection.
 //
 // Background: the extension only needs one bit per terminal — "did something
-// happen here that the user has not looked at". Holding the master PTY to get
+// happen here that the user has not looked at". Reading terminal output to get
 // that bit means every byte of every terminal crosses the extension-host main
 // thread, which is what starves the event loop under high-output commands.
 //
@@ -9,7 +9,7 @@
 // deliberately dumb: they report "terminal X did something", and every policy
 // decision (is it in the registry, is the user looking at it, was it focused a
 // moment ago) lives in one place — `ActivityCoordinator`. Previously that gate
-// was copy-pasted into `OutputWatcher` and `PtyTerminalHost.detectActivity`.
+// was copy-pasted into each byte-reading watcher.
 
 import type { TerminalHandle } from "./types";
 

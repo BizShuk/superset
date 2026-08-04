@@ -56,18 +56,17 @@ a
 
 > 若使用者聚焦時同時改了 terminal 名稱,清除時 Presenter 只剝 `●` 前綴、不還原舊名稱,以免覆寫使用者意圖。
 
-#### 1.2 跑 TUI App — `Superset: Open TUI Terminal`
+#### 1.2 跑 TUI App(`claude`、`vim`、`htop`)
 
-**功能**:VSCode 內建 Shell Integration 在 TUI app (`claude`、`vim`、`htop`) 上解析不穩;此命令用 `node-pty` 100% 攔截 PTY 寫入,TUI redraw 一個不漏。
+**功能**:TUI app 在 Shell Integration 眼中是一次永不結束的 execution,所以高亮改由 process tree 判定 —— Superset 每次輪詢跑`一次` `ps`,比較各 terminal 前景子程序的累計 CPU 時間,有推進就視為活動。用 VSCode 任何方式開的 terminal 都適用,不需要特定命令。
 
 **逐步使用**:
 
-1. 按 `Ctrl+Shift+P` 開啟命令面板。
-2. 輸入 `Superset: Open TUI Terminal` → Enter。
-3. 跳出新的 terminal → 在裡面跑 `claude` 或 `vim`。
-4. 切到其他 terminal,該 TUI terminal 有任何 redraw 都會觸發高亮。
+1. 用平常的方式開 terminal(`Ctrl+` `` ` `` 或 `Superset: New Terminal`)。
+2. 在裡面跑 `claude` 或 `vim`。
+3. 切到其他 terminal,該 TUI terminal 持續有工作就會觸發高亮。
 
-> **注意**:此命令**只對新開的 terminal 生效**;VSCode activate 時已存在的 terminal 不會自動替換(避免打斷工作),仍靠 Shell Integration fallback。
+> **注意**:Superset 不再替換或重建任何 terminal —— terminal 一律由 VSCode 自己擁有,Superset 只從外部觀察。
 
 #### 1.3 Fuzzy 跳轉 — `Ctrl+Alt+T`
 
@@ -170,7 +169,7 @@ subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無
 - `_http._tcp`、`_https._tcp`、`_ipp._tcp`、`_ipps._tcp` 經 VS Code
   `openExternal` 開啟已驗證 URI，不送進 shell。
 - `_ssh._tcp`、`_sftp._tcp` 只接受已驗證的 user、host 與 port，再將
-  `ssh` arguments 逐一 shell quote 後送入 PTY terminal。
+  `ssh` arguments 逐一 shell quote 後送入 terminal。
 
 無法通過驗證或不支援的服務只顯示警告，不開 URI、也不執行 terminal command。
 
@@ -376,7 +375,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 同時建立標準 project directories（`docs/tutorials/`、`docs/backlog/`、`docs/specs/`、`plans/`、`pkg/`、`config/`、`cmd/`、`.vscode/`、`.agents/`），並建立 `AGENTS.md -> CLAUDE.md` symbolic link。若目標 ignore file 已存在，執行命令時會先顯示 overwrite confirmation；取消即可保留原檔。
 
-安裝成功後 Run Terminal 會自動關閉。若 PTY shell 無法啟動，Superset 會顯示具體錯誤並結束該 terminal，不會留下持續等待的空白 terminal。
+安裝成功後 Run Terminal 會自動關閉(命令尾端的 `&& exit` 讓 shell 自行結束);命令失敗時 `&&` 短路，terminal 保留讓使用者讀錯誤訊息。
 
 這個命令取代舊的 `Superset: Install Ignore Template`；舊 command ID `superset.installIgnoreTemplate` 已不再註冊。
 
@@ -516,16 +515,12 @@ npm run build         # npm ci + 型別檢查 + 編譯 + 打包與驗證 VSIX
 code --install-extension superset-*.vsix
 ```
 
-> [!WARNING]
-> Linux 仍 ship prebuild 失敗 — `node-pty@1.1.0` 對 Linux 採 `node-gyp` 即時建置，`install` 需要 `build-essential` + `python3`；後續若需 Linux 路徑優化另開 plan。
-
 ---
 
 ## 指令速查 (Commands)
 
 | 指令                                            | 預設快捷鍵          | 用途                                                                          |
 | ----------------------------------------------- | ------------------- | ----------------------------------------------------------------------------- |
-| `Superset: Open TUI Terminal`                   | —                   | 開 PTY-backed terminal(適合跑 TUI app)                                        |
 | `Superset: Go to Terminal`                      | `Ctrl+Alt+T`        | Fuzzy 跳轉到 terminal                                                         |
 | `Superset: Reset Caches`                        | —                   | 重置所有快取(有確認彈窗)                                                      |
 | `Superset: Scan Network Topology`               | —                   | 掃描網路拓撲                                                                  |
@@ -582,8 +577,8 @@ npm run test:watch       # watch 模式
 npm run package
 ```
 
-產出 `superset-<version>.vsix`(目前約 2.8 MB，保留所有 platform 的
-`node-pty` runtime prebuild，並由 `scripts/verify-vsix.sh` 驗證內容)。
+產出 `superset-<version>.vsix`(不含任何 native binding，內容由
+`scripts/verify-vsix.sh` 驗證)。
 
 ---
 
@@ -592,7 +587,7 @@ npm run package
 | 現象                                  | 可能原因                                             | 解法                                                                                              |
 | ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Terminal 高亮完全沒反應               | 終端機沒裝 shell integration(例如 Windows `cmd.exe`) | 改用 PowerShell、bash、zsh 或 fish(預設內建整合腳本)                                              |
-| TUI app 跑著沒高亮                    | 用 VSCode 預設開 terminal,沒走 PTY                   | 用 `Superset: Open TUI Terminal` 開新 terminal 再跑 TUI                                           |
+| TUI app 跑著沒高亮                    | TUI 閒置時不耗 CPU,process tree 判定為沒有活動       | 確認該程式真的在工作;`Superset: Show Diagnostics` 可看 activity 判定紀錄                          |
 | `mDNS` 面板空白                       | 網路環境無 mDNS 廣播,或被防火牆擋 UDP/5353           | 確認網段有 mDNS 服務(印表機、AirPlay 等);macOS 防火牆需允許 VSCode 接收 mDNS                      |
 | `Topology` 掃描逾時                   | `netstat` / `scutil` / `arp` 執行慢(尤其 VPN 環境)   | 暫時無法解決(10s 熔斷);手動跑命令驗證輸出                                                         |
 | `Git hooks not linked` 一直顯示       | local `core.hooksPath` 未設定或 Link 失敗            | 點 Status Bar 或執行 `Superset: Link Git Hooks`;用 `git config --local --get core.hooksPath` 檢查 |
@@ -609,6 +604,7 @@ npm run package
 | 淘汰日期   | 功能                                                            | 原始文件                                         | 說明                                                                                                 |
 | ---------- | --------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | 2026-07-26 | 整併完成 — 41 份 `docs/specs/` 2026-06-20 ~ 2026-07-10 歷史文件 | `docs/specs/2026-06-20-*.md` ~ `2026-07-10-*.md` | 全部 contents 收進 [`docs/specs/2026-07-26-Summary.md`](docs/specs/2026-07-26-Summary.md);無功能淘汰 |
+| 2026-08-04 | PTY-backed terminal 與 `Superset: Open TUI Terminal` 命令 | [`docs/specs/2026-08-04-remove-pty-use-native-terminals.md`](docs/specs/2026-08-04-remove-pty-use-native-terminals.md) | Superset 不再持有 pseudoterminal:terminal 一律由 VSCode 開,`node-pty` 相依、auto-replace 層與 `superset.terminals.highWaterMark` / `lowWaterMark` 設定同時移除 |
 
 `2026-07-26-Summary.md` 已由 [`2026-07-31-Summary.md`](docs/specs/2026-07-31-Summary.md) 吸收；既有歷史列保留原文，完整內容仍可從 git history 追溯。
 

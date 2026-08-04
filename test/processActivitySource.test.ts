@@ -56,9 +56,9 @@ describe("pollOnce", () => {
     });
 
     it("skips ps when no tracked terminal has a resolvable pid", async () => {
-        // Pseudoterminal-backed terminals resolve to undefined; if that is all
-        // we have, there is nothing to sample.
-        const a = fakeTerminal("pty");
+        // Terminals another extension backs with a pseudoterminal resolve to
+        // undefined; if that is all we have, there is nothing to sample.
+        const a = fakeTerminal("ext-pty");
         const { ctx, runPs } = ctxFor({
             terminals: [a],
             pids: new Map([[a, undefined]]),

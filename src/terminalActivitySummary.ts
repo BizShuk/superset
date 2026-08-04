@@ -18,7 +18,6 @@ export interface TerminalActivityRow {
     processId?: number;
     cwd?: string;
     hiddenFromUser: boolean;
-    isPtyBacked: boolean;
     hasUnseen: boolean;
 }
 
@@ -32,7 +31,7 @@ export function captureSnapshot(
         const t = entry.terminal as unknown as {
             name: string;
             processId?: number | Promise<number | undefined>;
-            creationOptions?: { cwd?: string | { fsPath?: string }; hideFromUser?: boolean; pty?: unknown };
+            creationOptions?: { cwd?: string | { fsPath?: string }; hideFromUser?: boolean };
         };
         // `processId` is sometimes a Promise<number | undefined> —
         // we only take the synchronous-number fallback.
@@ -52,7 +51,6 @@ export function captureSnapshot(
             processId: pid,
             cwd,
             hiddenFromUser: Boolean(opts.hideFromUser),
-            isPtyBacked: Boolean(opts.pty),
             hasUnseen: Boolean(entry.hasUnseenOutput),
         });
     }
@@ -68,27 +66,25 @@ export function renderActivityMarkdown(
 ): string {
     const ts = capturedAt.toISOString().replace("T", " ").slice(0, 19);
     const unseenCount = rows.filter((r) => r.hasUnseen).length;
-    const ptyCount = rows.filter((r) => r.isPtyBacked).length;
 
     let md =
         `# Terminal Activity Summary\n\n` +
         `Captured at \`${ts}\`. ${rows.length} terminal(s) tracked; ` +
-        `**${unseenCount}** with unseen output; **${ptyCount}** PTY-backed.\n\n`;
+        `**${unseenCount}** with unseen output.\n\n`;
 
     if (rows.length === 0) {
         md += "_No terminals currently tracked._\n";
         return md;
     }
 
-    md += `| Name | PID | cwd | Hidden | PTY | Unseen |\n`;
-    md += `| --- | --- | --- | --- | --- | --- |\n`;
+    md += `| Name | PID | cwd | Hidden | Unseen |\n`;
+    md += `| --- | --- | --- | --- | --- |\n`;
     for (const r of rows) {
         md +=
             `| \`${r.name.replace(/\|/g, "\\|")}\` ` +
             `| ${r.processId ?? "—"} ` +
             `| ${r.cwd ? `\`${r.cwd}\`` : "—"} ` +
             `| ${r.hiddenFromUser ? "yes" : "no"} ` +
-            `| ${r.isPtyBacked ? "yes" : "no"} ` +
             `| ${r.hasUnseen ? "**yes**" : "no"} |\n`;
     }
 
@@ -98,7 +94,6 @@ export function renderActivityMarkdown(
         if (r.cwd) md += `- cwd: \`${r.cwd}\`\n`;
         if (r.processId) md += `- pid: ${r.processId}\n`;
         md += `- hiddenFromUser: ${r.hiddenFromUser ? "yes" : "no"}\n`;
-        md += `- pty: ${r.isPtyBacked ? "yes" : "no"}\n`;
         md += `- unseen: ${r.hasUnseen ? "yes" : "no"}\n`;
         md += `\n`;
     }

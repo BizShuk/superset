@@ -12,7 +12,6 @@ function makeRow(over: Partial<TerminalActivityRow> = {}): TerminalActivityRow {
     return {
         name: "bash",
         hiddenFromUser: false,
-        isPtyBacked: false,
         hasUnseen: false,
         ...over,
     };
@@ -23,13 +22,13 @@ describe("renderActivityMarkdown", () => {
         const md = renderActivityMarkdown(
             [
                 makeRow({ name: "bash", hasUnseen: true }),
-                makeRow({ name: "Superset TUI", isPtyBacked: true }),
+                makeRow({ name: "zsh" }),
             ],
             new Date("2026-07-10T00:00:00Z")
         );
         expect(md).toContain("# Terminal Activity Summary");
         expect(md).toContain("`bash`");
-        expect(md).toContain("`Superset TUI`");
+        expect(md).toContain("`zsh`");
         expect(md).toContain("**yes**"); // hasUnseen row
         expect(md).toContain("Per-terminal details");
     });
@@ -56,7 +55,7 @@ describe("captureSnapshot", () => {
         const fakeTerminal = {
             name: "bash",
             processId: 42,
-            creationOptions: { cwd: "/ws", hideFromUser: false, pty: false },
+            creationOptions: { cwd: "/ws", hideFromUser: false },
         } as unknown as Parameters<ReturnType<typeof captureSnapshot>["entries"] extends never ? never : (e: unknown) => void>;
         const fakeRegistry = {
             getAll: () => [
