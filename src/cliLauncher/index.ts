@@ -24,12 +24,16 @@ import {
     toCLIEntry,
     type CLIEntry,
 } from "./entries";
+import { filterCLIEntries } from "./filter";
 import { log, setCLILauncherLog } from "./log";
 import { scanRoots } from "./scan";
 import { initTerminalTracking, launchAll } from "./terminal";
 import { CLIEntryTreeItem, CLILauncherTreeProvider } from "./tree";
 
 export const VIEW_ID = "superset.cliLauncher.paths";
+
+/** 有作用中的過濾字串時才為 true;`Clear Filter` 按鈕靠它顯示／隱藏。 */
+export const FILTER_CONTEXT_KEY = "superset.cliLauncher.filtered";
 
 /** 三顆 agent 按鈕對應的 command id,與 `package.json` 的宣告一致。 */
 export const AGENT_COMMAND_IDS: Record<AgentId, string> = {
@@ -78,9 +82,21 @@ export function register(ctx: FeatureContext): FeatureHandle {
             provider.refresh();
         }),
         vscode.commands.registerCommand(
+            "superset.cliLauncherFilter",
+            async () => {
+                await filterInteractively(provider, view);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherClearFilter",
+            () => {
+                applyFilter(provider, view, "");
+            }
+        ),
+        vscode.commands.registerCommand(
             "superset.cliLauncherCopyAllPaths",
             async () => {
-                await copyAllPathsToClipboard();
+                await copyAllPathsToClipboard(provider.filter);
             }
         ),
         vscode.commands.registerCommand(
@@ -132,6 +148,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
     log(
         `registered: view=${VIEW_ID} commands=${[
             "superset.cliLauncherRefresh",
+            "superset.cliLauncherFilter",
+            "superset.cliLauncherClearFilter",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherAddPath",
             "superset.cliLauncherRemovePath",
@@ -145,10 +163,59 @@ export function register(ctx: FeatureContext): FeatureHandle {
             for (const disposable of disposables) {
                 disposable.dispose();
             }
+            // context key 是 window 層狀態,view 消失後不得留下 stale true。
+            void setFilterContext(false);
             // module-level sink 不得存活到下一輪 activation。
             setCLILauncherLog(undefined);
         },
     };
+}
+
+function setFilterContext(active: boolean): Thenable<unknown> {
+    return vscode.commands.executeCommand(
+        "setContext",
+        FILTER_CONTEXT_KEY,
+        active
+    );
+}
+
+/**
+ * 套用過濾字串:更新 provider、把目前條件寫進 view 的 description (面板標題右側),
+ * 並同步 `Clear Filter` 的 context key。
+ */
+function applyFilter(
+    provider: CLILauncherTreeProvider,
+    view: vscode.TreeView<CLIEntryTreeItem>,
+    raw: string
+): void {
+    provider.setFilter(raw);
+    const active = provider.filter !== "";
+    view.description = active ? `filter: ${provider.filter}` : undefined;
+    void setFilterContext(active);
+    log(`filter: ${active ? provider.filter : "(cleared)"}`);
+}
+
+/**
+ * `Filter Paths`:輸入框接受 subsequence 查詢 (`plsup` → `platform/superset`)。
+ * 送出空字串等同清除;按 Esc 取消則維持原本的條件。
+ *
+ * 刻意用一次性的 `showInputBox` 而不是逐鍵即時過濾:掃描結果沒有快取
+ * (`Reset Caches` == 重新掃描),每個按鍵都重掃 root 會把 readdir 打成熱路徑。
+ */
+async function filterInteractively(
+    provider: CLILauncherTreeProvider,
+    view: vscode.TreeView<CLIEntryTreeItem>
+): Promise<void> {
+    const input = await vscode.window.showInputBox({
+        title: "CLI: 過濾路徑",
+        prompt: "逐段比對:字元在同一段內依序出現即命中,留白清除過濾。",
+        placeHolder: "例如 tool → tools,pl/sup → ~/projects/platform/superset",
+        value: provider.filter,
+    });
+    if (input === undefined) {
+        return;
+    }
+    applyFilter(provider, view, input);
 }
 
 interface CommandContext {
@@ -271,13 +338,17 @@ async function listAllEntries(): Promise<CLIEntry[]> {
 /**
  * `Copy All Paths`:把面板目前顯示的每一個項目 (釘選 + 掃描兩層,與 tree view
  * 的渲染順序一致) 的絕對路徑各佔一行寫進剪貼簿。不看選取狀態 —— 這是「複製全部」,
- * 不是「複製選取」。
+ * 不是「複製選取」;但「全部」以面板`當下可見`為準,因此套用作用中的過濾條件。
  */
-async function copyAllPathsToClipboard(): Promise<void> {
+async function copyAllPathsToClipboard(filter: string): Promise<void> {
     const commandID = "superset.cliLauncherCopyAllPaths";
-    log(`${commandID}: invoked`);
+    log(`${commandID}: invoked (filter=${filter === "" ? "none" : filter})`);
     try {
-        const entries = await listAllEntries();
+        const entries = filterCLIEntries(
+            await listAllEntries(),
+            filter,
+            os.homedir()
+        );
         if (entries.length === 0) {
             log(`${commandID}: no entries to copy`);
             await vscode.window.showInformationMessage(

@@ -49,7 +49,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | `src/git/` | SCM reset、Explorer GitHub URL、Git hooks Install/Link 與 Status Bar | `gitPlugin` |
 | `src/editorLayout/` | Editor group 四模式佈局（水平/垂直 × 均分/放大）與網格形狀 | `editorLayoutPlugin` |
 | `src/diskUsage/` | 第一個 workspace volume 的 disk capacity Status Bar 顯示與週期刷新 | `diskUsagePlugin` |
-| `src/cliLauncher/` | 獨立「CLI」面板：掃描兩層資料夾，每列三顆按鈕在該路徑開 terminal 跑 claude / codex / grok | `cliLauncherPlugin` |
+| `src/cliLauncher/` | 獨立「CLI」面板：掃描兩層資料夾、subsequence 路徑過濾、每列顯示 git 待處理計數，三顆按鈕在該路徑開 terminal 跑 claude / codex / grok | `cliLauncherPlugin` |
 | `src/installCommands.ts` | Default Project、Default Tools、Skill Install 與 Projects Setup commands | `registerInstallCommands` |
 | `src/treePreview/` | Markdown `tree` fence 渲染 | `treePreviewPlugin` |
 | `src/todoPreview/` | `README.todo` 預覽重組與 CSS 互動 | `todoPreviewPlugin` |
@@ -74,6 +74,8 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - `spawnRunTerminal` 送出的是 `sendText(cmdline)`，不得補 `\r`：那是舊 PTY `handleInput` 的原始按鍵位元組語意，原生 terminal 會讀成第二次 Enter。
 - CLI Launcher 的唯一資料來源是 `superset.cliLauncher.*` settings（`scope: application`、寫入 Global），不得引入 `globalState` 副本；掃描深度固定兩層且 root 本身不是節點。掃描讀取失敗一律回空陣列，一個打錯的 root 不得讓面板變成錯誤畫面。
 - CLI Launcher 送進 terminal 的每一行都自帶 `cd '<path>'`，路徑一律以 POSIX single quote 包裝；terminal 重用以 `(path, agent)` 為 key，不比對顯示名稱（label 取 basename 會撞名）。非空命令在 delivery 前標記 `pending`，只有配對的 `onDidStartTerminalShellExecution` → `onDidEndTerminalShellExecution` 才解除 busy；busy 期間一律開新 terminal，不得把命令送進正在跑的 agent TUI stdin。
+- CLI Launcher 的面板過濾是`逐段 (per segment)` 的 subsequence match：查詢以 `/` 切段，每段必須在`單一路徑段`內依序命中，段之間只能往後推進。subsequence 不得跨 `/` 或跨整條攤平路徑 —— `tool` 會在 `~/projects/collections/plans` 湊出 t-o-o-l 而誤命中，這是本功能第一版的實際 bug。單段查詢額外 fallback 比對顯示名稱；純規則集中在 `src/cliLauncher/filter.ts`。過濾字串是 ephemeral UI state，只存在 `CLILauncherTreeProvider` 記憶體中，不得寫入 settings 或 `globalState` —— settings 仍只描述路徑清單本身。過濾時 tree item id 必須帶上查詢字串當 scope，否則 VS Code 會沿用上一次的展開狀態。過濾以一次性 input box 套用，不做逐鍵即時過濾：掃描沒有快取，逐鍵會把 root 的 `readdir` 變成熱路徑。
+- CLI Launcher 每一列的 description 是該路徑的 git 待處理計數 `staged:<n> unstaged:<n> <untracked>`,不是路徑（完整路徑只留在 tooltip）。執行 git 前必須先確認`資料夾自己`有 `.git`（目錄或 submodule 的檔案）—— git 預設會沿父層往上找 repository，少了這個 gate，`~/projects/platform` 會顯示 `~/projects` 的狀態。乾淨 repo 與非 repo 一律不顯示；任何失敗（沒有 git、逾時、輸出過大）都當成沒有資訊，不得變成錯誤畫面。未追蹤用 git 預設的 `normal`（整包資料夾一筆），不得改成 `-uall`。同一層的路徑要一次批次查詢（併發上限 8），第二層只在展開時才讀，不得逐列 await 或開面板就掃完兩層。
 - CLI Launcher 的命令參數以 duck typing（`toCLIEntry`）解析，不得改用 `instanceof`：命令參數跨過 VS Code menu 層後型別不保證同源，`instanceof` 會靜默失敗成「按了沒反應」。
 - 專案清單本身不是獨立 feature：`src/projectsTodo/` 同時擁有跨專案清單與 TODO 內容（含 `superset.openProject`）。`TODO` 只讀寫當前 project / workspace root，Workspace TODO 只遞迴當前 workspace，Projects TODO 只遞迴 `~/projects`；三者的掃描邊界不混用。
 - Projects TODO 只認大小寫完全相符的 `README.todo`；`~/projects` root 為 depth 0 且不顯示，固定遞迴 depth 1–5，命中後繼續掃描子孫，每個命中資料夾以 `path.basename` 建立 group。
@@ -126,6 +128,8 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 - Current module map：[`docs/specs/2026-07-20-architecture-current-modules.md`](docs/specs/2026-07-20-architecture-current-modules.md)
 - Disk Usage Status Bar：[`docs/specs/2026-08-02-disk-usage-status-bar.md`](docs/specs/2026-08-02-disk-usage-status-bar.md)
 - CLI Launcher（含自 `vscode-plugin-experiment` 移入的差異）：[`docs/specs/2026-08-04-cli-launcher.md`](docs/specs/2026-08-04-cli-launcher.md)
+- CLI Launcher 路徑過濾（subsequence match）：[`docs/specs/2026-08-04-cli-launcher-path-filter.md`](docs/specs/2026-08-04-cli-launcher-path-filter.md)
+- CLI Launcher git 待處理計數：[`docs/specs/2026-08-04-cli-launcher-git-pending-counts.md`](docs/specs/2026-08-04-cli-launcher-git-pending-counts.md)
 - Visibility-scoped runtime 與 Sessions cache：[`docs/specs/2026-07-27-visibility-scoped-runtime-work.md`](docs/specs/2026-07-27-visibility-scoped-runtime-work.md)
 - Security hardening：[`docs/specs/2026-07-27-security-hardening.md`](docs/specs/2026-07-27-security-hardening.md)
 - Overall architecture：[`docs/specs/2026-07-02-architecture-master.md`](docs/specs/2026-07-02-architecture-master.md)

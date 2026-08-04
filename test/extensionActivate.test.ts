@@ -266,6 +266,8 @@ describe("extension activation via PluginManager", () => {
             "superset.cliLauncherRemovePath",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherRefresh",
+            "superset.cliLauncherFilter",
+            "superset.cliLauncherClearFilter",
         ]) {
             expect(cmds.has(id), `missing CLI Launcher command: ${id}`).toBe(
                 true

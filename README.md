@@ -26,7 +26,7 @@ a
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
-| `CLI` 面板                | 列出 `~/projects` 兩層資料夾,一鍵在該路徑開 claude / codex / grok | 常在多個專案間切換跑 agent CLI 的人 |
+| `CLI` 面板                | 列出 `~/projects` 兩層資料夾、subsequence 過濾、顯示 git 待處理計數,一鍵在該路徑開 claude / codex / grok | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -487,9 +487,9 @@ Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects
 
 ```text
 CLI
-├── ai              ← 第一層,可展開
-│   └── sessiond    ← 第二層,leaf
-├── tools
+├── ai                                    ← 第一層,可展開
+│   └── sessiond   staged:0 unstaged:4 2  ← 第二層,leaf
+├── tools          staged:1 unstaged:0 0
 │   ├── autop
 │   └── pm2
 └── web
@@ -497,6 +497,17 @@ CLI
 
 root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形狀對齊
 `<category>/<project>` 的目錄慣例。以 `.` 開頭的目錄與 `node_modules` 不列出。
+
+#### git 待處理計數
+
+每一列名稱右側顯示`該資料夾自己`的 git 待處理檔案數,格式為
+`staged:<已 add 數> unstaged:<未 add 數> <未追蹤數>`:
+
+- 只有資料夾本身是 repository(含 submodule)時才有數字;不會沿父層往上找,
+  所以 `~/projects/platform` 不會顯示 `~/projects` 的狀態。
+- 乾淨的 repository 與非 repository 一律`不顯示`,面板不被一整排 `0` 佔滿。
+- 未追蹤資料夾以整包一筆計(git 預設行為),不逐檔展開。
+- 完整路徑移到 hover tooltip;第二層的數字在展開時才讀取。
 
 #### 逐步操作
 
@@ -508,10 +519,34 @@ root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形�
 4. 按住 `Cmd` / `Ctrl` 多選數列再按快捷鍵,每個路徑各開一個 terminal,只有最後一個
    會搶焦點。
 5. 右鍵 → `Open Terminal at Path` 只開 terminal 不跑任何 CLI。
-6. 標題列三顆按鈕:`Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`
-   (把面板所有路徑逐行複製到剪貼簿)、`Refresh`(重新掃描)。
+6. 標題列按鈕:`Filter Paths`(過濾路徑)、`Pin Path`(釘一個 root 以外的路徑到
+   最上面)、`Copy All Paths`(把面板所有路徑逐行複製到剪貼簿)、`Refresh`
+   (重新掃描)。過濾生效時才多出一顆 `Clear Filter`。
 
 點擊一列`不會`啟動任何東西 —— 只做選取與展開,避免瀏覽時誤開一堆 terminal。
+
+#### 專案過濾 (subsequence match)
+
+`Filter Paths` 會跳出輸入框,查詢以 `/` 切段,每段的字元只要`依序`出現在`同一個
+資料夾名`裡就算命中 —— 不必連續,也不必記得完整名稱,但`不會跨過 /`:
+
+| 輸入      | 命中                                                     |
+| --------- | -------------------------------------------------------- |
+| `tool`    | `~/projects/tools` 及其下所有專案                        |
+| `sup`     | 任何名字含 s…u…p 的資料夾(`superset`、`surfer_profile`) |
+| `pl/sup`  | `~/projects/platform/superset`(先對上第一層再對第二層)  |
+| `superset`| `~/projects/platform/superset`(連續字串同樣適用)         |
+
+- 段與段之間只能`往後`推進,可以跳過中間層級:`pj/sup` 命中
+  `~/projects/platform/superset`,但 `sup/pl` 不會。
+- 比對對象是面板顯示的縮寫路徑(`~/projects/...`)的`各段`;單段查詢額外比對顯示
+  名稱,讓自訂 label 的釘選項目也找得到。大小寫不分,查詢中的空白會被忽略
+  (`pl sup` 等同 `plsup`)。
+- 第一層命中時整包子資料夾一起留下;只有第二層命中時,第一層仍會保留當作掛載點,
+  並自動展開讓命中的項目直接可見。
+- 過濾中面板標題右側顯示 `filter: <查詢>`,`Copy All Paths` 也只複製過濾後的路徑。
+- 送出空字串或按 `Clear Filter` 即清除;按 `Esc` 取消則維持原條件。
+- 過濾條件`只存在記憶體`,不寫進 settings,關掉視窗即消失。
 
 #### 設定
 
@@ -599,7 +634,8 @@ code --install-extension superset-*.vsix
 | `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+1/2/3`(CLI 面板) | 在選取路徑開 terminal 並執行對應 agent CLI                                 |
 | `CLI: Open Terminal at Path`                    | —                   | 只在選取路徑開 terminal,不執行命令                                            |
 | `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
-| `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿                                                  |
+| `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿(套用作用中的過濾)                              |
+| `CLI: Filter Paths` / `Clear Filter`            | —                   | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 

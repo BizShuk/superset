@@ -219,6 +219,27 @@ describe("CLI Launcher manifest contributions", () => {
             "Copy All Paths"
         );
         expect(titles.get("superset.cliLauncherRefresh")).toBe("Refresh");
+        expect(titles.get("superset.cliLauncherFilter")).toBe("Filter Paths");
+        expect(titles.get("superset.cliLauncherClearFilter")).toBe(
+            "Clear Filter"
+        );
+    });
+
+    it("shows Clear Filter in the title bar only while a filter is active", () => {
+        const titleMenu = manifest.contributes.menus["view/title"].filter(
+            (m) => m.command?.startsWith("superset.cliLauncher")
+        );
+        const filter = titleMenu.find(
+            (m) => m.command === "superset.cliLauncherFilter"
+        );
+        expect(filter?.when).toBe(`view == ${VIEW_ID}`);
+
+        const clear = titleMenu.find(
+            (m) => m.command === "superset.cliLauncherClearFilter"
+        );
+        expect(clear?.when).toBe(
+            `view == ${VIEW_ID} && superset.cliLauncher.filtered == true`
+        );
     });
 
     it("keeps no command under the pre-move cliLauncher.* namespace", () => {
