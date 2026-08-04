@@ -1,85 +1,62 @@
-// `git status --porcelain=v1` 的解析與 description 格式化。純字串進出,
+// `git diff --numstat` 的解析與 description 格式化。純字串進出,
 // 不 spawn 任何行程。
 
 import { describe, it, expect } from "vitest";
 import {
-    formatGitPendingCounts,
-    parseGitStatus,
+    formatGitFolderStatus,
+    parseNumstat,
 } from "../src/cliLauncher/gitStatus";
 
-describe("parseGitStatus", () => {
-    it("returns zeros for a clean worktree", () => {
-        expect(parseGitStatus("")).toEqual({
-            staged: 0,
-            unstaged: 0,
-            untracked: 0,
-        });
+describe("parseNumstat", () => {
+    it("returns zeros for an empty diff", () => {
+        expect(parseNumstat("")).toEqual({ added: 0, removed: 0 });
     });
 
-    it("splits index and worktree columns", () => {
+    it("sums added and removed lines across files", () => {
         const output = [
-            "M  src/staged.ts",
-            " M src/unstaged.ts",
-            "MM src/both.ts",
-            "A  src/added.ts",
-            " D src/deleted.ts",
-            "?? src/new.ts",
-            "?? docs/",
+            "12\t3\tsrc/tree.ts",
+            "0\t7\tsrc/gone.ts",
+            "5\t0\tdocs/new.md",
             "",
         ].join("\n");
 
-        expect(parseGitStatus(output)).toEqual({
-            staged: 3, // M , MM, A
-            unstaged: 3, // M, MM, D
-            untracked: 2,
-        });
+        expect(parseNumstat(output)).toEqual({ added: 17, removed: 10 });
     });
 
-    it("counts unmerged entries on both sides", () => {
-        expect(parseGitStatus("UU src/conflict.ts\n")).toEqual({
-            staged: 1,
-            unstaged: 1,
-            untracked: 0,
-        });
+    it("skips binary files reported as dashes", () => {
+        const output = ["-\t-\tpkg/logo.png", "4\t1\tREADME.md"].join("\n");
+
+        expect(parseNumstat(output)).toEqual({ added: 4, removed: 1 });
     });
 
-    it("ignores ignored entries and short lines", () => {
-        expect(parseGitStatus("!! out/bundle.js\n\nx\n")).toEqual({
-            staged: 0,
-            unstaged: 0,
-            untracked: 0,
-        });
-    });
-
-    it("counts a rename as one staged change", () => {
-        expect(parseGitStatus("R  old.ts -> new.ts\n")).toEqual({
-            staged: 1,
-            unstaged: 0,
-            untracked: 0,
+    it("ignores malformed lines", () => {
+        expect(parseNumstat("garbage\n\n3\t2\tsrc/a.ts\n")).toEqual({
+            added: 3,
+            removed: 2,
         });
     });
 });
 
-describe("formatGitPendingCounts", () => {
-    it("renders staged, unstaged and the bare untracked count", () => {
+describe("formatGitFolderStatus", () => {
+    it("renders the branch with its line deltas", () => {
         expect(
-            formatGitPendingCounts({ staged: 1, unstaged: 2, untracked: 3 })
-        ).toBe("staged:1 unstaged:2 3");
+            formatGitFolderStatus({ branch: "master", added: 12, removed: 3 })
+        ).toBe("master(+12,-3)");
+    });
+
+    it("keeps zeros so the branch stays visible on a clean repository", () => {
+        expect(
+            formatGitFolderStatus({ branch: "master", added: 0, removed: 0 })
+        ).toBe("master(+0,-0)");
     });
 
     it("renders nothing when there is no git information", () => {
-        expect(formatGitPendingCounts(undefined)).toBe("");
+        expect(formatGitFolderStatus(undefined)).toBe("");
     });
 
-    it("renders nothing for a clean repository", () => {
+    it("renders nothing when the branch could not be resolved", () => {
         expect(
-            formatGitPendingCounts({ staged: 0, unstaged: 0, untracked: 0 })
+            formatGitFolderStatus({ branch: "", added: 5, removed: 5 })
         ).toBe("");
-    });
-
-    it("keeps zero columns once anything is pending", () => {
-        expect(
-            formatGitPendingCounts({ staged: 0, unstaged: 0, untracked: 4 })
-        ).toBe("staged:0 unstaged:0 4");
     });
 });

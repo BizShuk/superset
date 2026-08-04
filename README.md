@@ -26,7 +26,7 @@ a
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
-| `CLI` 面板                | 列出 `~/projects` 兩層資料夾、subsequence 過濾、顯示 git 待處理計數,一鍵在該路徑開 claude / codex / grok | 常在多個專案間切換跑 agent CLI 的人 |
+| `CLI` 面板                | 列出 `~/projects` 兩層資料夾、subsequence 過濾、顯示 git 分支與行數增減,一鍵在該路徑開 claude / codex / grok | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -487,9 +487,9 @@ Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects
 
 ```text
 CLI
-├── ai                                    ← 第一層,可展開
-│   └── sessiond   staged:0 unstaged:4 2  ← 第二層,leaf
-├── tools          staged:1 unstaged:0 0
+├── ai                                ← 第一層,可展開
+│   └── sessiond   master(+4,-2)      ← 第二層,leaf
+├── tools          w-cli-git(+180,-165)
 │   ├── autop
 │   └── pm2
 └── web
@@ -498,16 +498,18 @@ CLI
 root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形狀對齊
 `<category>/<project>` 的目錄慣例。以 `.` 開頭的目錄與 `node_modules` 不列出。
 
-#### git 待處理計數
+#### git 分支與行數增減
 
-每一列名稱右側顯示`該資料夾自己`的 git 待處理檔案數,格式為
-`staged:<已 add 數> unstaged:<未 add 數> <未追蹤數>`:
+每一列名稱右側顯示`該資料夾自己`的 git 狀態,格式為
+`<分支>(+<新增或修改行數>,-<刪除行數>)`,例如 `master(+0,-0)`:
 
-- 只有資料夾本身是 repository(含 submodule)時才有數字;不會沿父層往上找,
+- 行數是 `git diff HEAD` 的加總,`staged` 與 `unstaged` 一起算;`未追蹤`檔案不
+  在 `git diff` 範圍內,因此不計入。二進位檔案略過。
+- 只有資料夾本身是 repository(含 submodule)時才顯示;不會沿父層往上找,
   所以 `~/projects/platform` 不會顯示 `~/projects` 的狀態。
-- 乾淨的 repository 與非 repository 一律`不顯示`,面板不被一整排 `0` 佔滿。
-- 未追蹤資料夾以整包一筆計(git 預設行為),不逐檔展開。
-- 完整路徑移到 hover tooltip;第二層的數字在展開時才讀取。
+- 乾淨的 repository 仍會顯示 `<分支>(+0,-0)` —— 分支名本身就是有用資訊。
+  detached HEAD 時顯示短 commit hash。
+- 完整路徑移到 hover tooltip;第二層的狀態在展開時才讀取。
 
 #### 逐步操作
 

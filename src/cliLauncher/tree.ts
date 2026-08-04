@@ -10,7 +10,7 @@
 // Provider 另外持有一個 ephemeral 的 subsequence 過濾字串 (見 `filter.ts`),
 // 只影響顯示,不進 settings。
 //
-// 每一列的 description 顯示該路徑的 git 待處理檔案數 (見 `gitStatus.ts`),
+// 每一列的 description 顯示該路徑的 git 分支與行數增減 (見 `gitStatus.ts`),
 // 不再重複顯示路徑 —— 完整路徑留在 tooltip。
 
 import * as os from "node:os";
@@ -23,9 +23,9 @@ import {
     normalizeFilterQuery,
 } from "./filter";
 import {
-    formatGitPendingCounts,
-    readGitPendingCountsMap,
-    type GitPendingCounts,
+    formatGitFolderStatus,
+    readGitFolderStatusMap,
+    type GitFolderStatus,
 } from "./gitStatus";
 import { scanRoots } from "./scan";
 
@@ -44,8 +44,8 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
             id: string;
             contextValue: string;
             children?: readonly CLIEntry[];
-            /** 該路徑的 git 待處理計數;不是 repository 時省略。 */
-            git?: GitPendingCounts;
+            /** 該路徑的 git 分支與行數增減;不是 repository 時省略。 */
+            git?: GitFolderStatus;
             /** 有子節點時是否預設展開;過濾中才會設,讓命中的第二層直接看得到。 */
             expanded?: boolean;
         }
@@ -63,19 +63,19 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
         this.children = children;
 
         const shownPath = collapseHome(entry.path, os.homedir());
-        const pending = formatGitPendingCounts(options.git);
+        const status = formatGitFolderStatus(options.git);
         this.id = options.id;
         // description 空字串等同不顯示;路徑本身留在 tooltip,不再佔用列寬。
-        this.description = pending;
+        this.description = status;
         this.tooltip = new vscode.MarkdownString(
             [
                 `**${entry.label}**`,
                 "",
                 `\`${shownPath}\``,
                 "",
-                ...(pending === ""
+                ...(status === ""
                     ? []
-                    : [`git: ${pending} (staged / unstaged / untracked)`, ""]),
+                    : [`git: ${status} (分支 / 新增行 / 刪除行)`, ""]),
                 "右側按鈕在此路徑執行 claude / codex / grok。",
             ].join("\n")
         );
@@ -134,13 +134,13 @@ export class CLILauncherTreeProvider
 }
 
 /**
- * 第二層節點:leaf。git 計數只在這一層被展開時才讀 —— 兩層全掃會對每個
+ * 第二層節點:leaf。git 狀態只在這一層被展開時才讀 —— 兩層全掃會對每個
  * `~/projects/<category>/<project>` 都 spawn 一次 git。
  */
 async function layer2Items(
     parent: CLIEntryTreeItem
 ): Promise<CLIEntryTreeItem[]> {
-    const pending = await readGitPendingCountsMap(
+    const status = await readGitFolderStatusMap(
         parent.children.map((child) => child.path)
     );
 
@@ -149,7 +149,7 @@ async function layer2Items(
             new CLIEntryTreeItem(child, {
                 id: `${parent.id}/${child.path}`,
                 contextValue: FOLDER_CONTEXT_VALUE,
-                git: pending.get(child.path),
+                git: status.get(child.path),
             })
     );
 }
@@ -173,8 +173,8 @@ async function topLevelItems(query: string): Promise<CLIEntryTreeItem[]> {
     );
 
     // 一次把這一層要顯示的路徑全部問完,再分配給各列;逐列 await 會把數十次
-    // `git status` 串成序列,面板要等最後一個才畫得出來。
-    const pending = await readGitPendingCountsMap([
+    // git 呼叫串成序列,面板要等最後一個才畫得出來。
+    const status = await readGitFolderStatusMap([
         ...visiblePinned.map((entry) => entry.path),
         ...scanned.map((folder) => folder.entry.path),
     ]);
@@ -184,7 +184,7 @@ async function topLevelItems(query: string): Promise<CLIEntryTreeItem[]> {
             new CLIEntryTreeItem(entry, {
                 id: `pinned:${scope}${entry.path}`,
                 contextValue: ENTRY_CONTEXT_VALUE,
-                git: pending.get(entry.path),
+                git: status.get(entry.path),
             })
     );
 
@@ -195,7 +195,7 @@ async function topLevelItems(query: string): Promise<CLIEntryTreeItem[]> {
                 contextValue: FOLDER_CONTEXT_VALUE,
                 children: folder.children,
                 expanded: query !== "",
-                git: pending.get(folder.entry.path),
+                git: status.get(folder.entry.path),
             })
         );
     }

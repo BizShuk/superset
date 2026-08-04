@@ -35,15 +35,15 @@ vi.mock("vscode", () => {
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as os from "node:os";
 import type { CLIEntry } from "../src/cliLauncher/entries";
-import type { GitPendingCounts } from "../src/cliLauncher/gitStatus";
+import type { GitFolderStatus } from "../src/cliLauncher/gitStatus";
 import type { ScannedFolder } from "../src/cliLauncher/scan";
 
 const HOME = os.homedir();
 
 let pinned: CLIEntry[] = [];
 let scanned: ScannedFolder[] = [];
-/** 路徑 → git 待處理計數;沒有列出的路徑代表不是 repository。 */
-let gitCounts = new Map<string, GitPendingCounts>();
+/** 路徑 → git 分支與行數增減;沒有列出的路徑代表不是 repository。 */
+let gitStatus = new Map<string, GitFolderStatus>();
 
 vi.mock("../src/cliLauncher/config", () => ({
     loadEntries: () => pinned,
@@ -58,11 +58,11 @@ vi.mock("../src/cliLauncher/scan", () => ({
 // 才會被這裡的斷言釘住。
 vi.mock("../src/cliLauncher/gitStatus", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../src/cliLauncher/gitStatus")>()),
-    readGitPendingCountsMap: async (dirs: readonly string[]) =>
+    readGitFolderStatusMap: async (dirs: readonly string[]) =>
         new Map(
             dirs
-                .filter((dir) => gitCounts.has(dir))
-                .map((dir) => [dir, gitCounts.get(dir)!])
+                .filter((dir) => gitStatus.has(dir))
+                .map((dir) => [dir, gitStatus.get(dir)!])
         ),
 }));
 
@@ -91,7 +91,7 @@ beforeEach(() => {
             children: [entry(`${HOME}/projects/ai/sessiond`)],
         },
     ];
-    gitCounts = new Map();
+    gitStatus = new Map();
 });
 
 describe("CLILauncherTreeProvider filtering", () => {
@@ -166,34 +166,34 @@ describe("CLILauncherTreeProvider filtering", () => {
         provider.dispose();
     });
 
-    it("describes each row with its git pending counts", async () => {
-        gitCounts.set("/opt/tools/cli", {
-            staged: 1,
-            unstaged: 2,
-            untracked: 3,
+    it("describes each row with its branch and line deltas", async () => {
+        gitStatus.set("/opt/tools/cli", {
+            branch: "release",
+            added: 12,
+            removed: 3,
         });
-        gitCounts.set(`${HOME}/projects/platform`, {
-            staged: 0,
-            unstaged: 0,
-            untracked: 0,
+        gitStatus.set(`${HOME}/projects/platform`, {
+            branch: "master",
+            added: 0,
+            removed: 0,
         });
 
         const provider = new CLILauncherTreeProvider();
         const items = await provider.getChildren();
 
         expect(items.map((item) => item.description)).toEqual([
-            "staged:1 unstaged:2 3", // 釘選的 repo
-            "", // 乾淨的 repo 不顯示
+            "release(+12,-3)", // 釘選的 repo
+            "master(+0,-0)", // 乾淨的 repo 仍顯示分支
             "", // 不是 repository
         ]);
         provider.dispose();
     });
 
-    it("describes second layer rows with their own counts", async () => {
-        gitCounts.set(`${HOME}/projects/platform/superset`, {
-            staged: 0,
-            unstaged: 4,
-            untracked: 0,
+    it("describes second layer rows with their own branch", async () => {
+        gitStatus.set(`${HOME}/projects/platform/superset`, {
+            branch: "w-cli-git",
+            added: 4,
+            removed: 0,
         });
 
         const provider = new CLILauncherTreeProvider();
@@ -201,7 +201,7 @@ describe("CLILauncherTreeProvider filtering", () => {
         const children = await provider.getChildren(items[1]);
 
         expect(children.map((item) => item.description)).toEqual([
-            "staged:0 unstaged:4 0",
+            "w-cli-git(+4,-0)",
             "",
         ]);
         provider.dispose();
