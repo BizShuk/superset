@@ -327,6 +327,23 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Scan Timeout`          | network scan 的 10-second failure boundary；逾時不得無限阻塞 View。                                     |
 | `Topology Transformer`  | 將 Scan Inputs 純轉換為固定順序 `Local Interfaces → Routing → DNS Servers → ARP Table` 的 pure module。 |
 
+## CLI Launcher 術語
+
+| 術語                   | 定義                                                                                                                    |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `CLI View Container`   | Activity Bar 上獨立的 `cli` container，標題為 `CLI`；不屬於 `superset` 或 `superset-overall`。                          |
+| `CLI View`             | `superset.cliLauncher.paths` Tree View，container 內唯一的 View，名稱為 `Paths`。                                       |
+| `Scan Root`            | `superset.cliLauncher.roots` 中的一個根目錄。root 本身不是節點，只列出其下的 Layer 1／Layer 2。                         |
+| `Layer 1` / `Layer 2`  | `<root>/<layer1>` 為 top-level item，`<root>/<layer1>/<layer2>` 為其 leaf child。掃描深度固定兩層。                     |
+| `Pinned Path`          | `superset.cliLauncher.entries` 手動釘選的路徑，排在掃描結果之前，contextValue 為 `superset.cliLauncher.entry`，可 Unpin。 |
+| `Scanned Folder`       | 由 Scan Root 掃描而來的資料夾，contextValue 為 `superset.cliLauncher.folder`；沒有 Unpin 語意，只能改 roots。            |
+| `Agent Button`         | 每列固定三顆 inline button（`claude` / `codex` / `grok`），命令內容由 `agentCommands` 決定，數量與順序不可動態調整。     |
+| `Agent Command`        | 送進 terminal 的實際命令字串，預設為同名 CLI，可含旗標。                                                                |
+| `Launch`               | 建立或重用 terminal → 送出 `cd '<path>' && <agent command>` 的一次操作；不是 spawn 一個 child process。                 |
+| `Terminal Reuse Key`   | `(path, agent)` 組合。以顯示名稱比對不算數 —— 不同路徑的 basename 會撞名。                                              |
+| `Busy Terminal`        | 已送出非空命令、尚未收到配對 shell execution end 的 terminal（`pending` / `running`）；busy 期間一律開新 terminal。      |
+| `Shell Readiness`      | 新 terminal 等待 `onDidChangeTerminalShellIntegration` 的最長 3 秒視窗，逾時仍以 `sendText` 送出。                       |
+
 ## Markdown 與 Preview 術語
 
 | 術語                   | 定義                                                                                                 |

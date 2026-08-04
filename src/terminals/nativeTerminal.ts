@@ -12,10 +12,26 @@
 
 import * as vscode from "vscode";
 
+export interface NativeTerminalOptions {
+    /**
+     * Open the terminal as an editor-area tab instead of the bottom panel.
+     * CLI Launcher passes `{ viewColumn: ViewColumn.Active }` — the agent
+     * CLIs it starts are full-screen TUIs that want the editor's height.
+     * Omitted for every other caller, which keeps the created options
+     * byte-identical to the panel default.
+     */
+    readonly location?: vscode.TerminalEditorLocationOptions;
+}
+
 /** Open a native VS Code terminal named `name`, rooted at `cwd`. */
 export function createNativeTerminal(
     name: string,
-    cwd: string
+    cwd: string,
+    options?: NativeTerminalOptions
 ): vscode.Terminal {
-    return vscode.window.createTerminal({ name, cwd });
+    return vscode.window.createTerminal({
+        name,
+        cwd,
+        ...(options?.location ? { location: options.location } : {}),
+    });
 }

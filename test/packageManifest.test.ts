@@ -177,6 +177,122 @@ describe("Superset view layout manifest contributions", () => {
     });
 });
 
+describe("CLI Launcher manifest contributions", () => {
+    interface ManifestConfigBlock {
+        readonly title: string;
+        readonly properties: Record<string, Record<string, unknown>>;
+    }
+
+    const VIEW_ID = "superset.cliLauncher.paths";
+    const titles = new Map(
+        manifest.contributes.commands.map((c) => [c.command, c.title])
+    );
+
+    it("gives the panel its own activity-bar container backed by a pkg/resources icon", () => {
+        const containers = manifest.contributes.viewsContainers as {
+            activitybar: { id: string; title: string; icon: string }[];
+        };
+        expect(containers.activitybar).toContainEqual({
+            id: "cli",
+            title: "CLI",
+            icon: "pkg/resources/cli.svg",
+        });
+        expect(manifest.contributes.views.cli).toEqual([
+            { id: VIEW_ID, name: "Paths", contextualTitle: "CLI" },
+        ]);
+    });
+
+    it("publishes one command per agent button plus the path-list commands", () => {
+        expect(titles.get("superset.cliLauncherRunClaude")).toBe(
+            "Open with Claude"
+        );
+        expect(titles.get("superset.cliLauncherRunCodex")).toBe(
+            "Open with Codex"
+        );
+        expect(titles.get("superset.cliLauncherRunGrok")).toBe("Open with Grok");
+        expect(titles.get("superset.cliLauncherOpen")).toBe(
+            "Open Terminal at Path"
+        );
+        expect(titles.get("superset.cliLauncherAddPath")).toBe("Pin Path");
+        expect(titles.get("superset.cliLauncherRemovePath")).toBe("Unpin Path");
+        expect(titles.get("superset.cliLauncherCopyAllPaths")).toBe(
+            "Copy All Paths"
+        );
+        expect(titles.get("superset.cliLauncherRefresh")).toBe("Refresh");
+    });
+
+    it("keeps no command under the pre-move cliLauncher.* namespace", () => {
+        for (const command of manifest.contributes.commands) {
+            expect(command.command.startsWith("cliLauncher.")).toBe(false);
+        }
+    });
+
+    it("binds ctrl+1/2/3 only while the CLI panel has focus", () => {
+        interface ManifestKeybinding {
+            readonly command: string;
+            readonly key: string;
+            readonly when?: string;
+        }
+        const keybindings = manifest.contributes
+            .keybindings as ManifestKeybinding[];
+        // Unscoped these would shadow VS Code's own "switch editor group".
+        for (const [key, command] of [
+            ["ctrl+1", "superset.cliLauncherRunClaude"],
+            ["ctrl+2", "superset.cliLauncherRunCodex"],
+            ["ctrl+3", "superset.cliLauncherRunGrok"],
+        ]) {
+            const binding = keybindings.find((k) => k.command === command);
+            expect(binding?.key).toBe(key);
+            expect(binding?.when).toBe(`focusedView == ${VIEW_ID}`);
+        }
+    });
+
+    it("shows the three agent buttons inline on every row kind", () => {
+        const rowKinds =
+            "viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder";
+        const inline = manifest.contributes.menus["view/item/context"].filter(
+            (m) => m.command?.startsWith("superset.cliLauncherRun")
+        );
+        expect(inline.map((m) => m.group)).toEqual([
+            "inline@1",
+            "inline@2",
+            "inline@3",
+        ]);
+        for (const item of inline) {
+            expect(item.when).toBe(`view == ${VIEW_ID} && (${rowKinds})`);
+        }
+
+        // Unpin is pinned-only — scanned folders are removed by editing roots.
+        const unpin = manifest.contributes.menus["view/item/context"].find(
+            (m) => m.command === "superset.cliLauncherRemovePath"
+        );
+        expect(unpin?.when).toBe(
+            `view == ${VIEW_ID} && viewItem == superset.cliLauncher.entry`
+        );
+    });
+
+    it("declares the three application-scoped settings", () => {
+        const configuration = manifest.contributes
+            .configuration as ManifestConfigBlock[];
+        const block = configuration.find(
+            (b) => b.title === "Superset CLI Launcher"
+        );
+        expect(block).toBeDefined();
+        expect(Object.keys(block!.properties).sort()).toEqual([
+            "superset.cliLauncher.agentCommands",
+            "superset.cliLauncher.entries",
+            "superset.cliLauncher.roots",
+        ]);
+        // Path lists are system-level, not per-workspace.
+        for (const property of Object.values(block!.properties)) {
+            expect(property.scope).toBe("application");
+        }
+        expect(block!.properties["superset.cliLauncher.roots"].default).toEqual(
+            ["~/projects"]
+        );
+    });
+});
+
 describe("Sessions manifest contributions", () => {
     it("exposes Open Session Source File inline and in the open group", () => {
         expect(manifest.contributes.commands).toContainEqual({

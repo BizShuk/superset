@@ -26,6 +26,7 @@ a
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
+| `CLI` 面板                | 列出 `~/projects` 兩層資料夾,一鍵在該路徑開 claude / codex / grok | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -480,6 +481,52 @@ mode = { horizontal: even | max } × { vertical: even | max }
 
 ---
 
+### 16. `CLI` — 路徑啟動器
+
+Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects` 底下的資料夾:
+
+```text
+CLI
+├── ai              ← 第一層,可展開
+│   └── sessiond    ← 第二層,leaf
+├── tools
+│   ├── autop
+│   └── pm2
+└── web
+```
+
+root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形狀對齊
+`<category>/<project>` 的目錄慣例。以 `.` 開頭的目錄與 `node_modules` 不列出。
+
+#### 逐步操作
+
+1. 點 Activity Bar 的 `CLI` 圖示打開面板。
+2. Hover 任一列,右側出現三顆按鈕:`Open with Claude`、`Open with Codex`、
+   `Open with Grok`。點下去會在`編輯區`開一個 terminal 分頁,cwd 設在該路徑並執行
+   對應的 CLI。
+3. 面板取得焦點時,`Ctrl+1` / `Ctrl+2` / `Ctrl+3` 是同樣三顆按鈕的快捷鍵。
+4. 按住 `Cmd` / `Ctrl` 多選數列再按快捷鍵,每個路徑各開一個 terminal,只有最後一個
+   會搶焦點。
+5. 右鍵 → `Open Terminal at Path` 只開 terminal 不跑任何 CLI。
+6. 標題列三顆按鈕:`Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`
+   (把面板所有路徑逐行複製到剪貼簿)、`Refresh`(重新掃描)。
+
+點擊一列`不會`啟動任何東西 —— 只做選取與展開,避免瀏覽時誤開一堆 terminal。
+
+#### 設定
+
+| 設定 | 預設 | 用途 |
+| --- | --- | --- |
+| `superset.cliLauncher.roots` | `["~/projects"]` | 要掃描的根目錄;設成 `[]` 即關閉掃描 |
+| `superset.cliLauncher.entries` | `[]` | 手動釘選的路徑,排在掃描結果之前 |
+| `superset.cliLauncher.agentCommands` | `{}` | 覆寫三顆按鈕的命令,可含旗標 |
+
+三個設定都是 `application` scope,寫入 User settings,不隨 workspace 切換而變。
+按鈕沒反應時,`Superset: Show Diagnostic Logs` 會列出解析到的項目與實際送進
+terminal 的字串。
+
+---
+
 ## 系統需求 (Requirements)
 
 | 項目    | 版本 / 用途                                                            |
@@ -549,6 +596,10 @@ code --install-extension superset-*.vsix
 | `Superset: Transpose Editor Grid`               | —                   | 翻 root 方向，等同 NxM 網格轉置                                               |
 | `Superset: Pick Editor Grid Shape`              | —                   | 重塑 editor 網格形狀（唯一會改變格子數的命令）                                |
 | `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                        |
+| `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+1/2/3`(CLI 面板) | 在選取路徑開 terminal 並執行對應 agent CLI                                 |
+| `CLI: Open Terminal at Path`                    | —                   | 只在選取路徑開 terminal,不執行命令                                            |
+| `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
+| `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿                                                  |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 

@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.23.0",
+    "version": "0.24.0",
     "scripts": {
         "clean": "rm -rf out && rm -f *.vsix",
         "dev": "npm run watch",
@@ -103,6 +103,68 @@
                         "type": "boolean",
                         "default": false,
                         "description": "Re-enable the legacy byte-reading activity watcher, which drains every shell execution's output stream through the extension host. Off by default: activity is detected by shell-integration start/end events plus process-tree polling, neither of which moves terminal output through the extension host. Only turn this on to compare against the old behaviour."
+                    }
+                }
+            },
+            {
+                "title": "Superset CLI Launcher",
+                "properties": {
+                    "superset.cliLauncher.roots": {
+                        "type": "array",
+                        "scope": "application",
+                        "default": [
+                            "~/projects"
+                        ],
+                        "items": {
+                            "type": "string"
+                        },
+                        "markdownDescription": "要掃描的根目錄。CLI 面板列出其下`兩層`資料夾,root 本身不出現;以 `.` 開頭的目錄與 `node_modules` 略過。設成 `[]` 即關閉掃描,只顯示 `#superset.cliLauncher.entries#` 釘選的路徑。"
+                    },
+                    "superset.cliLauncher.entries": {
+                        "type": "array",
+                        "scope": "application",
+                        "default": [],
+                        "items": {
+                            "type": [
+                                "string",
+                                "object"
+                            ],
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "絕對路徑,或以 ~ 開頭的家目錄相對路徑。"
+                                },
+                                "label": {
+                                    "type": "string",
+                                    "description": "顯示名稱,省略時取路徑 basename。"
+                                }
+                            },
+                            "required": [
+                                "path"
+                            ]
+                        },
+                        "markdownDescription": "手動釘選的路徑,排在掃描結果之前。字串簡寫等同 `{ \"path\": \"...\" }`;重複路徑只保留第一筆,格式錯誤的項目直接忽略。"
+                    },
+                    "superset.cliLauncher.agentCommands": {
+                        "type": "object",
+                        "scope": "application",
+                        "default": {},
+                        "properties": {
+                            "claude": {
+                                "type": "string",
+                                "default": "claude"
+                            },
+                            "codex": {
+                                "type": "string",
+                                "default": "codex"
+                            },
+                            "grok": {
+                                "type": "string",
+                                "default": "grok"
+                            }
+                        },
+                        "additionalProperties": false,
+                        "markdownDescription": "三顆 agent 按鈕送進 terminal 的命令,可含旗標(例如 `claude --dangerously-skip-permissions`)。非字串或空白值 fallback 回同名 CLI。"
                     }
                 }
             }
@@ -676,6 +738,54 @@
                 "command": "superset.editorLayoutShapeReset",
                 "title": "Superset: Reset Editor Grid Shape",
                 "icon": "$(debug-restart)"
+            },
+            {
+                "command": "superset.cliLauncherAddPath",
+                "title": "Pin Path",
+                "category": "CLI",
+                "icon": "$(add)"
+            },
+            {
+                "command": "superset.cliLauncherRemovePath",
+                "title": "Unpin Path",
+                "category": "CLI",
+                "icon": "$(trash)"
+            },
+            {
+                "command": "superset.cliLauncherRefresh",
+                "title": "Refresh",
+                "category": "CLI",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "superset.cliLauncherOpen",
+                "title": "Open Terminal at Path",
+                "category": "CLI",
+                "icon": "$(terminal)"
+            },
+            {
+                "command": "superset.cliLauncherCopyAllPaths",
+                "title": "Copy All Paths",
+                "category": "CLI",
+                "icon": "$(copy)"
+            },
+            {
+                "command": "superset.cliLauncherRunClaude",
+                "title": "Open with Claude",
+                "category": "CLI",
+                "icon": "$(sparkle)"
+            },
+            {
+                "command": "superset.cliLauncherRunCodex",
+                "title": "Open with Codex",
+                "category": "CLI",
+                "icon": "$(rocket)"
+            },
+            {
+                "command": "superset.cliLauncherRunGrok",
+                "title": "Open with Grok",
+                "category": "CLI",
+                "icon": "$(zap)"
             }
         ],
         "viewsContainers": {
@@ -689,6 +799,11 @@
                     "id": "superset-overall",
                     "title": "Overall",
                     "icon": "$(list-unordered)"
+                },
+                {
+                    "id": "cli",
+                    "title": "CLI",
+                    "icon": "pkg/resources/cli.svg"
                 }
             ]
         },
@@ -743,8 +858,21 @@
                     "contextualTitle": "Overall",
                     "visibility": "visible"
                 }
+            ],
+            "cli": [
+                {
+                    "id": "superset.cliLauncher.paths",
+                    "name": "Paths",
+                    "contextualTitle": "CLI"
+                }
             ]
         },
+        "viewsWelcome": [
+            {
+                "view": "superset.cliLauncher.paths",
+                "contents": "找不到可列出的資料夾。預設會掃描 `~/projects` 底下的兩層資料夾,可用 `superset.cliLauncher.roots` 換成其他根目錄。\n[釘選路徑](command:superset.cliLauncherAddPath)"
+            }
+        ],
         "menus": {
             "view/title": [
                 {
@@ -896,6 +1024,21 @@
                     "command": "superset.projectsTodoOpen",
                     "when": "view == superset.projectsTodo",
                     "group": "navigation@6"
+                },
+                {
+                    "command": "superset.cliLauncherAddPath",
+                    "when": "view == superset.cliLauncher.paths",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "superset.cliLauncherCopyAllPaths",
+                    "when": "view == superset.cliLauncher.paths",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "superset.cliLauncherRefresh",
+                    "when": "view == superset.cliLauncher.paths",
+                    "group": "navigation@3"
                 }
             ],
             "view/item/context": [
@@ -1158,6 +1301,31 @@
                     "command": "superset.openProject",
                     "when": "viewItem == projectsTodoProject",
                     "group": "inline"
+                },
+                {
+                    "command": "superset.cliLauncherRunClaude",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "superset.cliLauncherRunCodex",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "superset.cliLauncherRunGrok",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "group": "inline@3"
+                },
+                {
+                    "command": "superset.cliLauncherOpen",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "group": "1_run@1"
+                },
+                {
+                    "command": "superset.cliLauncherRemovePath",
+                    "when": "view == superset.cliLauncher.paths && viewItem == superset.cliLauncher.entry",
+                    "group": "2_modify@1"
                 }
             ],
             "explorer/context": [
@@ -1218,6 +1386,21 @@
                 "key": "ctrl+alt+shift+v",
                 "mac": "ctrl+alt+shift+v",
                 "when": "editorIsOpen"
+            },
+            {
+                "command": "superset.cliLauncherRunClaude",
+                "key": "ctrl+1",
+                "when": "focusedView == superset.cliLauncher.paths"
+            },
+            {
+                "command": "superset.cliLauncherRunCodex",
+                "key": "ctrl+2",
+                "when": "focusedView == superset.cliLauncher.paths"
+            },
+            {
+                "command": "superset.cliLauncherRunGrok",
+                "key": "ctrl+3",
+                "when": "focusedView == superset.cliLauncher.paths"
             }
         ]
     },

@@ -15,6 +15,7 @@ import { projectsTodoPlugin } from "./projectsTodo/plugin";
 import { gitPlugin } from "./git/plugin";
 import { editorLayoutPlugin } from "./editorLayout/plugin";
 import { diskUsagePlugin } from "./diskUsage/plugin";
+import { cliLauncherPlugin } from "./cliLauncher/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
 import { panelLayoutPlugin } from "./panelLayout/plugin";
 import {
@@ -118,6 +119,7 @@ export async function activate(
         gitPlugin,
         editorLayoutPlugin,
         diskUsagePlugin,
+        cliLauncherPlugin,
         globalCommandsPlugin,
         panelLayoutPlugin,
     ];

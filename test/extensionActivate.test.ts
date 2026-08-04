@@ -29,6 +29,21 @@ vi.mock("vscode", () => {
             parse: (s: string) => ({ fsPath: s, scheme: "url", path: s }),
         },
         TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
+        // `cliLauncher/tree.ts` subclasses TreeItem at module scope, so this
+        // has to exist before `extension.ts` finishes importing.
+        TreeItem: class TreeItem {
+            constructor(
+                public label: string,
+                public collapsibleState?: number
+            ) {}
+        },
+        MarkdownString: class MarkdownString {
+            constructor(public value: string) {}
+        },
+        ThemeIcon: class ThemeIcon {
+            constructor(public id: string) {}
+        },
+        ViewColumn: { Active: -1 },
         window: {
             createOutputChannel: () => ({
                 appendLine: noop,
@@ -62,10 +77,17 @@ vi.mock("vscode", () => {
             showErrorMessage: async () => undefined,
             showInputBox: async () => undefined,
             showQuickPick: async () => undefined,
+            // Terminal lifecycle edges — cliLauncher subscribes to these at
+            // activation so it knows when a launched agent has finished.
+            onDidCloseTerminal: () => noopDisposable,
+            onDidStartTerminalShellExecution: () => noopDisposable,
+            onDidEndTerminalShellExecution: () => noopDisposable,
+            onDidChangeTerminalShellIntegration: () => noopDisposable,
         },
         workspace: {
             workspaceFolders: [{ uri: { fsPath: "/ws" } }],
             onDidChangeWorkspaceFolders: () => noopDisposable,
+            onDidChangeConfiguration: () => noopDisposable,
             createFileSystemWatcher: () => ({
                 onDidChange: () => noopDisposable,
                 onDidCreate: () => noopDisposable,
@@ -222,6 +244,33 @@ describe("extension activation via PluginManager", () => {
         const viewIds = createTreeView.mock.calls.map((call) => call[0]);
         expect(viewIds).toContain("superset.workspaceTodo");
         expect(viewIds).toContain("superset.projectsTodo");
+    });
+
+    it("registers the CLI Launcher view and its agent commands", async () => {
+        const ext = fakeExtCtx();
+        const createTreeView = vi.mocked(vscode.window.createTreeView);
+        createTreeView.mockClear();
+
+        await activate(ext);
+
+        const viewIds = createTreeView.mock.calls.map((call) => call[0]);
+        expect(viewIds).toContain("superset.cliLauncher.paths");
+        const cmds = (vscode as unknown as { __commands: Map<string, unknown> })
+            .__commands;
+        for (const id of [
+            "superset.cliLauncherRunClaude",
+            "superset.cliLauncherRunCodex",
+            "superset.cliLauncherRunGrok",
+            "superset.cliLauncherOpen",
+            "superset.cliLauncherAddPath",
+            "superset.cliLauncherRemovePath",
+            "superset.cliLauncherCopyAllPaths",
+            "superset.cliLauncherRefresh",
+        ]) {
+            expect(cmds.has(id), `missing CLI Launcher command: ${id}`).toBe(
+                true
+            );
+        }
     });
 
     it("deactivate() releases manager-owned resources and global roots", async () => {
