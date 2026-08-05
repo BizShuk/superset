@@ -1,5 +1,5 @@
 // linkUtils — the single source of truth for todo-link parsing/resolution
-// helpers shared by the `todo` and `projectsTodo` panels (and the
+// helpers shared by the `todo` panel (and the
 // `todoEngine` command factory that serves both).
 //
 // History: `extractLink` / `resolveTodoLink` / `cleanLabelText` previously

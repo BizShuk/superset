@@ -1,6 +1,6 @@
 // TreeViewRegistry — runtime registry for every `vscode.TreeView` the
 // extension owns. Panels (terminals / mdns / topology / todo /
-// projectsTodo / future settings) register their view via
+// future settings) register their view via
 // `ctx.registerTreeView(viewId, treeView, treeDataProvider)` and the
 // `superset.revealInTree` command can then walk any panel's tree to
 // locate and focus a specific item by predicate.
@@ -137,16 +137,11 @@ export class TreeViewRegistry {
             return false;
         }
         // Best-effort focus the parent container + the inner view.
-        // The view container id is the viewId's prefix (`superset.`
-        // → `superset` and `superset-overall`). Both focus calls
-        // are wrapped in try/catch because the view might not be
-        // visible in the current layout.
+        // Every registered TreeView lives in the `superset` container.
+        // Both focus calls are wrapped in try/catch because the view
+        // might not be visible in the current layout.
         try {
-            const containerId = viewId.startsWith("superset.")
-                ? viewId.split(".")[0] === "superset"
-                    ? "superset"
-                    : "superset-overall"
-                : "superset";
+            const containerId = "superset";
             await import("vscode").then((vs) =>
                 vs.commands.executeCommand(
                     `workbench.view.extension.${containerId}`

@@ -22,6 +22,7 @@ vi.mock("vscode", () => {
     const noop = () => {};
     const noopDisposable = { dispose: noop };
     const commands = new Map<string, (...args: unknown[]) => unknown>();
+    const executedCommands: Array<[string, ...unknown[]]> = [];
     return {
         EventEmitter,
         Uri: {
@@ -41,6 +42,9 @@ vi.mock("vscode", () => {
             constructor(public value: string) {}
         },
         ThemeIcon: class ThemeIcon {
+            constructor(public id: string) {}
+        },
+        ThemeColor: class ThemeColor {
             constructor(public id: string) {}
         },
         ViewColumn: { Active: -1 },
@@ -69,6 +73,7 @@ vi.mock("vscode", () => {
                 onDidChangeVisibility: () => ({
                     dispose: () => undefined,
                 }),
+                selection: [],
                 title: "",
                 dispose: noop,
             })),
@@ -107,6 +112,7 @@ vi.mock("vscode", () => {
                 return { dispose: () => commands.delete(id) };
             },
             executeCommand: async (id: string, ...args: unknown[]) => {
+                executedCommands.push([id, ...args]);
                 const cb = commands.get(id);
                 if (cb) return cb(...args);
             },
@@ -115,14 +121,19 @@ vi.mock("vscode", () => {
         Disposable: { from: () => noopDisposable },
         // Test helpers
         __commands: commands,
+        __executedCommands: executedCommands,
         __outputDisposeCount: () => outputDisposeCount,
         __resetTestState: () => {
             commands.clear();
+            executedCommands.length = 0;
             outputDisposeCount = 0;
         },
     };
 });
 
+import { access, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as vscode from "vscode";
 import {
@@ -203,7 +214,6 @@ describe("extension activation via PluginManager", () => {
         for (const id of [
             "superset.resetCaches",
             "superset.focusView",
-            "superset.focusOverallView",
             "superset.showLogs",
             "superset.focusPanel",
             "superset.installDefaultTools",
@@ -234,7 +244,7 @@ describe("extension activation via PluginManager", () => {
         expect(cmds.has("superset.topologyScan")).toBe(true);
     });
 
-    it("registers both Overall TODO TreeViews", async () => {
+    it("does not register the removed Overall TreeViews", async () => {
         const ext = fakeExtCtx();
         const createTreeView = vi.mocked(vscode.window.createTreeView);
         createTreeView.mockClear();
@@ -242,8 +252,8 @@ describe("extension activation via PluginManager", () => {
         await activate(ext);
 
         const viewIds = createTreeView.mock.calls.map((call) => call[0]);
-        expect(viewIds).toContain("superset.workspaceTodo");
-        expect(viewIds).toContain("superset.projectsTodo");
+        expect(viewIds).not.toContain("superset.workspaceTodo");
+        expect(viewIds).not.toContain("superset.projectsTodo");
     });
 
     it("registers the CLI Launcher view and its agent commands", async () => {
@@ -262,6 +272,8 @@ describe("extension activation via PluginManager", () => {
             "superset.cliLauncherRunCodex",
             "superset.cliLauncherRunGrok",
             "superset.cliLauncherOpen",
+            "superset.cliLauncherOpenNewWindow",
+            "superset.cliLauncherCreateSubfolder",
             "superset.cliLauncherAddPath",
             "superset.cliLauncherRemovePath",
             "superset.cliLauncherRestoreHidden",
@@ -273,6 +285,166 @@ describe("extension activation via PluginManager", () => {
             expect(cmds.has(id), `missing CLI Launcher command: ${id}`).toBe(
                 true
             );
+        }
+    });
+
+    it("returns focus to the CLI panel after accepting a filter", async () => {
+        const input = vi
+            .spyOn(vscode.window, "showInputBox")
+            .mockResolvedValueOnce("platform");
+
+        try {
+            await activate(fakeExtCtx());
+            const testApi = vscode as unknown as {
+                __commands: Map<string, () => unknown>;
+                __executedCommands: Array<[string, ...unknown[]]>;
+            };
+
+            await testApi.__commands.get("superset.cliLauncherFilter")?.();
+
+            expect(testApi.__executedCommands).toContainEqual([
+                "superset.cliLauncher.paths.focus",
+            ]);
+        } finally {
+            input.mockRestore();
+        }
+    });
+
+    it("opens every selected CLI path in a new VS Code window", async () => {
+        const ext = fakeExtCtx();
+        await activate(ext);
+
+        const testApi = vscode as unknown as {
+            __commands: Map<string, (...args: unknown[]) => unknown>;
+            __executedCommands: Array<[string, ...unknown[]]>;
+        };
+        const command = testApi.__commands.get(
+            "superset.cliLauncherOpenNewWindow"
+        );
+        expect(command).toBeDefined();
+
+        await command?.(
+            { entry: { id: "/projects/one", label: "one", path: "/projects/one" } },
+            [{ path: "/projects/one" }, { path: "/projects/two" }]
+        );
+
+        expect(
+            testApi.__executedCommands.filter(
+                ([id]) => id === "vscode.openFolder"
+            )
+        ).toEqual([
+            [
+                "vscode.openFolder",
+                {
+                    fsPath: "/projects/one",
+                    scheme: "file",
+                    path: "/projects/one",
+                },
+                { forceNewWindow: true },
+            ],
+            [
+                "vscode.openFolder",
+                {
+                    fsPath: "/projects/two",
+                    scheme: "file",
+                    path: "/projects/two",
+                },
+                { forceNewWindow: true },
+            ],
+        ]);
+    });
+
+    it("creates one direct subfolder under every selected CLI path", async () => {
+        const sandbox = await mkdtemp(
+            join(tmpdir(), "superset-subfolder-")
+        );
+        const parentA = join(sandbox, "one");
+        const parentB = join(sandbox, "two");
+        await mkdir(parentA);
+        await mkdir(parentB);
+        const input = vi
+            .spyOn(vscode.window, "showInputBox")
+            .mockResolvedValueOnce("  child  ");
+        const createTreeView = vi.mocked(vscode.window.createTreeView);
+        createTreeView.mockClear();
+
+        try {
+            await activate(fakeExtCtx());
+            const testApi = vscode as unknown as {
+                __commands: Map<string, (...args: unknown[]) => unknown>;
+            };
+            const command = testApi.__commands.get(
+                "superset.cliLauncherCreateSubfolder"
+            );
+            expect(command).toBeDefined();
+
+            const cliCall = createTreeView.mock.calls.find(
+                ([viewID]) => viewID === "superset.cliLauncher.paths"
+            );
+            const provider = cliCall?.[1].treeDataProvider as {
+                refresh(): void;
+            };
+            const refresh = vi.spyOn(provider, "refresh");
+
+            await command?.(
+                { path: parentA },
+                [{ path: parentA }, { path: parentB }]
+            );
+
+            await expect(
+                access(join(parentA, "child"))
+            ).resolves.toBeUndefined();
+            await expect(
+                access(join(parentB, "child"))
+            ).resolves.toBeUndefined();
+            expect(refresh).toHaveBeenCalledTimes(1);
+        } finally {
+            input.mockRestore();
+            await rm(sandbox, { recursive: true, force: true });
+        }
+    });
+
+    it("rejects nested input before creating a CLI subfolder", async () => {
+        const sandbox = await mkdtemp(
+            join(tmpdir(), "superset-subfolder-")
+        );
+        const input = vi
+            .spyOn(vscode.window, "showInputBox")
+            .mockResolvedValueOnce("nested/child");
+        const error = vi.spyOn(vscode.window, "showErrorMessage");
+
+        try {
+            await activate(fakeExtCtx());
+            const testApi = vscode as unknown as {
+                __commands: Map<string, (...args: unknown[]) => unknown>;
+            };
+            const command = testApi.__commands.get(
+                "superset.cliLauncherCreateSubfolder"
+            );
+            expect(command).toBeDefined();
+
+            await command?.({ path: sandbox });
+
+            await expect(
+                access(join(sandbox, "nested", "child"))
+            ).rejects.toMatchObject({ code: "ENOENT" });
+            expect(error).toHaveBeenCalledWith(
+                expect.stringContaining("請只輸入一層子資料夾名稱")
+            );
+
+            const options = input.mock.calls[0]?.[0] as vscode.InputBoxOptions;
+            const validate = options.validateInput as (
+                value: string
+            ) => string | undefined;
+            expect(validate("")).toContain("請輸入子資料夾名稱");
+            expect(validate(".")).toContain("不可為 . 或 ..");
+            expect(validate("..")).toContain("不可為 . 或 ..");
+            expect(validate("nested\\child")).toContain("只輸入一層");
+            expect(validate("bad\0name")).toContain("不支援的字元");
+        } finally {
+            input.mockRestore();
+            error.mockRestore();
+            await rm(sandbox, { recursive: true, force: true });
         }
     });
 

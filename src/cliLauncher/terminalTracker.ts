@@ -7,6 +7,7 @@
 
 import * as vscode from "vscode";
 import type { AgentId } from "./command";
+import { isDescendantPath } from "./entries";
 import { log } from "./log";
 
 export type CLITerminalPhase = "idle" | "pending" | "running";
@@ -126,6 +127,28 @@ export class CLITerminalTracker implements vscode.Disposable {
             }
         }
         return found;
+    }
+
+    /**
+     * 這個路徑`與其所有子孫路徑`目前存活的 terminal 數。
+     *
+     * 面板的父列以此計數:第二層資料夾開著 terminal 時,收合的第一層若只算自己
+     * 就顯示 0,看起來像沒有東西在跑。字首比對而不是加總已顯示的子列 —— 尚未
+     * 展開 (因此還沒建立 tree item) 的子路徑一樣要算進去。
+     */
+    countUnderPath(path: string): number {
+        let count = 0;
+        for (const [trackedPath, records] of this.paths) {
+            if (trackedPath !== path && !isDescendantPath(path, trackedPath)) {
+                continue;
+            }
+            for (const tracked of records) {
+                if (tracked.terminal.exitStatus === undefined) {
+                    count += 1;
+                }
+            }
+        }
+        return count;
     }
 
     dispose(): void {

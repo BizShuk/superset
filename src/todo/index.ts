@@ -1,8 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import type { FeatureContext, FeatureHandle } from "../shared";
-import { ProjectsTodoStore } from "../projectsTodo/projectsTodoStore";
-import { ProjectsTodoTreeProvider } from "../projectsTodo/projectsTodoTreeProvider";
+import { WorkspaceTodoStore } from "./workspaceTodoStore";
+import { WorkspaceTodoTreeProvider } from "./workspaceTodoTreeProvider";
+import { invokeTodoStoreMutation } from "./storeDispatch";
 import { computeTodoBadgeTitle } from "./badge";
 import {
     completePlan as completePlanFs,
@@ -11,7 +12,7 @@ import {
     deletePlan as deletePlanFs,
 } from "./planActions";
 import { formatPlanCopyText } from "./plansSource";
-import type { TodoItem } from "./types";
+import type { TodoItem, WorkspaceTodoItem } from "./types";
 import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import {
@@ -25,9 +26,8 @@ import {
 } from "../todoEngine";
 
 const TODO_VIEW_TITLE = "TODO";
-// SuperSet TODO 專用空狀態文案 — 與 Overall Workspace TODO 走同樣
-// 的 scan 邊界(maxDepth + includeRoot=true),所以這裡直接沿用
-// 「workspace subdirs」的措辭,不再提「immediate」之類 depth-1 語意。
+// TODO 面板的空狀態文案 — scan 邊界是 maxDepth + includeRoot=true,
+// 所以措辭用「workspace subdirs」,不提「immediate」之類 depth-1 語意。
 const SUPER_SET_EMPTY_COPY =
     "No README.todo files in this workspace — drop a README.todo into a subdirectory to add it here.";
 
@@ -35,28 +35,23 @@ const SUPER_SET_EMPTY_COPY =
  * SuperSet TODO panel — 取代原本的「讀 workspace root README.todo」
  * 單檔行為,改用 workspace 內部掃描:
  *
- * - 從當前 workspace 根目錄出發,沿用與 Overall Workspace TODO
- *   相同的 `superset.projectsTodo.maxDepth` 設定(預設 5,範圍
- *   1–10),includeRoot = true(workspace root 自身也收)。
- *   設定變更時自動重新掃描。
+ * - 從當前 workspace 根目錄出發,依 `superset.todo.maxDepth`
+ *   設定(預設 5,範圍 1–10)遞迴,includeRoot = true(workspace
+ *   root 自身也收)。設定變更時自動重新掃描。
  * - 每個含 `README.todo` 的子目錄作為一個 project row,內含
- *   sections + Plans(對齊 Workspace TODO view 既有行為)。
+ *   sections + Plans。
  * - 保留 `src/todo/` 既有的所有 title buttons:View: Section /
  *   Priority / File、New TODO、Filter P0/P1/P2、Hide Completed /
  *   Show All、Open README.todo — 共 29 個 `superset.todo*` 命令。
- *   這是 SuperSet TODO 與 Overall Workspace TODO 唯一的功能差異:
- *   同一個 scan 邊界,但前者提供 view-type 切換,後者只有 section。
- * - row context menu 與 inline action 行為不變(`projectsTodo*`
- *   context values 已涵蓋 `superset.todo` view 因為兩個 panel
- *   共用同一個 provider)。
+ * - row context menu 與 inline action 都綁在 `todo*` context values
+ *   上,由同一組 `superset.todo*` 命令服務。
  */
 export function register(ctx: FeatureContext): FeatureHandle {
-    const store = new ProjectsTodoStore();
-    const provider = new ProjectsTodoTreeProvider(
+    const store = new WorkspaceTodoStore();
+    const provider = new WorkspaceTodoTreeProvider(
         store,
         ctx.workspaceFolder,
         ctx.context.extensionUri,
-        "workspace",
         SUPER_SET_EMPTY_COPY,
     );
     provider.start();
@@ -116,14 +111,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // Push initial state.
     refreshTodoFilterBadge();
 
-    // Workspace scan — 與 Overall Workspace TODO 同步:
-    // - 讀取 `superset.projectsTodo.maxDepth` 設定(預設 5,範圍 1–10)
+    // Workspace scan:
+    // - 讀取 `superset.todo.maxDepth` 設定(預設 5,範圍 1–10)
     // - `includeRoot = true`(workspace root 自身也收)
     // - 設定變更時自動重新掃描
-    //
-    // 兩個 panel 共用同一條 scan 邊界,差異只剩 SuperSet TODO 提供
-    // view-type 切換(View Sec/PX/File)。
-    const configSection = "superset.projectsTodo";
+    const configSection = "superset.todo";
     const readMaxDepth = (): number => {
         const v = vscode.workspace
             .getConfiguration(configSection)
@@ -232,9 +224,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     };
 
     // dispatchItem routes a per-row mutation through the owning
-    // sub-store. Mirrors the helper used by `src/projectsTodo/index.ts`
-    // but is scoped to the workspace store map only — `~/projects`
-    // projects are not visible from this panel.
+    // sub-store. Scope is the workspace store map only.
     const dispatchItem = async (
         kind:
             | "toggle"
@@ -252,8 +242,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
     ): Promise<void> => {
         const sub = getSubStore(item.projectPath);
         if (!sub) return;
-        const fn = (sub as unknown as Record<string, (...a: unknown[]) => unknown>)[kind];
-        if (typeof fn === "function") await fn(item, ...rest);
+        // `TodoStore` methods read instance state (`this.repository`);
+        // dispatch through the shared helper so the receiver survives.
+        await invokeTodoStoreMutation(sub, kind, item, ...rest);
     };
 
     // Pick a sub-project path — prefer the row's `projectPath`,
@@ -438,6 +429,23 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     });
 
+    // Open a sub-project folder in a new window. Wired to the inline
+    // `$(folder-opened)` icon for `viewItem == todoProject` and
+    // `viewItem == todoPlan` in `package.json`.
+    const openProjectCmd = vscode.commands.registerCommand(
+        "superset.openProject",
+        async (item?: WorkspaceTodoItem) => {
+            const projectPath = item?.projectPath;
+            // Synthetic wrapper rows carry an empty `projectPath` —
+            // never open one (it would resolve to the process cwd).
+            if (!projectPath) return;
+            const uri = vscode.Uri.file(projectPath);
+            await vscode.commands.executeCommand("vscode.openFolder", uri, {
+                forceNewWindow: true,
+            });
+        }
+    );
+
     // Push initial priority-filter context keys. The factory's
     // `syncPriorityContext()` also pushes them whenever a FilterP*
     // command fires, so this initial call keeps the menu icons
@@ -446,6 +454,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     ctx.subscriptions.push(
         view,
+        openProjectCmd,
         visibilitySub,
         workspaceTodoWatcher,
         plansWatcher,
@@ -471,6 +480,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             provider.stop();
             // Factory disposes its own registered commands via
             // `todoFactorySet.disposables` above.
+            openProjectCmd.dispose();
             view.dispose();
             workspaceTodoWatcher.dispose();
             plansWatcher.dispose();

@@ -43,7 +43,7 @@ vi.mock("vscode", () => ({
 const vscode = await import("vscode");
 
 function makeCtx(
-    prefix: "todo" | "projectsTodo" = "todo",
+    prefix: "todo" = "todo",
     overrides: Partial<TodoCommandContext> = {}
 ): TodoCommandContext {
     const calls = {
@@ -193,17 +193,6 @@ describe("createTodoCommands", () => {
         expect(ids).toContain("superset.todoFilterP2On");
     });
 
-    it("emits 25 commands for the `projectsTodo` prefix", () => {
-        const ctx = makeCtx("projectsTodo");
-        createTodoCommands(ctx);
-        const ids = registerSpy.mock.calls.map((c) => c[0] as string);
-        for (const id of ids) {
-            expect(id.startsWith("superset.projectsTodo")).toBe(true);
-        }
-        expect(ids).toContain("superset.projectsTodoToggle");
-        expect(ids).toContain("superset.projectsTodoOpen");
-    });
-
     it("returns disposables that can be disposed without error", () => {
         const ctx = makeCtx();
         const set = createTodoCommands(ctx);
@@ -213,19 +202,19 @@ describe("createTodoCommands", () => {
     });
 
     it("syncPriorityContext pushes three context keys with the prefix", () => {
-        const ctx = makeCtx("projectsTodo");
+        const ctx = makeCtx("todo");
         const set = createTodoCommands(ctx);
         set.syncPriorityContext();
         expect(setContext).toHaveBeenCalledWith(
-            "projectsTodo.filterP0",
+            "todo.filterP0",
             expect.anything()
         );
         expect(setContext).toHaveBeenCalledWith(
-            "projectsTodo.filterP1",
+            "todo.filterP1",
             expect.anything()
         );
         expect(setContext).toHaveBeenCalledWith(
-            "projectsTodo.filterP2",
+            "todo.filterP2",
             expect.anything()
         );
     });
@@ -456,24 +445,4 @@ describe("createTodoCommands", () => {
         );
     });
 
-    it("projectsTodoCopy handler also writes label + link target", async () => {
-        const ctx = makeCtx("projectsTodo");
-        createTodoCommands(ctx);
-        const copy = registerSpy.mock.calls.find(
-            (c) => c[0] === "superset.projectsTodoCopy"
-        )?.[1] as (item: unknown) => Promise<void>;
-        const writeText = (vscode.env.clipboard as any).writeText as ReturnType<typeof vi.fn>;
-        writeText.mockClear();
-
-        await copy({
-            line: 1,
-            text: "[Open](https://p.example)",
-            checked: false,
-            kind: "checkboxWithLink",
-        });
-
-        expect(writeText).toHaveBeenCalledWith(
-            "[Open](https://p.example)\nhttps://p.example"
-        );
-    });
 });

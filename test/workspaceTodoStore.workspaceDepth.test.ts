@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ProjectsTodoStore } from "../src/projectsTodo/projectsTodoStore";
+import { WorkspaceTodoStore } from "../src/todo/workspaceTodoStore";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -14,7 +14,7 @@ import { tmpdir } from "os";
  * These tests pin both branches so the rewrite of `src/todo/index.ts`
  * (and any future regression on the contract) is caught here.
  */
-describe("ProjectsTodoStore.loadWorkspaceTodos — includeRoot flag", () => {
+describe("WorkspaceTodoStore.loadWorkspaceTodos — includeRoot flag", () => {
     let tempDir: string;
     let workspaceRoot: string;
 
@@ -50,7 +50,7 @@ describe("ProjectsTodoStore.loadWorkspaceTodos — includeRoot flag", () => {
             "# Root\n- [ ] root-only\n",
         );
 
-        const store = new ProjectsTodoStore();
+        const store = new WorkspaceTodoStore();
         await store.loadWorkspaceTodos(workspaceRoot, 1, false);
 
         expect(store.getWorkspaceStores().has(workspaceRoot)).toBe(false);
@@ -68,7 +68,7 @@ describe("ProjectsTodoStore.loadWorkspaceTodos — includeRoot flag", () => {
             "# Root\n- [ ] root-only\n",
         );
 
-        const store = new ProjectsTodoStore();
+        const store = new WorkspaceTodoStore();
         await store.loadWorkspaceTodos(workspaceRoot, 1, true);
 
         const paths = [...store.getWorkspaceStores().keys()].sort();
@@ -77,7 +77,7 @@ describe("ProjectsTodoStore.loadWorkspaceTodos — includeRoot flag", () => {
     });
 
     it("maxDepth < 1 clears prior workspace stores without throwing", async () => {
-        const store = new ProjectsTodoStore();
+        const store = new WorkspaceTodoStore();
         // Seed with a valid scan first.
         await store.loadWorkspaceTodos(workspaceRoot, 1, false);
         expect(store.getWorkspaceStores().size).toBe(2);
@@ -91,7 +91,7 @@ describe("ProjectsTodoStore.loadWorkspaceTodos — includeRoot flag", () => {
     });
 
     it("maxDepth controls how deep the recursion goes (depth-2 not reached at maxDepth=1)", async () => {
-        const store = new ProjectsTodoStore();
+        const store = new WorkspaceTodoStore();
         await store.loadWorkspaceTodos(workspaceRoot, 1, false);
 
         // child-a/nested/README.todo exists but must NOT appear.

@@ -1,10 +1,10 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import type { ProjectTodoItem } from "./types";
-import type { ProjectsTodoStore } from "./projectsTodoStore";
-import { isArchivedSubsection, cleanTags, isArchivedTask } from "../todo/parser";
-import { filterCompleted, applyPriorityFilter } from "../todo/todoTreeProvider";
-import { makePlansSection, planInfoToTodoItem } from "../todo/plansSource";
+import type { WorkspaceTodoItem } from "./types";
+import type { WorkspaceTodoStore } from "./workspaceTodoStore";
+import { isArchivedSubsection, cleanTags, isArchivedTask } from "./parser";
+import { filterCompleted, applyPriorityFilter } from "./todoTreeProvider";
+import { makePlansSection, planInfoToTodoItem } from "./plansSource";
 import {
     countPending,
     sortSiblings,
@@ -17,13 +17,13 @@ import { extractLink } from "../todoEngine/linkUtils";
 
 /**
  * vscode-bound TreeDataProvider for the Projects TODO list.
- * Reads from a ProjectsTodoStore (which reads from multiple README.todo files).
+ * Reads from a WorkspaceTodoStore (which reads from multiple README.todo files).
  */
-export class ProjectsTodoTreeProvider
-    implements vscode.TreeDataProvider<ProjectTodoItem>
+export class WorkspaceTodoTreeProvider
+    implements vscode.TreeDataProvider<WorkspaceTodoItem>
 {
     private readonly emitter = new vscode.EventEmitter<
-        ProjectTodoItem | ProjectTodoItem[] | undefined
+        WorkspaceTodoItem | WorkspaceTodoItem[] | undefined
     >();
     readonly onDidChangeTreeData = this.emitter.event;
 
@@ -33,27 +33,19 @@ export class ProjectsTodoTreeProvider
     private viewType: "section" | "priority" | "file" = "section";
 
     constructor(
-        private readonly store: ProjectsTodoStore,
+        private readonly store: WorkspaceTodoStore,
         /**
          * 當前開啟的 VSCode workspace 絕對路徑。TreeProvider 用來把
          * workspace sub-project 的 `projectPath` 折算成相對路徑
          * (例如 `src/todo` 而不是 `todo`),讓巢狀結構一眼可見。
          * 未提供時,workspace section 仍會出現,但 sub-project 退用
-         * basename(對齊既有 `~/projects` project row 行為)。
+         * basename。
          */
         private readonly workspaceRoot?: string,
         private readonly extensionUri?: vscode.Uri,
         /**
-         * Root rendering mode:
-         * - projects: existing ~/projects overview view
-         * - workspace: current-workspace-only sub-panel view
-         */
-        private readonly rootMode: "projects" | "workspace" = "projects",
-        /**
          * Optional override for the workspace empty-state placeholder
-         * text. Panels that mount this provider with their own copy
-         * (e.g. the SuperSet TODO panel) pass a custom string;
-         * `superset.workspaceTodo` keeps the default.
+         * text.
          */
         private readonly emptyStateCopy?: string,
     ) {}
@@ -124,7 +116,7 @@ export class ProjectsTodoTreeProvider
         return this.enabledPriorities.has(p);
     }
 
-    getTreeItem(element: ProjectTodoItem): vscode.TreeItem {
+    getTreeItem(element: WorkspaceTodoItem): vscode.TreeItem {
         // 0. Plan item — synthetic entry from plans/<file>.md.
         // Symmetric with the local `todoPlan` rendering: file icon,
         // description = title, no `command` (open happens via the
@@ -137,21 +129,19 @@ export class ProjectsTodoTreeProvider
             item.description = element.description;
             item.tooltip = `${element.description ?? element.text}\n${element.filePath ?? ""}`;
             item.collapsibleState = vscode.TreeItemCollapsibleState.None;
-            item.contextValue = "projectsTodoPlan";
+            item.contextValue = "todoPlan";
             item.checkboxState = vscode.TreeItemCheckboxState.Unchecked;
             return item;
         }
 
-        // 1. If it's a project section node (~/projects projects use
-        // line === -1, workspace sub-projects use line === -2 so they
-        // can be rendered with the same folder/pending semantics while
-        // carrying a relative path label instead of a basename).
-        const isProjectNode = (element.line === -1 || element.line === -2) &&
+        // 1. If it's a sub-project section node. Workspace sub-projects
+        // use line === -2 so they can be rendered with folder/pending
+        // semantics while carrying a relative path label.
+        const isProjectNode = element.line === -2 &&
             element.projectPath &&
-            // ~/projects project rows: text === basename(projectPath)
-            // Workspace sub-project rows: text === path.relative(workspaceRoot, projectPath)
+            // text === basename(projectPath) 或 relative(workspaceRoot, projectPath)
             (element.text === path.basename(element.projectPath) ||
-                (element.line === -2 && element.text.includes(path.sep) && this.workspaceRoot !== undefined));
+                (element.text.includes(path.sep) && this.workspaceRoot !== undefined));
         if (isProjectNode) {
             const item = new vscode.TreeItem(element.text);
             item.iconPath = new vscode.ThemeIcon("folder");
@@ -172,7 +162,7 @@ export class ProjectsTodoTreeProvider
             // about. Empty children would also collapse here, but the
             // Collapsed default already covers both cases.
             item.collapsibleState = vscode.TreeItemCollapsibleState.Collapsed;
-            item.contextValue = "projectsTodoProject";
+            item.contextValue = "todoProject";
             // No item.command — clicking the row text folds/unfolds the section.
             // Opening the project is an inline button (see package.json menus).
             return item;
@@ -203,7 +193,7 @@ export class ProjectsTodoTreeProvider
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
             // Reserved contextValue for future menu wiring (e.g. a
             // refresh button) — no menu entries are bound to it yet.
-            item.contextValue = "projectsTodoWorkspaceSection";
+            item.contextValue = "todoWorkspaceSection";
             return item;
         }
 
@@ -219,7 +209,7 @@ export class ProjectsTodoTreeProvider
                 item.description = `${planCount} plan${planCount === 1 ? "" : "s"}`;
                 item.tooltip = "Design documents under ./plans/";
                 item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
-                item.contextValue = "projectsTodoPlansSection";
+                item.contextValue = "todoPlansSection";
                 return item;
             }
             const item = new vscode.TreeItem(element.text);
@@ -238,7 +228,7 @@ export class ProjectsTodoTreeProvider
             // respects the active filter. Archive sub-sections are
             // skipped — by definition they hold finished work, so a
             // "0 ◐" badge is noise rather than signal.
-            if (sectionContext !== "projectsTodoSectionArchived") {
+            if (sectionContext !== "todoSectionArchived") {
                 const pending = countPending(element.children);
                 item.description = `${pending} ◐`;
             }
@@ -277,7 +267,7 @@ export class ProjectsTodoTreeProvider
                 isArchivedTask(element.text) ||
                 element.parentSection?.toLowerCase() === "archive";
             item.contextValue = dispatchContextValue({
-                prefix: "projectsTodo",
+                prefix: "todo",
                 kind: "list",
                 isArchived,
                 hasLink,
@@ -315,7 +305,7 @@ export class ProjectsTodoTreeProvider
             isArchivedTask(element.text) ||
             element.parentSection?.toLowerCase() === "archive";
         item.contextValue = dispatchContextValue({
-            prefix: "projectsTodo",
+            prefix: "todo",
             kind: "checkbox",
             isArchived,
             hasLink,
@@ -323,146 +313,41 @@ export class ProjectsTodoTreeProvider
         return item;
     }
 
-    private computeSectionContextValue(element: ProjectTodoItem): string {
-        if (element.level === undefined) return "projectsTodoSection";
-        if (element.level === 2 && element.text.toLowerCase() === "archive") return "projectsTodoSection";
+    private computeSectionContextValue(element: WorkspaceTodoItem): string {
+        if (element.level === undefined) return "todoSection";
+        if (element.level === 2 && element.text.toLowerCase() === "archive") return "todoSection";
         
-        const subStore = this.store.getStore(element.projectPath);
+        const subStore = this.store.getWorkspaceStore(element.projectPath);
         if (subStore && isArchivedSubsection(subStore.getItems(), element)) {
-            return "projectsTodoSectionArchived";
+            return "todoSectionArchived";
         }
-        return "projectsTodoSectionArchivable";
+        return "todoSectionArchivable";
     }
 
-    getChildren(element?: ProjectTodoItem): vscode.ProviderResult<ProjectTodoItem[]> {
+    getChildren(element?: WorkspaceTodoItem): vscode.ProviderResult<WorkspaceTodoItem[]> {
         if (element) {
             return sortSiblings(element.children || []);
         }
 
         const workspaceStores = this.store.getWorkspaceStores();
 
-        // Workspace view mode: this provider is mounted as its own
-        // VSCode sub-panel under the Overall viewContainer, so the view
-        // title itself is already the foldable "Workspace TODO" panel.
-        // Therefore root children should be the workspace sub-projects
-        // (or empty-state placeholder) directly — NOT a synthetic wrapper
-        // row inside the tree.
-        if (this.rootMode === "workspace") {
-            if (!this.workspaceRoot) return [];
-            // Section view is the default and the only mode exposed to
-            // `superset.workspaceTodo` (the Overall view's separate
-            // workspace panel never installs view-switch commands).
-            // Priority/file views are reachable from the SuperSet TODO
-            // panel via the View buttons that ship with the local TODO
-            // feature.
-            if (this.viewType === "priority") {
-                return this.buildWorkspacePriorityGroups(workspaceStores);
-            }
-            if (this.viewType === "file") {
-                return this.buildWorkspaceFileGroups(workspaceStores);
-            }
-            return (
-                this.makeWorkspaceSection(
-                    workspaceStores,
-                    this.emptyStateCopy,
-                ).children ?? []
-            );
+        // Root children are the workspace sub-projects (or the
+        // empty-state placeholder) directly — the view title itself is
+        // already the foldable panel, so no synthetic wrapper row is
+        // rendered inside the tree.
+        if (!this.workspaceRoot) return [];
+        if (this.viewType === "priority") {
+            return this.buildWorkspacePriorityGroups(workspaceStores);
         }
-
-        const projectItems: ProjectTodoItem[] = [];
-
-        // Projects view mode: existing ~/projects overview only. The
-        // workspace scan is intentionally NOT rendered here; it has its
-        // own sibling VSCode view panel (`superset.workspaceTodo`) so each
-        // panel can fold independently at the workbench level.
-
-        // Project rows — only projects that actually have a README.todo.
-        // Each project surfaces its own `plans/*.md` as a synthetic
-        // "Plans" sub-section under its row, appended after the
-        // README.todo sections so users can drill into a project and see
-        // its design docs locally. Overview 不再有頂層 merged Plans row
-        // (見 CLAUDE.md invariant);plans 只在各自的 per-project scope
-        // 出現,跨專案的 "what's happening" snapshot 走 `plansSource`
-        // 自己的 panel,不混入本 view。
-        //
-        // 路徑若同時被 workspace scan 收為 sub-project (例如
-        // `~/projects/tmp/superset` 既是 ~/projects project 也是
-        // workspace root),由 workspace panel 顯示,這裡 suppress
-        // 避免同一份 `README.todo` 在兩個 panel 出現。
-        for (const [projectPath, store] of this.store.getStores()) {
-            if (workspaceStores.has(projectPath)) {
-                // Workspace panel already covers this — skip the
-                // ~/projects duplicate so the same content isn't
-                // rendered twice.
-                continue;
-            }
-            const projectName = path.basename(projectPath);
-            const raw = store.getItems();
-
-            // Apply filtering logic using standard filters
-            const completedFiltered = this.showCompleted ? raw : filterCompleted(raw);
-            const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
-
-            // Note: the overview intentionally surfaces EVERY project that
-            // has a `README.todo`, even when the current filter (hide-completed
-            // / priority) leaves zero visible items. The project row stays
-            // (collapsed if its filtered children happen to be empty) so users
-            // see at a glance which projects still have a todo file, regardless
-            // of whether every task is checked, the file is empty, or the
-            // active priority filter excludes all of this project's tasks.
-
-            // Per-project plans: append a synthetic "Plans" section AFTER
-            // the README.todo sections so users can drill into this project
-            // and see its own design docs. Plans survive both filters (no
-            // checked state, no priority tag — see `applyPriorityFilter` /
-            // `filterCompleted` passthrough), so the section appears as
-            // long as the project has any plans at all. When the README.todo
-            // filter leaves zero visible items, this section is the only
-            // thing keeping the project row expanded instead of collapsed.
-            const projectPlans = store.getPlanItems();
-            if (projectPlans.length > 0) {
-                const planChildren: ProjectTodoItem[] = projectPlans.map((p) => {
-                    const base = planInfoToTodoItem(p);
-                    return {
-                        line: base.line,
-                        text: base.text,
-                        description: base.description,
-                        kind: base.kind,
-                        checked: base.checked,
-                        filePath: base.filePath,
-                        parentSection: base.parentSection,
-                        level: base.level,
-                        projectName,
-                        projectPath,
-                    };
-                });
-                filtered.push(makePlansSection(planChildren));
-            }
-
-            // Decorate items with project information
-            const decoratedChildren = decorateItems(filtered, projectName, projectPath);
-
-            const projectItem: ProjectTodoItem = {
-                line: -1,
-                text: projectName,
-                kind: "section",
-                checked: false,
-                children: decoratedChildren,
-                projectName,
-                projectPath,
-            };
-            projectItems.push(projectItem);
+        if (this.viewType === "file") {
+            return this.buildWorkspaceFileGroups(workspaceStores);
         }
-
-        // Sort groups by the folder name where README.todo was found.
-        // Same-name folders use their absolute path as a deterministic tie-breaker.
-        projectItems.sort(
-            (a, b) =>
-                a.text.localeCompare(b.text) ||
-                a.projectPath.localeCompare(b.projectPath),
+        return (
+            this.makeWorkspaceSection(
+                workspaceStores,
+                this.emptyStateCopy,
+            ).children ?? []
         );
-
-        return projectItems;
     }
 
     /**
@@ -476,10 +361,10 @@ export class ProjectsTodoTreeProvider
      * 是否存在」,而不是「當前 filter 下可看見的 task」。
      */
     private makeWorkspaceSection(
-        workspaceStores: Map<string, import("../todo/todoStore").TodoStore>,
+        workspaceStores: Map<string, import("./todoStore").TodoStore>,
         emptyStateCopy?: string,
-    ): ProjectTodoItem {
-        const subProjects: ProjectTodoItem[] = [];
+    ): WorkspaceTodoItem {
+        const subProjects: WorkspaceTodoItem[] = [];
 
         for (const [projectPath, store] of workspaceStores) {
             const projectName = this.workspaceRoot
@@ -494,7 +379,7 @@ export class ProjectsTodoTreeProvider
             // 一覽的同位置處理。
             const projectPlans = store.getPlanItems();
             if (projectPlans.length > 0) {
-                const planChildren: ProjectTodoItem[] = projectPlans.map((p) => {
+                const planChildren: WorkspaceTodoItem[] = projectPlans.map((p) => {
                     const base = planInfoToTodoItem(p);
                     return {
                         line: base.line,
@@ -585,9 +470,9 @@ export class ProjectsTodoTreeProvider
      * the `"None"` bucket, matching the local provider.
      */
     private buildWorkspacePriorityGroups(
-        workspaceStores: Map<string, import("../todo/todoStore").TodoStore>,
-    ): ProjectTodoItem[] {
-        const flat: ProjectTodoItem[] = [];
+        workspaceStores: Map<string, import("./todoStore").TodoStore>,
+    ): WorkspaceTodoItem[] {
+        const flat: WorkspaceTodoItem[] = [];
         for (const [projectPath, store] of workspaceStores) {
             const projectName = this.workspaceRoot
                 ? path.relative(this.workspaceRoot, projectPath) ||
@@ -607,21 +492,21 @@ export class ProjectsTodoTreeProvider
             collectWorkspaceLeafItems(filtered, projectName, projectPath, flat);
         }
 
-        const p0: ProjectTodoItem[] = [];
-        const p1: ProjectTodoItem[] = [];
-        const p2: ProjectTodoItem[] = [];
-        const none: ProjectTodoItem[] = [];
+        const p0: WorkspaceTodoItem[] = [];
+        const p1: WorkspaceTodoItem[] = [];
+        const p2: WorkspaceTodoItem[] = [];
+        const none: WorkspaceTodoItem[] = [];
         for (const item of flat) {
             const m = item.text.match(/^(\[|\()?(P[0-2])(\]|\))?/i);
             const tag = m?.[2]?.toUpperCase();
-            const copy: ProjectTodoItem = { ...item, children: undefined };
+            const copy: WorkspaceTodoItem = { ...item, children: undefined };
             if (tag === "P0") p0.push(copy);
             else if (tag === "P1") p1.push(copy);
             else if (tag === "P2") p2.push(copy);
             else none.push(copy);
         }
 
-        const groups: ProjectTodoItem[] = [];
+        const groups: WorkspaceTodoItem[] = [];
         if (p0.length > 0) {
             groups.push({
                 line: -100,
@@ -678,9 +563,9 @@ export class ProjectsTodoTreeProvider
      * `getWorkspaceFileGroup`'s kind-aware branch.
      */
     private buildWorkspaceFileGroups(
-        workspaceStores: Map<string, import("../todo/todoStore").TodoStore>,
-    ): ProjectTodoItem[] {
-        const flat: ProjectTodoItem[] = [];
+        workspaceStores: Map<string, import("./todoStore").TodoStore>,
+    ): WorkspaceTodoItem[] {
+        const flat: WorkspaceTodoItem[] = [];
         for (const [projectPath, store] of workspaceStores) {
             const projectName = this.workspaceRoot
                 ? path.relative(this.workspaceRoot, projectPath) ||
@@ -702,13 +587,13 @@ export class ProjectsTodoTreeProvider
             {
                 label: string;
                 description?: string;
-                children: ProjectTodoItem[];
+                children: WorkspaceTodoItem[];
             }
         >();
         for (const item of flat) {
             const grp = getWorkspaceFileGroup(item.text, item.kind);
             const key = grp.label;
-            const copy: ProjectTodoItem = { ...item, children: undefined };
+            const copy: WorkspaceTodoItem = { ...item, children: undefined };
             const existing = groupsMap.get(key) ?? {
                 label: grp.label,
                 description: grp.description,
@@ -718,7 +603,7 @@ export class ProjectsTodoTreeProvider
             groupsMap.set(key, existing);
         }
 
-        const groups: ProjectTodoItem[] = [];
+        const groups: WorkspaceTodoItem[] = [];
         let index = 0;
         for (const val of groupsMap.values()) {
             groups.push({
@@ -745,9 +630,9 @@ export class ProjectsTodoTreeProvider
     }
 }
 
-function decorateItems(items: any[], projectName: string, projectPath: string): ProjectTodoItem[] {
+function decorateItems(items: any[], projectName: string, projectPath: string): WorkspaceTodoItem[] {
     return items.map(item => {
-        const decorated: ProjectTodoItem = {
+        const decorated: WorkspaceTodoItem = {
             ...item,
             projectName,
             projectPath,
@@ -769,10 +654,10 @@ function decorateItems(items: any[], projectName: string, projectPath: string): 
  * are nested under their `##`/Default section wrapper.
  */
 function collectWorkspaceLeafItems(
-    items: import("../todo/types").TodoItem[],
+    items: import("./types").TodoItem[],
     projectName: string,
     projectPath: string,
-    out: ProjectTodoItem[],
+    out: WorkspaceTodoItem[],
 ): void {
     for (const item of items) {
         if (item.kind !== "section") {
@@ -805,7 +690,7 @@ function collectWorkspaceLeafItems(
  */
 function getWorkspaceFileGroup(
     text: string,
-    kind: ProjectTodoItem["kind"],
+    kind: WorkspaceTodoItem["kind"],
 ): { label: string; description?: string } {
     if (kind === "plan") {
         return { label: "plans", description: "plans/" };

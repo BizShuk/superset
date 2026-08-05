@@ -143,6 +143,15 @@ export function normalizeHiddenPaths(raw: unknown, homeDir: string): string[] {
 }
 
 /**
+ * `target` 是不是 `parent` 底下的子孫路徑 (不含 `parent` 自己)。
+ *
+ * 純字首比對:兩邊都已經是 `expandHome` 正規化過的絕對路徑,不需要再碰檔案系統。
+ */
+export function isDescendantPath(parent: string, target: string): boolean {
+    return parent !== "" && target.startsWith(`${parent}/`);
+}
+
+/**
  * 這個路徑是不是被移除掉了。命中自己或任一祖先都算 —— 移掉
  * `~/projects/platform` 之後,它底下的第二層不該又從別的入口冒出來。
  */
@@ -151,7 +160,7 @@ export function isHiddenPath(
     hidden: readonly string[]
 ): boolean {
     return hidden.some(
-        (value) => target === value || target.startsWith(`${value}/`)
+        (value) => target === value || isDescendantPath(value, target)
     );
 }
 

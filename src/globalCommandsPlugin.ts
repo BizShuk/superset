@@ -1,5 +1,5 @@
 // globalCommandsPlugin — chrome commands that don't belong to a
-// single feature (resetCaches, focusView, focusOverallView, showLogs,
+// single feature (resetCaches, focusView, showLogs,
 // focusPanel). Implemented as an `ExtensionPlugin` so the
 // `PluginManager` owns its disposable / reset-handler lifecycle
 // alongside the feature plugins. The install-flavor commands
@@ -71,20 +71,6 @@ export const globalCommandsPlugin: ExtensionPlugin = {
                     );
                     await vscode.commands.executeCommand(
                         "superset.terminals.focus"
-                    );
-                }
-            )
-        );
-
-        ctx.registerDisposable(
-            vscode.commands.registerCommand(
-                "superset.focusOverallView",
-                async () => {
-                    await vscode.commands.executeCommand(
-                        "workbench.view.extension.superset-overall"
-                    );
-                    await vscode.commands.executeCommand(
-                        "superset.projects.focus"
                     );
                 }
             )
@@ -207,7 +193,6 @@ export const globalCommandsPlugin: ExtensionPlugin = {
                         unseenTerminalCount: 0,
                         mDNSServiceCount: 0,
                         todoItemCount: 0,
-                        projectsTodoProjectCount: 0,
                         activePluginIds: pluginIds,
                     };
                     const md = renderDiagnosticsMarkdown(snapshot);

@@ -1,6 +1,6 @@
 // Command factory — emit `vscode.commands.registerCommand` for every
 // todoEngine logical command, parameterised by `commandPrefix` so the
-// same code path produces `superset.todo*` and `superset.projectsTodo*`.
+// same code path produces every `superset.todo*` command.
 //
 // Each panel calls `createTodoCommands(ctx)` once during register() and
 // adds the returned disposables to its FeatureHandle.dispose() list.
@@ -204,8 +204,8 @@ export function createTodoCommands(
         // inside the panel because the workspaceFolder-relative
         // resolution is panel-specific. See
         // `resolveTodoLink` in src/todo/todoTreeProvider.ts for the
-        // single-file panel; projectsTodo resolves through its own
-        // sub-store link map.
+        // single-file panel; the workspace panel resolves through its
+        // own sub-store link map.
         // No-op fallback: panels are expected to wrap this command
         // with their own OpenLink handler if they need panel-aware
         // link resolution. The factory registers the command id so
@@ -254,8 +254,8 @@ export function createTodoCommands(
             if (!item?.filePath) return;
             const basename = path.basename(item.filePath);
             // Resolve the plan's owning directory: prefer the row's
-            // `projectPath` (set by both `src/projectsTodo/` and the
-            // depth-1 panel in `src/todo/`), fall back to the open
+            // `projectPath` (set by the workspace scan in
+            // `src/todo/`), fall back to the open
             // workspace for the legacy single-file panel. Without this
             // `??`, plan actions on rows that live in a sub-project
             // (e.g. `~/projects/foo/plans/bar.md`) would target the

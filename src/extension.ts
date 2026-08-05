@@ -11,7 +11,6 @@ import { mdnsPlugin } from "./mdns/plugin";
 import { topologyPlugin } from "./topology/plugin";
 import { todoPlugin } from "./todo/plugin";
 import { sessionsPlugin } from "./sessions/plugin";
-import { projectsTodoPlugin } from "./projectsTodo/plugin";
 import { gitPlugin } from "./git/plugin";
 import { editorLayoutPlugin } from "./editorLayout/plugin";
 import { diskUsagePlugin } from "./diskUsage/plugin";
@@ -115,7 +114,6 @@ export async function activate(
         topologyPlugin,
         sessionsPlugin,
         todoPlugin,
-        projectsTodoPlugin,
         gitPlugin,
         editorLayoutPlugin,
         diskUsagePlugin,

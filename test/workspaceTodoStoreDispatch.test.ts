@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invokeTodoStoreMutation } from "../src/projectsTodo/storeDispatch";
+import { invokeTodoStoreMutation } from "../src/todo/storeDispatch";
 
 describe("Projects TODO store mutation dispatch", () => {
     it("preserves the TodoStore receiver for delete mutations", async () => {

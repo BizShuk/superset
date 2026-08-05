@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ProjectsTodoTreeProvider } from "../src/projectsTodo/projectsTodoTreeProvider";
-import { ProjectsTodoStore } from "../src/projectsTodo/projectsTodoStore";
+import { WorkspaceTodoTreeProvider } from "../src/todo/workspaceTodoTreeProvider";
+import { WorkspaceTodoStore } from "../src/todo/workspaceTodoStore";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import * as os from "os";
 
-// Mock vscode namespace — mirrors projectsTodoTreeProvider.test.ts.
+// Mock vscode namespace — mirrors workspaceTodoTreeProvider.test.ts.
 vi.mock("vscode", () => {
     class EventEmitter<T> {
         private listeners = new Set<(e: T) => void>();
@@ -73,18 +73,18 @@ vi.mock("os", async () => {
 });
 
 /**
- * The workspace-mode `ProjectsTodoTreeProvider` now exposes view-type
+ * The workspace-mode `WorkspaceTodoTreeProvider` now exposes view-type
  * switching (Section / Priority / File) so the SuperSet TODO panel's
  * View buttons drive real changes. These tests pin that contract:
  * the default is "section", switches rebuild the children with the
  * corresponding grouping, and the `superset.todo.viewType` context
  * key is pushed on every transition.
  */
-describe("ProjectsTodoTreeProvider — workspace viewType switching", () => {
+describe("WorkspaceTodoTreeProvider — workspace viewType switching", () => {
     let tempDir: string;
     let workspaceRoot: string;
-    let store: ProjectsTodoStore;
-    let provider: ProjectsTodoTreeProvider;
+    let store: WorkspaceTodoStore;
+    let provider: WorkspaceTodoTreeProvider;
 
     beforeEach(async () => {
         vi.clearAllMocks();
@@ -109,14 +109,13 @@ describe("ProjectsTodoTreeProvider — workspace viewType switching", () => {
             "# B\n- [ ] (P1) follow-up\n- [ ] low\n",
         );
 
-        store = new ProjectsTodoStore();
+        store = new WorkspaceTodoStore();
         await store.loadWorkspaceTodos(workspaceRoot, 1, false);
 
-        provider = new ProjectsTodoTreeProvider(
+        provider = new WorkspaceTodoTreeProvider(
             store,
             workspaceRoot,
             undefined,
-            "workspace",
         );
         provider.start();
     });
@@ -200,14 +199,13 @@ describe("ProjectsTodoTreeProvider — workspace viewType switching", () => {
         // populated one above.
         const emptyRoot = join(tempDir, "empty-ws");
         mkdirSync(emptyRoot);
-        const emptyStore = new ProjectsTodoStore();
+        const emptyStore = new WorkspaceTodoStore();
         await emptyStore.loadWorkspaceTodos(emptyRoot, 1, false);
 
-        const customProvider = new ProjectsTodoTreeProvider(
+        const customProvider = new WorkspaceTodoTreeProvider(
             emptyStore,
             emptyRoot,
             undefined,
-            "workspace",
             "CUSTOM-COPY",
         );
         const children = customProvider.getChildren() as Array<{

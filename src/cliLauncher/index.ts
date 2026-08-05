@@ -30,6 +30,7 @@ import {
 import { filterCLIEntries } from "./filter";
 import { log, setCLILauncherLog } from "./log";
 import { scanRoots } from "./scan";
+import { createSubfolder, validateSubfolderName } from "./subfolder";
 import { initTerminalTracking, launchAll } from "./terminal";
 import {
     CLILauncherTreeProvider,
@@ -115,9 +116,21 @@ export function register(ctx: FeatureContext): FeatureHandle {
             }
         ),
         vscode.commands.registerCommand(
+            "superset.cliLauncherCreateSubfolder",
+            async (target: unknown, targets?: unknown[]) => {
+                await runCommand(
+                    "superset.cliLauncherCreateSubfolder",
+                    { target, targets, view },
+                    async (entries) => {
+                        await createSubfolderInteractively(entries, provider);
+                    }
+                );
+            }
+        ),
+        vscode.commands.registerCommand(
             "superset.cliLauncherRemovePath",
-            async (target: unknown) => {
-                await removePathInteractively(target);
+            async (target: unknown, targets?: unknown[]) => {
+                await removePathInteractively({ target, targets, view });
             }
         ),
         vscode.commands.registerCommand(
@@ -134,6 +147,24 @@ export function register(ctx: FeatureContext): FeatureHandle {
                     { target, targets, view },
                     async (entries) => {
                         await launchAll(entries, "");
+                    }
+                );
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherOpenNewWindow",
+            async (target: unknown, targets?: unknown[]) => {
+                await runCommand(
+                    "superset.cliLauncherOpenNewWindow",
+                    { target, targets, view },
+                    async (entries) => {
+                        for (const entry of entries) {
+                            await vscode.commands.executeCommand(
+                                "vscode.openFolder",
+                                vscode.Uri.file(entry.path),
+                                { forceNewWindow: true }
+                            );
+                        }
                     }
                 );
             }
@@ -167,9 +198,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
             "superset.cliLauncherClearFilter",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherAddPath",
+            "superset.cliLauncherCreateSubfolder",
             "superset.cliLauncherRemovePath",
             "superset.cliLauncherRestoreHidden",
             "superset.cliLauncherOpen",
+            "superset.cliLauncherOpenNewWindow",
             ...AGENT_IDS.map((agent) => AGENT_COMMAND_IDS[agent]),
         ].join(", ")}`
     );
@@ -232,6 +265,7 @@ async function filterInteractively(
         return;
     }
     applyFilter(provider, view, input);
+    await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
 }
 
 interface CommandContext {
@@ -290,13 +324,19 @@ function describeError(error: unknown): string {
 }
 
 /**
- * 解析要啟動哪些項目,優先序:
+ * 解析命令要作用在哪些項目,優先序:
  *  1. 多選命令參數 (`targets`) —— 右鍵一份選取時 VS Code 會帶進來
  *  2. 單一命令參數 (`target`) —— inline 按鈕只作用在被點到的那一列
  *  3. tree view 目前的選取 —— ctrl+1/2/3 之類的 keybinding 沒有參數
- *  4. quick pick —— 從 Command Palette 呼叫且面板沒有選取
+ *  4. quick pick (`fallback`) —— 從 Command Palette 呼叫且面板沒有選取
+ *
+ * 啟動與移除共用同一份解析:選了幾列,動作就套用在那幾列,不會只處理游標下的
+ * 那一個。差別只有第 4 步要問哪一份候選清單。
  */
-async function resolveEntries(context: CommandContext): Promise<CLIEntry[]> {
+async function resolveEntries(
+    context: CommandContext,
+    fallback: () => Promise<CLIEntry | undefined> = () => pickEntry("選擇路徑")
+): Promise<CLIEntry[]> {
     const fromTargets = dedupe(context.targets ?? []);
     if (fromTargets.length > 1) {
         return fromTargets;
@@ -312,7 +352,7 @@ async function resolveEntries(context: CommandContext): Promise<CLIEntry[]> {
         return fromSelection;
     }
 
-    const picked = await pickEntry("選擇路徑");
+    const picked = await fallback();
     return picked ? [picked] : [];
 }
 
@@ -437,26 +477,72 @@ async function addPathInteractively(): Promise<void> {
 }
 
 /**
- * `Remove from Panel`:把一列從面板拿掉。兩層掃描一定會撈到不想要的資料夾,
+ * 在每個 resolved path 下建立同名 direct child。Input Box 只問一次；多選與
+ * Command Palette 的 path resolution 仍由共用 `resolveEntries` 負責。
+ */
+async function createSubfolderInteractively(
+    entries: readonly CLIEntry[],
+    provider: CLILauncherTreeProvider
+): Promise<void> {
+    const rawName = await vscode.window.showInputBox({
+        title:
+            entries.length === 1
+                ? `CLI: 在「${entries[0].label}」建立子資料夾`
+                : `CLI: 在 ${entries.length} 個路徑建立子資料夾`,
+        prompt: "輸入 direct subfolder 名稱。",
+        placeHolder: "例如 my-project",
+        validateInput: validateSubfolderName,
+    });
+    if (rawName === undefined) {
+        return;
+    }
+
+    let created = 0;
+    try {
+        for (const entry of entries) {
+            const target = await createSubfolder(entry.path, rawName);
+            created += 1;
+            log(`superset.cliLauncherCreateSubfolder: created ${target}`);
+        }
+    } finally {
+        if (created > 0) {
+            provider.refresh();
+        }
+    }
+
+    await vscode.window.showInformationMessage(
+        entries.length === 1
+            ? `CLI: 已建立「${rawName.trim()}」。`
+            : `CLI: 已在 ${entries.length} 個路徑建立「${rawName.trim()}」。`
+    );
+}
+
+/**
+ * `Remove from Panel`:把選取的列從面板拿掉。兩層掃描一定會撈到不想要的資料夾,
  * 所以掃描出來的列也要能移除,而不是只有釘選的列。
  *
  * 兩種來源的移除方式不同,但對使用者是同一個動作:
  *  - 釘選的路徑 → 從 `superset.cliLauncher.entries` 移除。
  *  - 掃描出來的資料夾 → 寫進 `superset.cliLauncher.hidden`,連同其子路徑隱藏。
  *    磁碟上的資料夾不會被動到,`Restore Hidden Paths` 可以還原。
+ *
+ * 多選時一次處理整份選取:清理面板本來就是一口氣挑掉好幾列的動作,逐列確認
+ * 等於把它變成 N 次對話。確認只跳`一次`,兩種來源可以混在同一次選取裡。
  */
-async function removePathInteractively(target: unknown): Promise<void> {
-    const entry = toCLIEntry(target) ?? (await pickRemovableEntry());
-    if (!entry) {
+async function removePathInteractively(
+    context: CommandContext
+): Promise<void> {
+    const commandID = "superset.cliLauncherRemovePath";
+    const entries = await resolveEntries(context, pickRemovableEntry);
+    if (entries.length === 0) {
         return;
     }
 
-    const pinned = loadEntries().some((item) => item.path === entry.path);
-    const action = pinned ? "取消釘選" : "從面板移除";
+    const pinnedPaths = new Set(loadEntries().map((item) => item.path));
+    const allPinned = entries.every((entry) => pinnedPaths.has(entry.path));
+    const action = allPinned ? "取消釘選" : "從面板移除";
     const confirmed = await vscode.window.showWarningMessage(
-        pinned
-            ? `取消釘選「${entry.label}」?`
-            : `把「${entry.label}」從 CLI 面板移除?資料夾本身不會被刪除。`,
+        confirmRemoveMessage(entries, allPinned),
         { modal: true },
         action
     );
@@ -464,19 +550,42 @@ async function removePathInteractively(target: unknown): Promise<void> {
         return;
     }
 
-    const removed = pinned
-        ? await removeEntry(entry.path)
-        : await hidePath(entry.path);
-    log(
-        `superset.cliLauncherRemovePath: ${
-            pinned ? "unpinned" : "hidden"
-        } ${entry.path} — ${removed ? "ok" : "no change"}`
-    );
-    if (!removed) {
-        await vscode.window.showInformationMessage(
-            "CLI: 此路徑已不在面板清單內。"
+    let changed = 0;
+    for (const entry of entries) {
+        const pinned = pinnedPaths.has(entry.path);
+        const removed = pinned
+            ? await removeEntry(entry.path)
+            : await hidePath(entry.path);
+        changed += removed ? 1 : 0;
+        log(
+            `${commandID}: ${pinned ? "unpinned" : "hidden"} ${entry.path} — ${
+                removed ? "ok" : "no change"
+            }`
         );
     }
+
+    if (changed < entries.length) {
+        await vscode.window.showInformationMessage(
+            entries.length === 1
+                ? "CLI: 此路徑已不在面板清單內。"
+                : `CLI: ${entries.length - changed} 個路徑已不在面板清單內。`
+        );
+    }
+}
+
+/** 單選沿用原本點名的句子;多選只報數量,列出十幾個 label 反而看不完。 */
+function confirmRemoveMessage(
+    entries: readonly CLIEntry[],
+    allPinned: boolean
+): string {
+    if (entries.length === 1) {
+        return allPinned
+            ? `取消釘選「${entries[0].label}」?`
+            : `把「${entries[0].label}」從 CLI 面板移除?資料夾本身不會被刪除。`;
+    }
+    return allPinned
+        ? `取消釘選 ${entries.length} 個路徑?`
+        : `把 ${entries.length} 個路徑從 CLI 面板移除?資料夾本身不會被刪除。`;
 }
 
 /** Command Palette 呼叫時沒有命令參數:候選 = 釘選 + 目前掃描到的資料夾。 */

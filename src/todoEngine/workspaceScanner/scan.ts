@@ -1,9 +1,9 @@
-// Pure workspace scanner — shared by `src/projectsTodo/` and `src/todo/`
+// Pure workspace scanner — used by `src/todo/`
 // (depth-1 panel). Walks a directory tree and returns the absolute
 // paths of every directory that directly contains an exact
 // case-sensitive `README.todo` file.
 //
-// Originally lived inside `src/projectsTodo/projectsTodoStore.ts` as
+// Originally lived inside the projects TODO store as
 // private helpers `collectTodoFiles` / `walkTodoFiles`. Lifted here so
 // multiple panels (workspace scan at configurable depth, depth-1 panel,
 // future scanners) share one implementation without inverting the

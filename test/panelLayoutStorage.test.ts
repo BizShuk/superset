@@ -29,16 +29,13 @@ function makeFake(initial: Record<string, unknown> = {}): FakeState {
 }
 
 describe("TRACKED_VIEW_IDS", () => {
-    it("covers the six registered panels", () => {
-        // Mirrors `views` entries in package.json — both view
-        // containers (`superset` and `superset-overall`) covered.
+    it("covers the four registered panels", () => {
+        // Mirrors the `superset` view container's entries in package.json.
         expect(TRACKED_VIEW_IDS).toEqual([
             "superset.terminals",
             "superset.mdns",
             "superset.topology",
             "superset.todo",
-            "superset.workspaceTodo",
-            "superset.projectsTodo",
         ]);
     });
 });

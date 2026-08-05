@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <rect x="2" y="4" width="20" height="16" rx="2" />
-  <path d="M6 9l3.5 3L6 15" />
-  <path d="M13 15h5" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Match SuperSet activity-bar cyan (#00BFFF) so the CLI container is multi-color, not theme-tinted monochrome. -->
+  <rect x="2" y="4" width="20" height="16" rx="2" stroke="#00BFFF" stroke-width="2"/>
+  <path d="M6 9l3.5 3L6 15" stroke="#00BFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13 15h5" stroke="#00BFFF" stroke-width="2" stroke-linecap="round"/>
 </svg>

@@ -1,23 +1,21 @@
-// todoEngine — shared types and contracts for the todo and projectsTodo
-// panels. The two panels were ~70% mirror images of each other; this
-// module captures the *shared surface* (command names, handler shapes,
-// filter model) so a single factory can emit the same vscode commands
-// for both `commandPrefix = "todo"` and `commandPrefix = "projectsTodo"`.
+// todoEngine — shared types and contracts for the TODO panel. The
+// module captures the panel's *command surface* (command names,
+// handler shapes, filter model) so a single factory emits every
+// `superset.todo*` command from one place.
 
-/** The two valid namespace prefixes. Mirrors package.json's command
- *  IDs which are split between `superset.todo*` and
- *  `superset.projectsTodo*`. */
-export type CommandPrefix = "todo" | "projectsTodo";
+/** Namespace prefix. Mirrors package.json's `superset.todo*` command
+ *  IDs. */
+export type CommandPrefix = "todo";
 
-/** VSCode TreeView id for each panel. */
-export type ViewId = "superset.todo" | "superset.projectsTodo";
+/** VSCode TreeView id for the panel. */
+export type ViewId = "superset.todo";
 
 /** Plan lifecycle action names. Mapped to `superset.<prefix>CompletePlan`
  *  / `BacklogPlan` / `ArchivePlan` / `DeletePlan` command ids. */
 export type PlanActionKind = "complete" | "backlog" | "archive" | "delete";
 
-/** Row kind coming through the TreeView callback. The union covers
- *  both panels' row types — the `plan` kind is for read-only entries
+/** Row kind coming through the TreeView callback. The `plan` kind is
+ *  for read-only entries
  *  surfaced from `plans/*.md`; `section` is a heading row used to
  *  anchor the inline "+" / "Open" buttons. */
 export type ItemKind =
@@ -52,8 +50,8 @@ export interface TodoEngineItem {
  *  with the right handlers. Each panel provides its own implementation
  *  by wiring its store / treeProvider into the matching fields. */
 export interface TodoCommandContext {
-    /** Namespace — "todo" or "projectsTodo". Determines command ID
-     *  prefix in the format `superset.${prefix}<Suffix>`. */
+    /** Namespace — "todo". Determines command ID prefix in the
+     *  format `superset.${prefix}<Suffix>`. */
     prefix: CommandPrefix;
 
     /** Store adapter — `toggle`, `updatePriority`, `addTodo`, etc.
@@ -135,9 +133,9 @@ export interface TodoCommandTreeProvider {
     isShowingCompleted(): boolean;
     isPriorityEnabled(priority: "P0" | "P1" | "P2"): boolean;
     togglePriority(priority: "P0" | "P1" | "P2"): void;
-    /** View-type switching. Optional because the projectsTodo panel
-     *  only supports 'section' / 'priority' views (no 'file' view) —
-     *  the factory's ViewSec/PX/File commands become no-ops there. */
+    /** View-type switching. Optional — panels that don't expose a
+     *  view switch leave the factory's ViewSec/PX/File commands as
+     *  no-ops. */
     setViewType?(viewType: "section" | "priority" | "file"): void;
     getViewType?(): "section" | "priority" | "file";
     /** Hidden / completed counts for the badge title. */

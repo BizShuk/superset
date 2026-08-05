@@ -14,7 +14,6 @@
 | ------------------------------ | ----------------------------- | -------------------------------------------------------------------- |
 | 產品名稱                       | `Superset`                    | Extension、repository 與產品的統一名稱。                             |
 | 第一個 View Container 顯示名稱 | `SuperSet`                    | 目前 manifest 的精確 title；不要用它取代產品名稱。                   |
-| 第二個 View Container          | `Overall`                     | 收納跨 scope 的 sibling Views。                                      |
 | 編輯器名稱                     | `VS Code`                     | 文件不使用 `VSCode`。API identifier 可保留 `vscode`。                |
 | 協定名稱                       | `mDNS`                        | Multicast DNS protocol 的標準寫法。                                  |
 | View 顯示名稱                  | `MDNS`                        | manifest 內的精確 View name。                                        |
@@ -31,7 +30,7 @@
 VS Code Workbench
 ├── Activity Bar（活動列）
 │   ├── SuperSet Activity Bar Item
-│   └── Overall Activity Bar Item
+│   └── CLI Activity Bar Item
 ├── Primary Side Bar（主側欄）
 │   └── Active View Container（目前開啟的檢視容器）
 │       └── View（檢視）
@@ -54,7 +53,7 @@ Container，因此 `Primary Side Bar` 描述的是預設位置，不是永久位
 | `Workbench`          | 工作台         | VS Code 整個應用程式 UI。                                                           |
 | `Activity Bar`       | 活動列         | 用來切換 View Container 的圖示列。                                                  |
 | `Activity Bar Item`  | 活動列項目     | Activity Bar 上代表某個 View Container 的圖示。                                     |
-| `View Container`     | 檢視容器       | 收納一個或多個 View；Superset 提供 `SuperSet` 與 `Overall`。                        |
+| `View Container`     | 檢視容器       | 收納一個或多個 View；Superset 提供 `SuperSet` 與 `CLI`。                            |
 | `Primary Side Bar`   | 主側欄         | 預設顯示 Activity Bar 所選 View Container 的區域。                                  |
 | `Secondary Side Bar` | 次側欄         | 位於 Primary Side Bar 對側、亦可收納 View 的區域。                                  |
 | `View`               | 檢視           | View Container 內可個別展開、收合或移動的功能區塊。                                 |
@@ -102,14 +101,11 @@ Tree Item 可依功能包含以下元素：
 | Manifest ID              | 顯示名稱         | 類型                               | 預設位置                  |
 | ------------------------ | ---------------- | ---------------------------------- | ------------------------- |
 | `superset`               | `SuperSet`       | View Container / Activity Bar Item | Primary Side Bar          |
-| `superset-overall`       | `Overall`        | View Container / Activity Bar Item | Primary Side Bar          |
 | `superset.terminals`     | `Terminals`      | Tree View                          | `SuperSet` View Container |
 | `superset.mdns`          | `MDNS`           | Tree View                          | `SuperSet` View Container |
 | `superset.topology`      | `Topology`       | Tree View                          | `SuperSet` View Container |
 | `superset.sessions`      | `Sessions`       | Tree View                          | `SuperSet` View Container |
 | `superset.todo`          | `TODO`           | Tree View                          | `SuperSet` View Container |
-| `superset.workspaceTodo` | `Workspace TODO` | Tree View                          | `Overall` View Container  |
-| `superset.projectsTodo`  | `Projects TODO`  | Tree View                          | `Overall` View Container  |
 
 `src/projects/` 具有 `projectsPlugin` adapter，但目前未列入 composition root，也沒有對應的
 manifest View。文件應稱為 `inactive Projects module`，不得描述成目前可見的 `Projects View`。
@@ -123,13 +119,11 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Current Workspace Root` | Superset 此次 activation 選定的 workspace root；沒有 opened folder 時才 fallback 到 process cwd。         |
 | `Project`                | 由特定 feature 規則識別的目錄。TODO、Sessions 與 inactive Projects module 的 project discovery 規則不同。 |
 | `Project Root`           | 某個 project 的絕對目錄路徑。TODO 寫入、plan scan 與 Git 操作皆以明確 root 為界。                         |
-| `Projects Root`          | Projects TODO 固定使用的 `~/projects` root。root 自身為 depth 0 且不顯示為 project row。                  |
 | `Descendant Project`     | 位於 current workspace root 下、符合該 feature discovery 規則的巢狀 project。                             |
 | `Scope`                  | 一個 View 或操作允許讀寫的目錄邊界。不同 scope 不得混用 store、watcher 或 mutation target。               |
 | `Scan Depth`             | 相對 scan root 的目錄層數；root 是 depth 0，直屬 child 是 depth 1。                                       |
 | `Recursive Scan`         | 命中符合條件的目錄後仍繼續掃描 descendants，直到 max depth 或 prune rule。                                |
 | `Pruned Subtree`         | 因 dot-prefix 或 skip directory 規則而整棵略過的目錄樹。                                                  |
-| `Duplicate Suppression`  | 同一路徑同時落入 Workspace TODO 與 Projects TODO 時，只由 Workspace TODO 顯示。                           |
 
 ## Terminals 術語
 
@@ -203,21 +197,17 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Descendant Workspace Session` | bucket path 位於 current workspace root 下的 session；segment containment 不使用單純 string prefix。                        |
 | `Store Watcher`                | `src/sessions/store.ts#watchSessions`；Sessions View visible 時遞迴監看 store，新增 bucket 或 append turn 會刷新。          |
 
-## TODO、Projects TODO 與 Plans 術語
+## TODO 與 Plans 術語
 
 ### Scope 名稱
 
 | 術語                       | 定義                                                                                                                         |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `TODO View`                | `superset.todo`；只讀寫 Current Workspace Root 的 `README.todo`，並顯示該 root 的 `plans/*.md`。                             |
-| `Workspace TODO View`      | `superset.workspaceTodo`；在 current workspace root 內遞迴尋找 `README.todo`。root 為 depth 0，max depth 預設 5、可設 1–10。 |
-| `Projects TODO View`       | `superset.projectsTodo`；固定掃描 `~/projects` depth 1–5，不提供自訂 root 或 depth。                                         |
-| `Overall View Container`   | 收納 Workspace TODO 與 Projects TODO 兩個 sibling Views；不是合併後的單一 Tree View。                                        |
+| `TODO View`                | `superset.todo`；在 current workspace root 內遞迴尋找 `README.todo`（root 為 depth 0，max depth 預設 5、可設 1–10），並顯示各 sub-project 的 `plans/*.md`。 |
 | `README.todo`              | 唯一被 TODO scan 接受的 case-sensitive filename。                                                                            |
 | `TODO Document`            | 第一個 heading 為 `# TODO`、內容以 Markdown headings 與 list items 組成的 `README.todo`。                                    |
-| `TODO Scope Boundary`      | TODO、Workspace TODO、Projects TODO 各自的 scan、store、watcher 與 write target；不可交叉使用。                              |
-| `Workspace Project Row`    | Workspace TODO 中由 workspace-relative path 標示的 project Tree Item。                                                       |
-| `Projects Project Row`     | Projects TODO 中以 `path.basename` 標示的 project Tree Item，預設收合。                                                      |
+| `TODO Scope Boundary`      | TODO 的 scan、store、watcher 與 write target 都以 current workspace root 為界；不得跨到 workspace 之外。                     |
+| `Workspace Project Row`    | TODO View 中由 workspace-relative path 標示的 sub-project Tree Item，預設收合。                                              |
 | `TODO Scan Skip Directory` | dot-prefixed directories，以及 `node_modules`、`out`、`dist`、`build`、`coverage`；命中後 prune whole subtree。              |
 
 ### Item 與狀態名稱
@@ -240,7 +230,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Priority`                | Checkbox Item 的 `P0`、`P1`、`P2` 或 `None` 分類。P0 最高、P2 最低。                                                                   |
 | `Section View`            | 按 Markdown section hierarchy 分組的 TODO projection。                                                                                 |
 | `Priority View`           | 按 P0、P1、P2、None 分組的 TODO projection。                                                                                           |
-| `File View`               | 按來源 file/path 分組的 local TODO projection；Projects TODO 不提供此 view type。                                                      |
+| `File View`               | 按來源 file/path 分組的 local TODO projection。                                                                                        |
 | `Completed Filter`        | 隱藏或顯示 completed/archive content 的 View Title Action。                                                                            |
 | `Priority Filter`         | 只保留指定 P0/P1/P2 items 的 View Title Action；可組合啟用。                                                                           |
 | `Inline Link`             | TODO text 中的 Markdown link；由 `linkUtils.ts` 統一解析、開啟及格式化 copy text。                                                     |
@@ -348,6 +338,9 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `CLI Terminal State`   | Terminal child row 的二態 description：內部 `pending` / `running` 顯示 `running`，內部 `idle` 顯示 `idle`。              |
 | `Hidden Path`          | `superset.cliLauncher.hidden` 中的一個路徑；該路徑`與其所有子路徑`都不再列出。只影響面板，不動磁碟上的資料夾。          |
 | `Remove from Panel`    | `superset.cliLauncherRemovePath` 的顯示名稱。作用在 Pinned Path 是移出 `entries`，作用在 Scanned Folder 是寫入 `hidden`。 |
+| `Open in New Window`   | `superset.cliLauncherOpenNewWindow` 的顯示名稱。以獨立 VS Code window 開啟所選 path，不建立 terminal。                 |
+| `Direct Subfolder`     | 所選 path 正下方的一層 child directory；名稱不含 path separator，不代表 nested relative path。                        |
+| `Create Subfolder`     | `superset.cliLauncherCreateSubfolder` 的顯示名稱。在每個所選 path 建立同名 Direct Subfolder，不改 CLI settings。      |
 | `Quiet Git Status`     | 分支為 `master` / `main` 且行數增減皆為零的靜止狀態；description 略過不顯示，tooltip 仍保留完整值。                      |
 | `Auto Refresh`         | View 可見時每 30 秒一次的全樹重刷（`AUTO_REFRESH_INTERVAL_MS`）；面板隱藏即停止，不在背景重掃。                          |
 

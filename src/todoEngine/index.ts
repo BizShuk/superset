@@ -1,4 +1,4 @@
-// todoEngine — public surface. Both `src/todo/` and `src/projectsTodo/`
+// todoEngine — public surface. `src/todo/`
 // import their factories from this barrel.
 //
 // Currently exposes:

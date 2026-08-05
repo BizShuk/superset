@@ -116,21 +116,51 @@ describe("SCM Graph manifest contributions", () => {
     });
 });
 
-describe("Overall TODO manifest contributions", () => {
-    it("registers Workspace TODO before Projects TODO", () => {
-        expect(manifest.contributes.views["superset-overall"]).toEqual([
-            {
-                id: "superset.workspaceTodo",
-                name: "Workspace TODO",
-                contextualTitle: "Overall",
-                visibility: "visible",
-            },
-            {
-                id: "superset.projectsTodo",
-                name: "Projects TODO",
-                contextualTitle: "Overall",
-                visibility: "visible",
-            },
+describe("Removed Overall panel", () => {
+    it("declares neither the Overall view container nor its views", () => {
+        expect(manifest.contributes.views["superset-overall"]).toBeUndefined();
+        expect(
+            manifest.contributes.viewsContainers.activitybar.map(
+                (c: { id: string }) => c.id
+            )
+        ).toEqual(["superset", "cli"]);
+    });
+
+    it("declares no superset.projectsTodo* command or menu entry", () => {
+        const commandIds = manifest.contributes.commands.map(
+            (c: { command: string }) => c.command
+        );
+        expect(
+            commandIds.filter((id: string) =>
+                id.startsWith("superset.projectsTodo")
+            )
+        ).toEqual([]);
+        expect(commandIds).not.toContain("superset.focusOverallView");
+
+        const menuEntries = Object.values(
+            manifest.contributes.menus as Record<
+                string,
+                Array<{ command: string; when?: string }>
+            >
+        ).flat();
+        for (const entry of menuEntries) {
+            expect(entry.command.startsWith("superset.projectsTodo")).toBe(
+                false
+            );
+            expect(entry.when ?? "").not.toContain("projectsTodo");
+        }
+    });
+
+    it("keeps superset.openProject wired to the surviving TODO rows", () => {
+        const openProjectEntries = (
+            manifest.contributes.menus["view/item/context"] as Array<{
+                command: string;
+                when?: string;
+            }>
+        ).filter((e) => e.command === "superset.openProject");
+        expect(openProjectEntries.map((e) => e.when)).toEqual([
+            "viewItem == todoPlan",
+            "viewItem == todoProject",
         ]);
     });
 });
@@ -195,7 +225,7 @@ describe("CLI Launcher manifest contributions", () => {
         expect(containers.activitybar).toContainEqual({
             id: "cli",
             title: "CLI",
-            icon: "pkg/resources/cli.svg",
+            icon: "pkg/resources/cli.png",
         });
         expect(manifest.contributes.views.cli).toEqual([
             { id: VIEW_ID, name: "Paths", contextualTitle: "CLI" },
@@ -212,6 +242,12 @@ describe("CLI Launcher manifest contributions", () => {
         expect(titles.get("superset.cliLauncherRunGrok")).toBe("Open with Grok");
         expect(titles.get("superset.cliLauncherOpen")).toBe(
             "Open Terminal at Path"
+        );
+        expect(titles.get("superset.cliLauncherOpenNewWindow")).toBe(
+            "Open in New Window"
+        );
+        expect(titles.get("superset.cliLauncherCreateSubfolder")).toBe(
+            "Create Subfolder"
         );
         expect(titles.get("superset.cliLauncherAddPath")).toBe("Pin Path");
         expect(titles.get("superset.cliLauncherRemovePath")).toBe(
@@ -273,6 +309,24 @@ describe("CLI Launcher manifest contributions", () => {
         }
     });
 
+    it("binds ctrl+t to filtering only while the CLI panel itself has focus", () => {
+        interface ManifestKeybinding {
+            readonly command: string;
+            readonly key: string;
+            readonly when?: string;
+        }
+        const keybindings = manifest.contributes
+            .keybindings as ManifestKeybinding[];
+        const binding = keybindings.find(
+            (item) => item.command === "superset.cliLauncherFilter"
+        );
+
+        expect(binding?.key).toBe("ctrl+t");
+        expect(binding?.when).toBe(
+            `focusedView == ${VIEW_ID} && !inputFocus`
+        );
+    });
+
     it("shows the three agent buttons inline on every row kind", () => {
         const rowKinds =
             "viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder";
@@ -295,6 +349,30 @@ describe("CLI Launcher manifest contributions", () => {
             (m) => m.command === "superset.cliLauncherRemovePath"
         );
         expect(remove?.when).toBe(`view == ${VIEW_ID} && (${rowKinds})`);
+        expect(remove?.group).toBe("2_modify@2");
+
+        const createSubfolder = manifest.contributes.menus[
+            "view/item/context"
+        ].find(
+            (item) =>
+                item.command === "superset.cliLauncherCreateSubfolder"
+        );
+        expect(createSubfolder).toEqual({
+            command: "superset.cliLauncherCreateSubfolder",
+            when: `view == ${VIEW_ID} && (${rowKinds})`,
+            group: "2_modify@1",
+        });
+
+        const openNewWindow = manifest.contributes.menus[
+            "view/item/context"
+        ].find(
+            (m) => m.command === "superset.cliLauncherOpenNewWindow"
+        );
+        expect(openNewWindow).toEqual({
+            command: "superset.cliLauncherOpenNewWindow",
+            when: `view == ${VIEW_ID} && (${rowKinds})`,
+            group: "1_run@2",
+        });
 
         // Restore is the way back — without it, removing means hand-editing
         // settings.

@@ -48,9 +48,8 @@ export function renderSettingsMarkdown(manifest: ExtensionManifest): string {
 function groupFromCommandId(id: string): string {
     if (!id.startsWith("superset.")) return "general";
     const rest = id.slice("superset.".length);
-    // Common prefixes: todo, projectsTodo, mdns, topology, terminals,
+    // Common prefixes: todo, mdns, topology, terminals,
     // revealInTree, openProject, showLogs, focusView, etc.
-    if (rest.startsWith("projectsTodo")) return "Projects TODO";
     const m = rest.match(/^([a-z]+)/);
     const prefix = m?.[1] ?? "general";
     return (
@@ -69,7 +68,6 @@ function groupFromCommandId(id: string): string {
             focus: "Chrome",
             focusView: "Chrome",
             focusPanel: "Chrome",
-            focusOverallView: "Chrome",
             resetCaches: "Chrome",
             show: "Chrome",
             revealInTree: "Chrome",
@@ -77,7 +75,6 @@ function groupFromCommandId(id: string): string {
             skillInstall: "Install",
             installDefaultProject: "Install",
             openProject: "Projects",
-            projectsTodo: "Projects TODO",
             terminalActivitySummary: "Terminals",
         } as Record<string, string>
     )[prefix] ?? prefix;
@@ -91,7 +88,6 @@ export interface DiagnosticsSnapshot {
     unseenTerminalCount: number;
     mDNSServiceCount: number;
     todoItemCount: number;
-    projectsTodoProjectCount: number;
     activePluginIds: string[];
 }
 
@@ -109,7 +105,6 @@ export function renderDiagnosticsMarkdown(
     md += `| Terminals with unseen output | ${snapshot.unseenTerminalCount} |\n`;
     md += `| mDNS services | ${snapshot.mDNSServiceCount} |\n`;
     md += `| TODO items (active workspace) | ${snapshot.todoItemCount} |\n`;
-    md += `| Projects (with README.todo) | ${snapshot.projectsTodoProjectCount} |\n`;
 
     md += `\n## Active plugins\n\n`;
     if (snapshot.activePluginIds.length === 0) {

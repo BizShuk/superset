@@ -4,7 +4,7 @@
 // headers keep their authored order.
 //
 // Used by `getChildren` in both `todoTreeProvider` and
-// `projectsTodoTreeProvider` when expanding a section's children.
+// `workspaceTodoTreeProvider` when expanding a section's children.
 
 import type { TodoEngineItem } from "./types";
 

@@ -1,20 +1,20 @@
 // Four-way contextValue dispatch for checkbox / list rows.
 //
-// Both `todoTreeProvider` and `projectsTodoTreeProvider` pick a
+// Both `todoTreeProvider` and `workspaceTodoTreeProvider` pick a
 // `viewItem` string based on two boolean axes:
 //   - isArchived:    is this row in `## Archive` or marked archived?
 //   - hasLink:       does the label carry a `[text](url)` Markdown link?
 //
 // The four combinations need four distinct context values so
 // `package.json` menu `when` clauses can target each variant. The
-// provider passes the prefix (`"todo"` or `"projectsTodo"`) plus the
-// two axes; this helper returns the matching string.
+// provider passes the prefix (`"todo"`) plus the two axes; this
+// helper returns the matching string.
 
 export type ContextValueAxis = "checkbox" | "list";
 
 export interface DispatchContextValueInput {
-    /** `"todo"` or `"projectsTodo"` — the panel's command prefix. */
-    prefix: "todo" | "projectsTodo";
+    /** `"todo"` — the panel's command prefix. */
+    prefix: "todo";
     /** The row kind (without archive suffix). */
     kind: ContextValueAxis;
     /** True if the row sits under an archive section or has an

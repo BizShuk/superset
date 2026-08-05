@@ -83,6 +83,10 @@ async function isDirectory(target: string): Promise<boolean> {
  * 掃描所有 root,回傳 top level 節點與各自的第二層子節點。
  * 多個 root 之間以絕對路徑去重,先出現的 root 優先。
  *
+ * 掃描條件只有「是不是可列出的目錄」,不看內容 —— 不以 `.git` 之類的標記篩選:
+ * 面板要挑的 cwd 不限於 repository,而按內容篩選會讓「東西不見了」變成沒有出口
+ * 的狀態。撈到不想要的資料夾一律靠 `hidden` 手動移除。
+ *
  * `hidden` 是使用者手動從面板移除的路徑 (`superset.cliLauncher.hidden`):
  * 兩層掃描一定會撈到不想要的資料夾,這是把它們拿掉的唯一機制。命中的第一層
  * 直接跳過 (連帶省下它的 `readdir`),第二層則逐個濾掉。

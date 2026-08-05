@@ -6,7 +6,7 @@
 // filter.
 //
 // Used by both `src/todo/todoTreeProvider.ts` and
-// `src/projectsTodo/projectsTodoTreeProvider.ts` to compute the
+// `src/todo/workspaceTodoTreeProvider.ts` to compute the
 // "N pending" / "N ◐" badge on section headers.
 
 import type { TodoEngineItem } from "./types";

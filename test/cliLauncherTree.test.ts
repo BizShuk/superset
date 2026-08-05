@@ -27,6 +27,12 @@ vi.mock("vscode", () => {
             constructor(public value: string) {}
         },
         ThemeIcon: class ThemeIcon {
+            constructor(
+                public id: string,
+                public color?: { id: string }
+            ) {}
+        },
+        ThemeColor: class ThemeColor {
             constructor(public id: string) {}
         },
     };
@@ -70,6 +76,16 @@ class FakeTerminalSource {
 
     getByPath(path: string): FakeTrackedTerminal[] {
         return this.records.get(path) ?? [];
+    }
+
+    countUnderPath(path: string): number {
+        let count = 0;
+        for (const [trackedPath, records] of this.records) {
+            if (trackedPath === path || trackedPath.startsWith(`${path}/`)) {
+                count += records.length;
+            }
+        }
+        return count;
     }
 
     set(path: string, records: FakeTrackedTerminal[]): void {
@@ -145,9 +161,8 @@ vi.mock("../src/cliLauncher/gitStatus", async (importOriginal) => ({
     },
 }));
 
-const { AUTO_REFRESH_INTERVAL_MS, CLILauncherTreeProvider } = await import(
-    "../src/cliLauncher/tree"
-);
+const { AUTO_REFRESH_INTERVAL_MS, CLILauncherTreeProvider } =
+    await import("../src/cliLauncher/tree");
 
 function entry(target: string, label?: string): CLIEntry {
     return {
@@ -397,6 +412,11 @@ describe("CLILauncherTreeProvider filtering", () => {
         const [pathItem] = await provider.getChildren();
         expect(pathItem.description).toBe("🟡 2 · release(+2,-1)");
         expect(pathItem.collapsibleState).toBe(1); // Collapsed
+        // icon 固定色,不跟 count 來源聯動。
+        expect(pathItem.iconPath).toEqual({
+            id: "folder",
+            color: { id: "charts.blue" },
+        });
 
         const children = await provider.getChildren(pathItem);
         expect(children.map((item) => item.label)).toEqual([
@@ -406,6 +426,10 @@ describe("CLILauncherTreeProvider filtering", () => {
         expect(children.map((item) => item.description)).toEqual([
             "running",
             "idle",
+        ]);
+        expect(children.map((item) => item.iconPath)).toEqual([
+            { id: "terminal", color: { id: "charts.blue" } },
+            { id: "terminal", color: { id: "charts.blue" } },
         ]);
         expect(children[0].command).toEqual({
             command: "superset.focus",
@@ -445,6 +469,75 @@ describe("CLILauncherTreeProvider filtering", () => {
             "superset",
             "gateway",
         ]);
+        provider.dispose();
+    });
+
+    it("sums descendant terminal counts into the ancestor rows", async () => {
+        const source = new FakeTerminalSource();
+        const provider = providerWith(source);
+        const items = await provider.getChildren();
+        const platform = items[1];
+        const [superset] = await provider.getChildren(platform);
+
+        source.set(`${HOME}/projects/platform/superset`, [
+            tracked(
+                "t-4",
+                `${HOME}/projects/platform/superset`,
+                "superset · claude",
+                "running"
+            ),
+        ]);
+
+        // 自己開的是 🟡;父列數字全來自子資料夾,所以換成 🔵。icon 維持固定色。
+        expect(superset.description).toBe("🟡 1");
+        expect(platform.description).toBe("🔵 1");
+        expect(superset.iconPath).toEqual({
+            id: "folder",
+            color: { id: "charts.blue" },
+        });
+        expect(platform.iconPath).toEqual({
+            id: "folder",
+            color: { id: "charts.blue" },
+        });
+        expect(platform.tooltip).toEqual({ value: "CLI terminals: 1" });
+        // 父列的數字含子孫,但展開後只會列出屬於它自己的 terminal (這裡是 0)。
+        expect(
+            (await provider.getChildren(platform)).map((item) => item.label)
+        ).toEqual(["superset", "gateway"]);
+        // 只有祖先鏈受影響,同層的其他 root 維持原樣。
+        expect(items[2].description).toBe("");
+
+        // 重新建立整棵樹時同樣要算進去,不能只在 terminal 事件路徑成立。
+        provider.refresh();
+        const rebuilt = await provider.getChildren();
+        expect(rebuilt[1].description).toBe("🔵 1");
+        provider.dispose();
+    });
+
+    it("keeps the own-terminal mark when the count mixes both levels", async () => {
+        const source = new FakeTerminalSource();
+        const provider = providerWith(source);
+        const items = await provider.getChildren();
+        const platform = items[1];
+
+        source.set(`${HOME}/projects/platform`, [
+            tracked(
+                "t-5",
+                `${HOME}/projects/platform`,
+                "platform · grok",
+                "idle"
+            ),
+        ]);
+        source.set(`${HOME}/projects/platform/superset`, [
+            tracked(
+                "t-6",
+                `${HOME}/projects/platform/superset`,
+                "superset · claude",
+                "running"
+            ),
+        ]);
+
+        expect(platform.description).toBe("🟡 2");
         provider.dispose();
     });
 });

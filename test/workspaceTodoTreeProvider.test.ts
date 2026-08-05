@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ProjectsTodoTreeProvider } from "../src/projectsTodo/projectsTodoTreeProvider";
-import { ProjectsTodoStore } from "../src/projectsTodo/projectsTodoStore";
+import { WorkspaceTodoTreeProvider } from "../src/todo/workspaceTodoTreeProvider";
+import { WorkspaceTodoStore } from "../src/todo/workspaceTodoStore";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "fs";
 import { join, basename } from "path";
 import { tmpdir } from "os";
@@ -76,9 +76,10 @@ vi.mock("os", async () => {
     };
 });
 
-describe("ProjectsTodoTreeProvider", () => {
+describe("WorkspaceTodoTreeProvider", () => {
     let tempDir: string;
-    let store: ProjectsTodoStore;
+    let store: WorkspaceTodoStore;
+    let projectsDir: string;
 
     beforeEach(async () => {
         vi.clearAllMocks();
@@ -86,7 +87,7 @@ describe("ProjectsTodoTreeProvider", () => {
         vi.mocked(os.homedir).mockReturnValue(tempDir);
 
         // Create mock folders and todo lists
-        const projectsDir = join(tempDir, "projects");
+        projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
         const p1 = join(projectsDir, "cc-plugin");
@@ -97,8 +98,8 @@ describe("ProjectsTodoTreeProvider", () => {
         mkdirSync(p2);
         writeFileSync(join(p2, "README.todo"), "# TODO\n- [ ] Task 3\n");
 
-        store = new ProjectsTodoStore();
-        await store.load();
+        store = new WorkspaceTodoStore();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
     });
 
     afterEach(() => {
@@ -106,7 +107,7 @@ describe("ProjectsTodoTreeProvider", () => {
     });
 
     it("returns correct project list as root items", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         expect(roots).toHaveLength(2);
@@ -115,7 +116,7 @@ describe("ProjectsTodoTreeProvider", () => {
         expect(roots![1].text).toBe("env-setup");
 
         // The roots should represent projects with folder kind
-        expect(roots![0].line).toBe(-1);
+        expect(roots![0].line).toBe(-2);
         expect(roots![0].projectPath).toBeDefined();
     });
 
@@ -123,19 +124,19 @@ describe("ProjectsTodoTreeProvider", () => {
         const nested = join(tempDir, "projects", "platform", "apps", "server");
         mkdirSync(nested, { recursive: true });
         writeFileSync(join(nested, "README.todo"), "# TODO\n- [ ] nested task\n");
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
         const server = roots!.find((root) => root.projectPath === nested);
 
         expect(server).toBeDefined();
-        expect(server!.text).toBe("server");
+        expect(server!.text).toBe(join("platform", "apps", "server"));
         expect(provider.getTreeItem(server!).tooltip).toBe(nested);
     });
 
     it("filters completed tasks by default", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         // Get children of "cc-plugin"
@@ -152,7 +153,7 @@ describe("ProjectsTodoTreeProvider", () => {
     });
 
     it("shows completed tasks when toggled", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         provider.toggleShowCompleted();
 
         const roots = await provider.getChildren();
@@ -168,9 +169,9 @@ describe("ProjectsTodoTreeProvider", () => {
     it("filters priority tasks when priority filter is active", async () => {
         const p1 = join(tempDir, "projects", "cc-plugin");
         writeFileSync(join(p1, "README.todo"), "# TODO\n- [ ] [P0] Task P0\n- [ ] [P1] Task P1\n- [ ] Task normal\n");
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         provider.togglePriorityFilter("P0");
 
         const roots = await provider.getChildren();
@@ -183,12 +184,12 @@ describe("ProjectsTodoTreeProvider", () => {
     });
 
     it("renders folder item for project nodes and tags for sections in getTreeItem", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         const item = provider.getTreeItem(roots![0]);
         expect(item.label).toBe("cc-plugin");
-        expect(item.contextValue).toBe("projectsTodoProject");
+        expect(item.contextValue).toBe("todoProject");
         // Project rows default to Collapsed so the overview shows a
         // flat project list at start; users expand the ones they care
         // about. Auto-expansion was removed in 0.10.x.
@@ -201,16 +202,16 @@ describe("ProjectsTodoTreeProvider", () => {
             join(p, "README.todo"),
             "## Foo\n- [ ] a\n- [ ] b\n- [x] c\n"
         );
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
         const section = (await provider.getChildren(roots![0]))![0];
         expect(section.text).toBe("Foo");
 
         const item = provider.getTreeItem(section);
         expect(item.label).toBe("Foo");
-        expect(item.contextValue).toBe("projectsTodoSectionArchivable");
+        expect(item.contextValue).toBe("todoSectionArchivable");
         expect(item.description).toBe("2 ◐");
     });
 
@@ -225,9 +226,9 @@ describe("ProjectsTodoTreeProvider", () => {
             join(p, "README.todo"),
             "## Done\n- [x] a\n- [x] b\n"
         );
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         provider.toggleShowCompleted();
         const roots = await provider.getChildren();
         const section = (await provider.getChildren(roots![0]))![0];
@@ -257,9 +258,9 @@ describe("ProjectsTodoTreeProvider", () => {
                 "- [ ] still",
             ].join("\n")
         );
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         provider.toggleShowCompleted();
         const roots = await provider.getChildren();
         const sections = await provider.getChildren(roots![0]);
@@ -268,11 +269,11 @@ describe("ProjectsTodoTreeProvider", () => {
         const archive = sections.find((s) => s.text === "Old")!;
 
         const activeItem = provider.getTreeItem(active);
-        expect(activeItem.contextValue).toBe("projectsTodoSectionArchivable");
+        expect(activeItem.contextValue).toBe("todoSectionArchivable");
         expect(activeItem.description).toBe("1 ◐");
 
         const archiveItem = provider.getTreeItem(archive);
-        expect(archiveItem.contextValue).toBe("projectsTodoSectionArchived");
+        expect(archiveItem.contextValue).toBe("todoSectionArchived");
         expect(archiveItem.description).toBeUndefined();
     });
 
@@ -285,9 +286,9 @@ describe("ProjectsTodoTreeProvider", () => {
         // env-setup still has its pending Task 3, so the root list
         // should contain both projects even though cc-plugin would
         // have been hidden by the old gate.
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         expect(roots).toHaveLength(2);
@@ -305,9 +306,9 @@ describe("ProjectsTodoTreeProvider", () => {
     it("lists project whose README.todo is empty", async () => {
         const p = join(tempDir, "projects", "cc-plugin");
         writeFileSync(join(p, "README.todo"), "# TODO\n");
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         expect(roots).toHaveLength(2);
@@ -327,9 +328,9 @@ describe("ProjectsTodoTreeProvider", () => {
             join(p, "README.todo"),
             "# TODO\n- [ ] [P1] only P1\n- [ ] plain\n"
         );
-        await store.load();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
 
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         provider.togglePriorityFilter("P0");
 
         const roots = await provider.getChildren();
@@ -346,7 +347,7 @@ describe("ProjectsTodoTreeProvider", () => {
         // regardless of how many children the filter leaves — auto-
         // expansion was removed in 0.10.x so the overview renders as a
         // flat project list at start.
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         // env-setup has a pending task in the default setup, so it has
@@ -359,16 +360,17 @@ describe("ProjectsTodoTreeProvider", () => {
     });
 });
 
-describe("ProjectsTodoTreeProvider — no top-level plans row", () => {
+describe("WorkspaceTodoTreeProvider — no top-level plans row", () => {
     let tempDir: string;
-    let store: ProjectsTodoStore;
+    let store: WorkspaceTodoStore;
+    let projectsDir: string;
 
     beforeEach(async () => {
         vi.clearAllMocks();
         tempDir = mkdtempSync(join(tmpdir(), "superset-prov-plans-"));
         vi.mocked(os.homedir).mockReturnValue(tempDir);
 
-        const projectsDir = join(tempDir, "projects");
+        projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
         // alpha: 有 plan (但不會出現在 top-level row — 已廢除)
@@ -386,8 +388,8 @@ describe("ProjectsTodoTreeProvider — no top-level plans row", () => {
         mkdirSync(join(b, "plans"));
         writeFileSync(join(b, "plans", "2026-07-02-b.md"), "# Plan B\n");
 
-        store = new ProjectsTodoStore();
-        await store.load();
+        store = new WorkspaceTodoStore();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
     });
 
     afterEach(() => {
@@ -395,7 +397,7 @@ describe("ProjectsTodoTreeProvider — no top-level plans row", () => {
     });
 
     it("does NOT render a top-level 'Plans' row even when workspace plans exist", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         // Top-level merged row was removed in 0.10.x — workspace plans
@@ -411,10 +413,10 @@ describe("ProjectsTodoTreeProvider — no top-level plans row", () => {
     });
 
     it("plans still surface under each project's own row", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
         const alpha = roots!.find((r) => r.text === "alpha")!;
-        const beta = roots!.find((r) => r.text === "beta")!;
+        const beta = roots!.find((r) => r.text === join("tmp", "beta"))!;
 
         const alphaPlans = alpha.children!.find((c) => c.text === "Plans");
         expect(alphaPlans).toBeDefined();
@@ -426,16 +428,17 @@ describe("ProjectsTodoTreeProvider — no top-level plans row", () => {
     });
 });
 
-describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
+describe("WorkspaceTodoTreeProvider — per-project plans sub-section", () => {
     let tempDir: string;
-    let store: ProjectsTodoStore;
+    let store: WorkspaceTodoStore;
+    let projectsDir: string;
 
     beforeEach(async () => {
         vi.clearAllMocks();
         tempDir = mkdtempSync(join(tmpdir(), "superset-prov-perproj-"));
         vi.mocked(os.homedir).mockReturnValue(tempDir);
 
-        const projectsDir = join(tempDir, "projects");
+        projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
         // alpha: README.todo item + plan  ── 應有 [Default, Plans]
@@ -458,8 +461,8 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
         mkdirSync(d);
         writeFileSync(join(d, "README.todo"), "# TODO\n- [ ] delta-task\n");
 
-        store = new ProjectsTodoStore();
-        await store.load();
+        store = new WorkspaceTodoStore();
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
     });
 
     afterEach(() => {
@@ -467,7 +470,7 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
     });
 
     it("appends a synthetic 'Plans' sub-section after README.todo sections when a project has plans", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         // alpha's row should be present
@@ -493,13 +496,13 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
     });
 
     it("renders the per-project Plans sub-section as Expanded with '1 plan' badge", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
         const alpha = roots!.find((r) => r.text === "alpha")!;
         const plansSection = alpha.children!.find((c) => c.text === "Plans")!;
 
         const item = provider.getTreeItem(plansSection);
-        expect(item.contextValue).toBe("projectsTodoPlansSection");
+        expect(item.contextValue).toBe("todoPlansSection");
         expect(item.collapsibleState).toBe(2); // Expanded
         expect(item.description).toBe("1 plan");
     });
@@ -508,7 +511,7 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
         // gamma's README.todo is all-completed; under default
         // hide-completed mode, the README.todo contributes zero
         // children but the Plans section still surfaces.
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         const gamma = roots!.find((r) => r.text === "gamma")!;
@@ -528,7 +531,7 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
     });
 
     it("does NOT attach a Plans sub-section to projects without plans", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         const delta = roots!.find((r) => r.text === "delta")!;
@@ -538,7 +541,7 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
     });
 
     it("per-project plan items carry projectName + projectPath for inline openProject", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
         const alpha = roots!.find((r) => r.text === "alpha")!;
         const planItem = alpha.children![1].children![0];
@@ -551,7 +554,7 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
         // Toggle P0 — neither alpha-task nor Plan A has a P0 tag, but
         // the plan item must still appear under alpha's Plans sub-section
         // because applyPriorityFilter lets kind === "plan" items through.
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         provider.togglePriorityFilter("P0");
 
         const roots = await provider.getChildren();
@@ -565,7 +568,7 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
     });
 
     it("top-level 'Plans' row no longer aggregates plans (only per-project sub-sections remain)", async () => {
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
         const roots = await provider.getChildren();
 
         // Top-level merged row was removed in 0.10.x. Plans now only
@@ -594,7 +597,7 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
         // mutated the store's items array, so the next filterCompleted
         // pass saw the stale Plans as a real section and pushed another
         // one — duplicating the section on every toggle.
-        const provider = new ProjectsTodoTreeProvider(store);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
 
         const collectPlansCounts = async () => {
             const roots = await provider.getChildren();
@@ -624,9 +627,10 @@ describe("ProjectsTodoTreeProvider — per-project plans sub-section", () => {
     });
 });
 
-describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
+describe("WorkspaceTodoTreeProvider — Current Workspace section", () => {
     let tempDir: string;
-    let store: ProjectsTodoStore;
+    let store: WorkspaceTodoStore;
+    let projectsDir: string;
     let workspaceFolder: string;
 
     beforeEach(async () => {
@@ -636,13 +640,13 @@ describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
 
         // ~/projects stub so the existing ~/projects scan path
         // doesn't blow up if some test happens to trigger it.
-        const projectsDir = join(tempDir, "projects");
+        projectsDir = join(tempDir, "projects");
         mkdirSync(projectsDir);
 
         workspaceFolder = join(tempDir, "ws");
         mkdirSync(workspaceFolder);
 
-        store = new ProjectsTodoStore();
+        store = new WorkspaceTodoStore();
     });
 
     afterEach(() => {
@@ -656,7 +660,7 @@ describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
 
         await store.loadWorkspaceTodos(workspaceFolder, 3);
 
-        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const provider = new WorkspaceTodoTreeProvider(store, workspaceFolder);
         const roots = await provider.getChildren();
 
         expect(roots).toHaveLength(1);
@@ -665,7 +669,7 @@ describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
     });
 
     it("renders an empty-state placeholder when workspace scan is empty", async () => {
-        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const provider = new WorkspaceTodoTreeProvider(store, workspaceFolder);
         const roots = await provider.getChildren();
 
         expect(roots).toHaveLength(1);
@@ -675,7 +679,7 @@ describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
     });
 
     it("does NOT render workspace rows when workspaceRoot is unset", async () => {
-        const provider = new ProjectsTodoTreeProvider(store, undefined, undefined, "workspace");
+        const provider = new WorkspaceTodoTreeProvider(store, undefined);
         const roots = await provider.getChildren();
         expect(roots).toEqual([]);
     });
@@ -689,37 +693,14 @@ describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
         );
         await store.loadWorkspaceTodos(workspaceFolder, 3);
 
-        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const provider = new WorkspaceTodoTreeProvider(store, workspaceFolder);
         const roots = await provider.getChildren();
         const subProject = roots!.find((c) => c.text === "src")!;
 
         const item = provider.getTreeItem(subProject);
-        expect(item.contextValue).toBe("projectsTodoProject");
+        expect(item.contextValue).toBe("todoProject");
         expect(item.description).toBe("2 pending");
         expect(item.collapsibleState).toBe(1); // Collapsed
-    });
-
-    it("suppresses the ~/projects duplicate when the same path is also a workspace sub-project", async () => {
-        const projectsDir = join(tempDir, "projects", "tmp");
-        mkdirSync(projectsDir, { recursive: true });
-
-        workspaceFolder = join(projectsDir, "superset");
-        mkdirSync(workspaceFolder);
-        writeFileSync(join(workspaceFolder, "README.todo"), "# TODO\n- [ ] dual\n");
-
-        await store.load();
-        await store.loadWorkspaceTodos(workspaceFolder, 3);
-
-        const workspaceProvider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
-        const workspaceRoots = await workspaceProvider.getChildren();
-        expect(workspaceRoots!.find((c) => c.projectPath === workspaceFolder)).toBeDefined();
-
-        const projectsProvider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "projects");
-        const projectRoots = await projectsProvider.getChildren();
-        const duplicate = projectRoots!.find(
-            (r) => r.text === "superset" && r.projectPath === workspaceFolder,
-        );
-        expect(duplicate).toBeUndefined();
     });
 
     it("renders the workspace root in the Workspace TODO sub-panel when only root has README.todo", async () => {
@@ -727,7 +708,7 @@ describe("ProjectsTodoTreeProvider — Current Workspace section", () => {
 
         await store.loadWorkspaceTodos(workspaceFolder, 3);
 
-        const provider = new ProjectsTodoTreeProvider(store, workspaceFolder, undefined, "workspace");
+        const provider = new WorkspaceTodoTreeProvider(store, workspaceFolder);
         const roots = await provider.getChildren();
 
         expect(roots).toHaveLength(1);

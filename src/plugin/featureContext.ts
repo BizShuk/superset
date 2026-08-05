@@ -2,7 +2,7 @@
 //
 // Every feature whose heavy lifting still lives in a `register(ctx:
 // FeatureContext)` function (todo / mdns / terminals / topology /
-// projects / projectsTodo) needs to adapt a `PluginContext` into that
+// todo) needs to adapt a `PluginContext` into that
 // legacy shape before calling `register()`. The adaptation logic is
 // identical across all six — the only wrinkle is the status-bar item:
 // `terminals` creates a real one (its `HighlightPresenter` calls

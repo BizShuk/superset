@@ -137,7 +137,7 @@ export function planInfoToTodoItem(info: PlanInfo): TodoItem {
  *
  * Plan items never have nested children, so the section node's
  * only structural role is to group its `items` under a named
- * heading. Returns a `TodoItem`; callers in the projectsTodo tree
+ * heading. Returns a `TodoItem`; callers in the workspace tree
  * provider cast this to `ProjectTodoItem` after spreading the
  * required `projectName` / `projectPath` fields (those fields are
  * added on the section node itself, not on the children).

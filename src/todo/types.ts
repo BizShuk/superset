@@ -39,6 +39,28 @@ export interface TodoItem {
     readonly filePath?: string;
 }
 
+/**
+ * 帶有 sub-project 歸屬的 `TodoItem`。TODO 面板遞迴掃描 workspace,
+ * 每個含 `README.todo` 的資料夾是一個 sub-project,列上的命令要靠
+ * `projectPath` 找回對應的 `TodoStore`。
+ *
+ * 合成的 wrapper row(priority / file group、workspace section)沒有
+ * 對應單一 sub-project,`projectName` 設為 `"<workspace>"` 並把
+ * `projectPath` 留空字串 — 命令處理端(例如 `openProject`)必須先
+ * null-check `projectPath` 才使用。
+ */
+export interface WorkspaceTodoItem extends TodoItem {
+    readonly projectName: string;
+    readonly projectPath: string;
+    children?: WorkspaceTodoItem[];
+}
+
+export type WorkspaceTodoChange =
+    | { type: "loaded" }
+    | { type: "toggled"; item: WorkspaceTodoItem };
+
+export type WorkspaceTodoListener = (change: WorkspaceTodoChange) => void;
+
 export type TodoViewType = "section" | "priority" | "file";
 
 export type TodoChange =

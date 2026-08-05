@@ -1,6 +1,6 @@
 # Superset
 
-VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀察型面板 — `Terminals` 列出所有開啟中的終端機、背景終端機有新輸出時三處同步高亮;`MDNS` 掃同網段服務;`Topology` 掃描網路環境;`TODO` 管理工作區待辦;`Overall` 跨專案檢視所有進行中的計畫。Markdown `tree` 區塊與 `README.todo` 預覽也內建。
+VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀察型面板 — `Terminals` 列出所有開啟中的終端機、背景終端機有新輸出時三處同步高亮;`MDNS` 掃同網段服務;`Topology` 掃描網路環境;`TODO` 遞迴管理 workspace 內所有 `README.todo` 與 `plans/`。Markdown `tree` 區塊與 `README.todo` 預覽也內建。
 
 核心使用情境:背景跑 Claude Code 的終端機持續輸出時,使用者能在側欄一眼看到「哪個背景終端機有新動靜」,再 `Ctrl+Alt+T` 模糊跳轉過去。
 
@@ -16,8 +16,7 @@ a
 | `Sessions`                | 依 current workspace 內的 project 分組瀏覽 agent sessions   | 同時操作 workspace / monorepo 的人   |
 | `MDNS`                    | 列出同網段 DNS-SD / mDNS 服務(印表機、AirPlay、SSH 等)      | 需要快速存取區網裝置的人             |
 | `Topology`                | 掃描 interfaces / routing / DNS / ARP,產出拓撲樹狀圖        | 需要掌握網路環境的開發者 / SRE       |
-| `TODO`                    | 讀寫 `README.todo`,支援嵌套 + 優先級 + inline link          | 用 `README.todo` 管理工作的人        |
-| `Overall → Projects TODO` | 跨專案總覽所有 `README.todo` 與 `plans/` 計畫文件           | 同時管理多個專案的人                 |
+| `TODO`                    | 讀寫 workspace 內所有 `README.todo`,支援嵌套 + 優先級 + inline link | 用 `README.todo` 管理工作的人 |
 | Markdown `tree` 預覽      | ` ```tree ` fenced block 渲染為 📁/📄 icon 結構             | 撰寫文件時想插入目錄樹狀圖           |
 | `README.todo` 預覽        | 摺疊/展開/過濾互動式檢視                                    | 想在 Markdown 預覽裡直接編輯 todo    |
 | SCM Graph reset           | commit 右鍵直接執行 `Reset Soft` / `Reset Hard`             | 本機使用 proposed API 的 Git 使用者  |
@@ -257,33 +256,7 @@ subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無
 
 ---
 
-### 5. `Overall → Projects TODO` — 跨專案總覽
-
-三個 TODO view 的掃描邊界互相獨立:
-
-| View             | 掃描邊界                                                  |
-| ---------------- | --------------------------------------------------------- |
-| `TODO`           | 只讀寫當前 project / workspace root 的 `README.todo`      |
-| `Workspace TODO` | 從當前 workspace root (depth 0) 遞迴掃描,預設最大 depth 5 |
-| `Projects TODO`  | 只從 `~/projects` 單一根目錄掃描 depth 1–5                |
-
-功能:在 Activity Bar 的第二顆 `Superset-Overall` icon 下,遞迴總覽 `~/projects/` 裡大小寫完全相符的 `README.todo`。每個命中資料夾以該資料夾名稱建立 project group。命中後仍繼續掃描子孫,但不超過 depth 5。每個 project row 一律預設收合,展開可看:
-
-- 該 project 自己的 `README.todo` sections(同上 TODO 面板的過濾 / 勾選 / rename 邏輯)
-- 該 project 自己的 `## Plans` sub-section(列出 `plans/*.md` 文件,點 🔗 icon 可用 Markdown 預覽開啟)
-
-**逐步使用**:
-
-1. Activity Bar 點第二顆 `Superset-Overall` icon → 開啟 `Projects TODO` view。
-2. 面板列出 `~/projects/` depth 1–5 內所有含精確 `README.todo` 的資料夾,並以資料夾名稱分組(預設全部收合)。
-3. 點某個 project row 左側 `>` 展開 → 看到該 project 自己的 sections 與 `## Plans` 子節。
-4. 在任一 project 上操作 todo / 過濾 / 點 `Open Project` icon — 行為與 TODO 面板一致,但寫回各自專案的 `README.todo`。
-
-> 每個 project row 永遠保留(即使檔案全勾、priority filter 全空),目的是讓 overview 作為「哪些專案還有 todo 檔」的一覽表。
-
----
-
-### 6. Markdown `tree` 區塊語法高亮 + 預覽渲染
+### 5. Markdown `tree` 區塊語法高亮 + 預覽渲染
 
 **功能**:在 `.md` 檔案裡用 ` ```tree ` fenced block 寫目錄樹,編輯時有 TextMate 高亮,Markdown 預覽則渲染為帶 📁/📄 icon 的結構。
 
@@ -310,7 +283,7 @@ subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無
 
 ---
 
-### 7. `README.todo` Markdown 預覽增強
+### 6. `README.todo` Markdown 預覽增強
 
 **功能**:在 `README.todo` 檔案的 Markdown 預覽裡,加上摺疊/展開按鈕與過濾互動,無需離開預覽就能操作。
 
@@ -325,7 +298,7 @@ subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無
 
 ---
 
-### 8. SCM Graph commit reset
+### 7. SCM Graph commit reset
 
 `功能`:在 `Source Control → Graph` 的單一 commit 上按右鍵,直接顯示 `Reset Soft` 與 `Reset Hard`。`Reset Hard` 會先顯示 modal confirmation;`Reset Soft` 直接執行。
 
@@ -338,7 +311,7 @@ subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無
 3. 按 `F5` 開 Extension Development Host。
 4. 在新視窗的 `Source Control → Graph` 對單一 commit 按右鍵驗證兩個 reset command。
 
-### 9. Explorer Copy GitHub URL
+### 8. Explorer Copy GitHub URL
 
 `功能`:在 Explorer 的 repository 檔案上按右鍵,選 `Copy GitHub URL`,將以下格式寫入 clipboard:
 
@@ -354,7 +327,7 @@ URL 固定使用 `master` branch。Superset 只讀取本機 Git repository 與 G
 2. 點 `Copy GitHub URL`。
 3. URL 寫入 clipboard;GitHub `origin` remote 優先,沒有時使用第一個 GitHub remote。
 
-### 10. Git Hooks 安裝與連結
+### 9. Git Hooks 安裝與連結
 
 `Superset: Install Git Hooks` 只在手動執行時,從 extension 內建模板補齊目前 VS Code 視窗第一個 opened folder 的 `.githooks/`。既有同名檔案不會被覆蓋;補齊成功後會設定 repository-local `core.hooksPath=.githooks`。
 
@@ -366,7 +339,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 11. Default Project Template — workspace 初始化
+### 10. Default Project Template — workspace 初始化
 
 `Superset: Install Default Project` 會在目前 workspace 根目錄執行內建安裝器，預設安裝三份標準 ignore files：
 
@@ -382,7 +355,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 12. Default Tools — Go CLI 安裝
+### 11. Default Tools — Go CLI 安裝
 
 `Superset: Install Default Tools` 會依序為目前使用者安裝九個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
 
@@ -413,7 +386,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 13. Projects Setup — projects workspace 初始化
+### 12. Projects Setup — projects workspace 初始化
 
 `Superset: Projects Setup` 會建立固定的 `~/projects` root，並從 GitHub clone 下列 BizShuk repositories：
 
@@ -440,7 +413,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 14. Editor Layout — 四個 editor group 佈局模式
+### 13. Editor Layout — 四個 editor group 佈局模式
 
 模式是`兩個方向各自`的 even／max `組合`，不是「選一個方向」：
 
@@ -472,7 +445,7 @@ mode = { horizontal: even | max } × { vertical: even | max }
 
 ---
 
-### 15. Disk Usage — Status Bar 磁碟容量
+### 14. Disk Usage — Status Bar 磁碟容量
 
 啟用 Superset 後，Status Bar 右側會顯示第一個 workspace 所在 volume 的已使用比例，例如
 `$(database) Disk 80%`。Hover tooltip 會列出 used、free 與 total capacity；資料每 30 秒刷新一次。
@@ -481,14 +454,14 @@ mode = { horizontal: even | max } × { vertical: even | max }
 
 ---
 
-### 16. `CLI` — 路徑啟動器
+### 15. `CLI` — 路徑啟動器
 
 Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects` 底下的資料夾:
 
 ```text
 CLI
-├── ai                                ← 第一層,可展開
-│   └── sessiond   master(+4,-2)      ← 第二層,leaf
+├── ai              🔵 1               ← 第一層,數字全來自底下
+│   └── sessiond   🟡 1 · master(+4,-2)  ← 第二層,leaf
 ├── tools          🟡 2 · w-cli-git(+180,-165)
 │   ├── tools · claude   running      ← CLI-created terminal,點擊可聚焦
 │   ├── tools · codex    idle
@@ -499,6 +472,9 @@ CLI
 
 root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形狀對齊
 `<category>/<project>` 的目錄慣例。以 `.` 開頭的目錄與 `node_modules` 不列出。
+
+除此之外`不`按內容篩選 —— 沒有 `.git` 的資料夾一樣會列出。要挑的 cwd 不限於
+git repository,不想看到的列請用 `Remove from Panel` 手動移除(見下)。
 
 #### git 分支與行數增減
 
@@ -523,7 +499,15 @@ CLI Launcher 在目前 Extension Host runtime 內記住自己建立的 terminals
 時,git 資訊前會顯示 `🟡 <總數>`,例如 `🟡 2 · master(+4,-2)`；沒有 terminal
 時維持原本的 git description,不顯示 `🟡 0`。
 
-展開 path 後,terminal rows 排在第二層資料夾之前。每列 description 顯示
+這個數字`含底下的子資料夾`:agent 通常跑在第二層,第一層收合時仍看得出底下有幾個
+terminal 在跑。圓點的`顏色`表示來源,不另外多寫文字:
+
+- `🟡` —— 這個資料夾`自己`有 terminal(可能再加上子資料夾的)。
+- `🔵` —— 自己沒開,數字`全部來自底下的子資料夾`;展開它只會看到資料夾,
+  要再往下一層才找得到那些 terminal。
+
+展開 path 後,terminal rows 排在第二層資料夾之前,且只列出`屬於該資料夾自己`的
+terminals。每列 description 顯示
 `running` 或 `idle`：CLI command 送出後到配對的 Shell Integration end event 之前
 都算 `running`。點擊 terminal row 會直接聚焦該 editor-area terminal,互動與 Superset
 `Terminals` View 一致。
@@ -541,13 +525,29 @@ CLI Launcher 在目前 Extension Host runtime 內記住自己建立的 terminals
 4. 按住 `Cmd` / `Ctrl` 多選數列再按快捷鍵,每個路徑各開一個 terminal,只有最後一個
    會搶焦點。
 5. 右鍵 → `Open Terminal at Path` 只開 terminal 不跑任何 CLI。
-6. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉(見下一節)。
-7. 標題列按鈕:`Filter Paths`(過濾路徑)、`Pin Path`(釘一個 root 以外的路徑到
-   最上面)、`Copy All Paths`(把面板所有路徑逐行複製到剪貼簿)、`Refresh`
-   (重新掃描)。過濾生效時才多出一顆 `Clear Filter`。
+6. 右鍵 → `Open in New Window` 會以獨立 VS Code window 開啟該路徑;多選時每個路徑
+   各開一個 window。
+7. 右鍵 → `Create Subfolder` 在所選 path 下建立一層子資料夾;多選時會在每個 path
+   建立同名子資料夾。
+8. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
+   (見下一節)。
+9. 標題列按鈕:`Filter Paths`(過濾路徑;CLI 面板取得焦點時可按 `Ctrl+T`)、
+   `Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`(把面板所有路徑
+   逐行複製到剪貼簿)、`Refresh`(重新掃描)。過濾生效時才多出一顆
+   `Clear Filter`。
 
 點擊 path row`不會`啟動任何東西 —— 只做選取與展開；點擊展開後的 terminal row
 則會聚焦既有 terminal,不會另外 launch。
+
+#### 建立子資料夾
+
+右鍵 Pinned Path 或 Scanned Folder → `Create Subfolder`，輸入名稱後會在該 path
+下建立 direct subfolder。名稱前後空白會先移除，只接受一層 folder name；空白、
+`.`、`..`、nested path 與 absolute path 都不會送進 filesystem。
+
+多選時只詢問一次名稱，並在每個選取 path 建立同名子資料夾。成功後 CLI View 立即
+刷新；新 folder 是否顯示仍受固定兩層 scan depth 與目前 filter 影響。這個動作不會
+修改 `superset.cliLauncher.*` settings、不會自動 pin，也不會建立 terminal。
 
 #### 從面板移除路徑
 
@@ -558,12 +558,16 @@ CLI Launcher 在目前 Extension Host runtime 內記住自己建立的 terminals
 - 掃描出來的資料夾 → 寫進 `superset.cliLauncher.hidden`,連同`其下的子路徑`一起
   不再列出。
 
+按住 `Cmd` / `Ctrl` 多選數列再右鍵,`Remove from Panel` 會套用到`整份選取`,確認
+對話只跳一次;釘選列與掃描列可以混在同一次選取裡,各自走各自的設定。
+
 移除只影響面板,`不會`動到磁碟上的資料夾。要放回來:標題列 `...` →
 `Restore Hidden Paths`(可多選),或直接編輯 `superset.cliLauncher.hidden`。
 
 #### 專案過濾 (subsequence match)
 
-`Filter Paths` 會跳出輸入框,查詢以 `/` 切段,每段的字元只要`依序`出現在`同一個
+`Filter Paths` 會跳出輸入框；CLI 面板取得焦點時可按 `Ctrl+T` 啟動同一個 Filter。
+查詢以 `/` 切段,每段的字元只要`依序`出現在`同一個
 資料夾名`裡就算命中 —— 不必連續,也不必記得完整名稱,但`不會跨過 /`:
 
 | 輸入      | 命中                                                     |
@@ -581,7 +585,8 @@ CLI Launcher 在目前 Extension Host runtime 內記住自己建立的 terminals
 - 第一層命中時整包子資料夾一起留下;只有第二層命中時,第一層仍會保留當作掛載點,
   並自動展開讓命中的項目直接可見。
 - 過濾中面板標題右側顯示 `filter: <查詢>`,`Copy All Paths` 也只複製過濾後的路徑。
-- 送出空字串或按 `Clear Filter` 即清除;按 `Esc` 取消則維持原條件。
+- 按 `Enter` 送出後 focus 回到 CLI 專案清單；送出空字串或按 `Clear Filter` 即清除,
+  按 `Esc` 取消則維持原條件。
 - 過濾條件`只存在記憶體`,不寫進 settings,關掉視窗即消失。
 
 #### 設定
@@ -651,7 +656,7 @@ code --install-extension superset-*.vsix
 | `Superset: Rename` / `Rename Group`             | `F2`(terminal 面板) | 重新命名                                                                      |
 | `Superset: Open README.todo`                    | —                   | 開啟專案 `README.todo`                                                        |
 | `Superset: Toggle Todo`                         | —                   | 切換該列完成狀態                                                              |
-| `Superset: Focus Panel` / `Focus Overall Panel` | —                   | 聚焦側欄面板                                                                  |
+| `Superset: Focus Panel`                         | —                   | 聚焦側欄面板                                                                  |
 | `Superset: Show Diagnostic Logs`                | —                   | 開啟 Output Channel 看診斷 log                                                |
 | `Superset: Reset Soft (this commit)`            | —                   | Graph commit 右鍵移動 HEAD,保留 index / working tree                          |
 | `Superset: Reset Hard (this commit)`            | —                   | Graph commit 右鍵重置 HEAD / index / working tree                             |
@@ -670,9 +675,11 @@ code --install-extension superset-*.vsix
 | `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                        |
 | `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+1/2/3`(CLI 面板) | 在選取路徑開 terminal 並執行對應 agent CLI                                 |
 | `CLI: Open Terminal at Path`                    | —                   | 只在選取路徑開 terminal,不執行命令                                            |
+| `CLI: Open in New Window`                       | —                   | 以獨立 VS Code window 開啟選取路徑                                            |
+| `CLI: Create Subfolder`                         | —                   | 在每個選取路徑建立同名 direct subfolder                                       |
 | `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
 | `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿(套用作用中的過濾)                              |
-| `CLI: Filter Paths` / `Clear Filter`            | —                   | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
+| `CLI: Filter Paths` / `Clear Filter`            | `Ctrl+T`(CLI 面板)  | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 

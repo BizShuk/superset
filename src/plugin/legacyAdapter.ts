@@ -36,7 +36,7 @@ export interface LegacyPluginOptions {
  * touch the status bar. Status bar is stubbed.
  *
  * Replaces the six near-identical shims in
- * `src/<feature>/plugin.ts` (mdns / todo / projects / projectsTodo /
+ * `src/<feature>/plugin.ts` (mdns / todo /
  * topology) with a single factory call.
  */
 export function legacyPlugin(options: LegacyPluginOptions): ExtensionPlugin {

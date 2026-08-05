@@ -138,6 +138,7 @@ interface TrackerInspection {
         terminal: FakeTerminal;
         phase: "idle" | "pending" | "running";
     }>;
+    countUnderPath(path: string): number;
 }
 
 let tracker: TrackerInspection;
@@ -326,6 +327,29 @@ describe("launch", () => {
         ).toEqual([terminals[0]]);
     });
 
+    it("counts descendant terminals but not sibling paths with the same prefix", async () => {
+        const nested = {
+            id: "/opt/web/api",
+            label: "api",
+            path: "/opt/web/api",
+        };
+        const sibling = {
+            id: "/opt/webhooks",
+            label: "webhooks",
+            path: "/opt/webhooks",
+        };
+        await launch(ENTRY, "claude", { agent: "claude" });
+        await launch(nested, "codex", { agent: "codex" });
+        await launch(sibling, "grok", { agent: "grok" });
+
+        expect(tracker.countUnderPath("/opt/web")).toBe(2);
+        expect(tracker.countUnderPath("/opt/web/api")).toBe(1);
+        expect(tracker.countUnderPath("/opt/webhooks")).toBe(1);
+
+        closeTerminal(terminals[1]);
+        expect(tracker.countUnderPath("/opt/web")).toBe(1);
+    });
+
     it("does not share terminals between entries with the same label", async () => {
         const other = { id: "/srv/web", label: "web", path: "/srv/web" };
         await launch(ENTRY, "claude", { agent: "claude" });
@@ -390,7 +414,10 @@ describe("launch", () => {
     it("executes only cd when opening a plain terminal", async () => {
         await launch(ENTRY, "");
 
-        expect(terminals[0].sendText).toHaveBeenCalledWith(`cd '/opt/web'`, true);
+        expect(terminals[0].sendText).toHaveBeenCalledWith(
+            `cd '/opt/web'`,
+            true
+        );
     });
 
     it("keeps reusing a plain terminal because cd never marks it busy", async () => {

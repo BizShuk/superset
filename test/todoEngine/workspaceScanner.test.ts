@@ -9,7 +9,7 @@ import { tmpdir } from "os";
 
 /**
  * `scanWorkspaceTodoDirs` is the pure scanner shared by
- * `src/projectsTodo/` (workspace scan at configurable depth) and
+ * `src/todo/` (workspace scan at configurable depth) and
  * `src/todo/` (the new SuperSet TODO panel at fixed depth 1).
  *
  * These tests pin its depth / includeRoot / case-sensitivity /

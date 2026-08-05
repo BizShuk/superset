@@ -57,7 +57,6 @@ describe("renderDiagnosticsMarkdown", () => {
             unseenTerminalCount: 2,
             mDNSServiceCount: 12,
             todoItemCount: 30,
-            projectsTodoProjectCount: 4,
             activePluginIds: ["terminals", "mdns", "todo"],
         };
         const md = renderDiagnosticsMarkdown(snap);
@@ -76,7 +75,6 @@ describe("renderDiagnosticsMarkdown", () => {
             unseenTerminalCount: 0,
             mDNSServiceCount: 0,
             todoItemCount: 0,
-            projectsTodoProjectCount: 0,
             activePluginIds: [],
         });
         expect(md).toContain("No plugins currently active");

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { ProjectsTodoTreeProvider } from "../src/projectsTodo/projectsTodoTreeProvider";
-import { ProjectsTodoStore } from "../src/projectsTodo/projectsTodoStore";
+import { WorkspaceTodoTreeProvider } from "../src/todo/workspaceTodoTreeProvider";
+import { WorkspaceTodoStore } from "../src/todo/workspaceTodoStore";
 import { mkdtempSync, rmSync, mkdirSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -44,7 +44,7 @@ vi.mock("vscode", () => {
  * wording. These tests pin both branches so the rewrite of
  * `src/todo/index.ts` doesn't drift the placeholder text.
  */
-describe("ProjectsTodoTreeProvider — empty-state copy", () => {
+describe("WorkspaceTodoTreeProvider — empty-state copy", () => {
     let tempDir: string;
 
     beforeEach(() => {
@@ -59,14 +59,13 @@ describe("ProjectsTodoTreeProvider — empty-state copy", () => {
     it("uses the default placeholder copy when no emptyStateCopy is supplied", async () => {
         const ws = join(tempDir, "ws");
         mkdirSync(ws);
-        const store = new ProjectsTodoStore();
+        const store = new WorkspaceTodoStore();
         await store.loadWorkspaceTodos(ws, 1, false);
 
-        const provider = new ProjectsTodoTreeProvider(
+        const provider = new WorkspaceTodoTreeProvider(
             store,
             ws,
             undefined,
-            "workspace",
         );
         const children = provider.getChildren() as Array<{
             text: string;
@@ -85,14 +84,13 @@ describe("ProjectsTodoTreeProvider — empty-state copy", () => {
     it("uses the panel-supplied copy when emptyStateCopy is provided", async () => {
         const ws = join(tempDir, "ws");
         mkdirSync(ws);
-        const store = new ProjectsTodoStore();
+        const store = new WorkspaceTodoStore();
         await store.loadWorkspaceTodos(ws, 1, false);
 
-        const provider = new ProjectsTodoTreeProvider(
+        const provider = new WorkspaceTodoTreeProvider(
             store,
             ws,
             undefined,
-            "workspace",
             "Drop a README.todo into a folder to see it here.",
         );
         const children = provider.getChildren() as Array<{
@@ -112,12 +110,11 @@ describe("ProjectsTodoTreeProvider — empty-state copy", () => {
         // Build a provider without a workspaceRoot (edge case the
         // `src/todo/index.ts` flow always avoids, but the contract
         // explicitly short-circuits in this branch).
-        const store = new ProjectsTodoStore();
-        const provider = new ProjectsTodoTreeProvider(
+        const store = new WorkspaceTodoStore();
+        const provider = new WorkspaceTodoTreeProvider(
             store,
             undefined,
             undefined,
-            "workspace",
         );
         expect(provider.getChildren()).toEqual([]);
     });

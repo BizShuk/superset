@@ -1,5 +1,5 @@
 // Label-rendering helpers shared by `todoTreeProvider` and
-// `projectsTodoTreeProvider`. Both providers repeat the same chain
+// `workspaceTodoTreeProvider`. Both providers repeat the same chain
 // when rendering checkbox / list rows:
 //   1. strip `[P0]` / `[P1]` / `[P2]` tag → derive priority
 //   2. detect a `[text](url)` link to choose contextValue

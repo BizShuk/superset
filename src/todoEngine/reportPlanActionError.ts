@@ -1,6 +1,6 @@
 // Map a `PlanActionError` to a contextual user-visible message.
 //
-// Both `todo` and `projectsTodo` panels surface the same four plan
+// The `todo` panel surfaces the same four plan
 // transitions (complete / backlog / archive / delete) and need the
 // same error mapping. Centralising it here keeps the user-facing
 // strings consistent and lets the factory emit the message without
