@@ -26,10 +26,13 @@ import * as vscode from "vscode";
 import { buildCLILauncherCatalog } from "./catalog";
 import {
     loadEntrySelectors,
+    loadFocusedOnly,
+    loadFocusedPaths,
     loadHiddenRules,
     loadRoots,
 } from "./config";
 import { isDescendantPath, type CLIEntry } from "./entries";
+import { projectFocusedPaths } from "./focus";
 import {
     formatGitFolderDescription,
     formatGitFolderStatus,
@@ -45,6 +48,13 @@ export const ENTRY_CONTEXT_VALUE = "superset.cliLauncher.entry";
 
 /** Scan-derived 資料夾；包含 Git repository 與必要的 category container。 */
 export const FOLDER_CONTEXT_VALUE = "superset.cliLauncher.folder";
+
+/** exact Focused row 的 context suffix，供 Add/Remove Focus menu 互斥顯示。 */
+export const FOCUSED_CONTEXT_SUFFIX = ".focused";
+
+function pathContextValue(base: string, focused: boolean): string {
+    return focused ? `${base}${FOCUSED_CONTEXT_SUFFIX}` : base;
+}
 
 /** CLI Launcher 建立的 terminal child row，不提供 path 的 inline agent buttons。 */
 export const TERMINAL_CONTEXT_VALUE = "superset.cliLauncher.terminal";
@@ -206,6 +216,7 @@ export class CLILauncherTreeProvider
         CLIEntryTreeItem,
         Promise<CLIEntryTreeItem[]>
     >();
+    private focusedPaths = new Set<string>();
 
     readonly onDidChangeTreeData = this.changed.event;
 
@@ -309,7 +320,10 @@ export class CLILauncherTreeProvider
             return this.registerPathItem(
                 new CLIEntryTreeItem(child, {
                     id: `${parent.id}/${child.path}`,
-                    contextValue: FOLDER_CONTEXT_VALUE,
+                    contextValue: pathContextValue(
+                        FOLDER_CONTEXT_VALUE,
+                        this.focusedPaths.has(child.path)
+                    ),
                     git: status.get(child.path),
                     terminalCount: counts.own,
                     totalTerminalCount: counts.total,
@@ -328,23 +342,35 @@ export class CLILauncherTreeProvider
             home
         );
         const defaultFolders = await filterRepositoryFolders(catalog.folders);
+        const focusedPaths = loadFocusedPaths();
+        this.focusedPaths = new Set(focusedPaths);
+        const projection = projectFocusedPaths(
+            catalog.entries,
+            defaultFolders,
+            focusedPaths,
+            loadFocusedOnly()
+        );
 
         // 一次把這一層要顯示的路徑全部問完,再分配給各列;逐列 await 會把數十次
         // git 呼叫串成序列,面板要等最後一個才畫得出來。
         const status = await readGitFolderStatusMap([
-            ...catalog.entries.map(({ entry }) => entry.path),
-            ...defaultFolders.map((folder) => folder.entry.path),
+            ...projection.entries.map(({ entry }) => entry.path),
+            ...projection.folders.map((folder) => folder.entry.path),
         ]);
 
-        const items = catalog.entries.map(({ entry, source }) => {
+        const items = projection.entries.map(({ entry, source }) => {
             const counts = this.terminalCounts(entry.path);
+            const baseContextValue =
+                source === "literal"
+                    ? ENTRY_CONTEXT_VALUE
+                    : FOLDER_CONTEXT_VALUE;
             return this.registerPathItem(
                 new CLIEntryTreeItem(entry, {
                     id: `${source}:${entry.path}`,
-                    contextValue:
-                        source === "literal"
-                            ? ENTRY_CONTEXT_VALUE
-                            : FOLDER_CONTEXT_VALUE,
+                    contextValue: pathContextValue(
+                        baseContextValue,
+                        this.focusedPaths.has(entry.path)
+                    ),
                     git: status.get(entry.path),
                     terminalCount: counts.own,
                     totalTerminalCount: counts.total,
@@ -352,13 +378,16 @@ export class CLILauncherTreeProvider
             );
         });
 
-        for (const folder of defaultFolders) {
+        for (const folder of projection.folders) {
             const counts = this.terminalCounts(folder.entry.path);
             items.push(
                 this.registerPathItem(
                     new CLIEntryTreeItem(folder.entry, {
                         id: `scan:${folder.entry.path}`,
-                        contextValue: FOLDER_CONTEXT_VALUE,
+                        contextValue: pathContextValue(
+                            FOLDER_CONTEXT_VALUE,
+                            this.focusedPaths.has(folder.entry.path)
+                        ),
                         children: folder.children,
                         git: status.get(folder.entry.path),
                         terminalCount: counts.own,

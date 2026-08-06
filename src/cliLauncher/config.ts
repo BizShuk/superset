@@ -21,11 +21,18 @@ import {
     type RawHiddenRule,
 } from "./entries";
 import { resolveAgentCommands, type AgentCommands } from "./command";
+import {
+    appendFocusedPath as appendFocusedPathToRaw,
+    normalizeFocusedPaths,
+    removeFocusedPath as removeFocusedPathFromRaw,
+} from "./focus";
 
 export const CONFIG_SECTION = "superset.cliLauncher";
 const ENTRIES_KEY = "entries";
 const ROOTS_KEY = "roots";
 const HIDDEN_KEY = "hidden";
+const FOCUSED_KEY = "focused";
+const FOCUSED_ONLY_KEY = "focusedOnly";
 const AGENT_COMMANDS_KEY = "agentCommands";
 
 /** 預設掃描 `~/projects`,對齊「兩層佈局」的目錄慣例。 */
@@ -68,6 +75,67 @@ function rawHidden(): unknown {
 /** 讀取 literal ancestor paths 與 Regex hidden rules。 */
 export function loadHiddenRules(): HiddenRule[] {
     return normalizeHiddenRules(rawHidden(), homeDir());
+}
+
+function rawFocused(): unknown {
+    return vscode.workspace
+        .getConfiguration(CONFIG_SECTION)
+        .get<unknown>(FOCUSED_KEY, []);
+}
+
+/** 讀取 exact literal Focus list。 */
+export function loadFocusedPaths(): string[] {
+    return normalizeFocusedPaths(rawFocused(), homeDir());
+}
+
+/** 是否只投影 Focused paths。 */
+export function loadFocusedOnly(): boolean {
+    return (
+        vscode.workspace
+            .getConfiguration(CONFIG_SECTION)
+            .get<unknown>(FOCUSED_ONLY_KEY, false) === true
+    );
+}
+
+async function writeFocused(next: string[]): Promise<void> {
+    await vscode.workspace
+        .getConfiguration(CONFIG_SECTION)
+        .update(FOCUSED_KEY, next, vscode.ConfigurationTarget.Global);
+}
+
+/** 加入 Focus list；已存在時不寫設定。 */
+export async function addFocusedPath(targetPath: string): Promise<boolean> {
+    const next = appendFocusedPathToRaw(rawFocused(), targetPath, homeDir());
+    if (!next) {
+        return false;
+    }
+    await writeFocused(next);
+    return true;
+}
+
+/** 移出 Focus list；找不到時不寫設定。 */
+export async function removeFocusedPath(targetPath: string): Promise<boolean> {
+    const next = removeFocusedPathFromRaw(rawFocused(), targetPath, homeDir());
+    if (!next) {
+        return false;
+    }
+    await writeFocused(next);
+    return true;
+}
+
+/** 切換 Focus-only projection；狀態相同時不寫設定。 */
+export async function setFocusedOnly(active: boolean): Promise<boolean> {
+    if (loadFocusedOnly() === active) {
+        return false;
+    }
+    await vscode.workspace
+        .getConfiguration(CONFIG_SECTION)
+        .update(
+            FOCUSED_ONLY_KEY,
+            active,
+            vscode.ConfigurationTarget.Global
+        );
+    return true;
 }
 
 async function writeHidden(next: RawHiddenRule[]): Promise<void> {

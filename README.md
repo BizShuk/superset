@@ -22,7 +22,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
-| `CLI` 面板                | 以 `Repo Path` 選 repository、啟動 agent CLI，並在 `Change` View 管理變更與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
+| `CLI` 面板                | 以 `Repo Path` 與 Focus list 選 repository、啟動 agent CLI，並在 `Change` View 管理變更與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -556,12 +556,14 @@ terminals。每列 description 顯示
    各開一個 window。
 9. 右鍵 → `Create Subfolder` 在所選 path 下建立一層子資料夾;多選時會在每個 path
    建立同名子資料夾。
-10. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
+10. 右鍵 → `Add to Focus List` / `Remove from Focus List` 管理 Focused paths;多選時會
+   套用到整份選取。
+11. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
    (見下一節)。
-11. 標題列按鈕:`Filter Paths`(開啟 VS Code native Find Control;CLI 面板取得焦點時
-   可按 `Cmd+F`)、
-   `Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`(把面板所有路徑
-   逐行複製到剪貼簿)、`Refresh`(重新掃描)。
+12. 標題列按鈕:`Filter Paths`(開啟 VS Code native Find Control;CLI 面板取得焦點時
+   可按 `Cmd+F`)、`Show Focused Paths Only` / `Show All Paths`(切換 Focus-only mode)、
+   `Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`(把目前 Focus
+   projection 的所有路徑逐行複製到剪貼簿)、`Refresh`(重新掃描)。
 
 點擊 path row`不會`啟動 terminal —— 只做選取、展開並更新 `Change` View；點擊展開
 後的 terminal row 則會聚焦既有 terminal，不會另外 launch。
@@ -576,6 +578,17 @@ terminals。每列 description 顯示
 刷新；新 folder 只有在成為 Git repository 或被 `entries` 明確加入後才會顯示，且仍受
 固定兩層 scan depth 與目前 native Find query 影響。這個動作不會修改
 `superset.cliLauncher.*` settings、不會自動 pin，也不會建立 terminal。
+
+#### Focus list
+
+每個 Pinned Path、Dynamic Entry 與 Scanned Folder 都可由右鍵選單加入或移出 Focus
+list。標題列的 `Show Focused Paths Only` 會隱藏未 Focus 的 paths；切換後同一位置顯示
+`Show All Paths`，可立即恢復完整清單。
+
+Focus list 採 exact path 語意，不使用 Regex，也不改變 Git-only discovery。若 Focused
+Path 位於第二層，第一層 ancestor category 會保留為導覽入口；只 Focus 第一層本身不會
+自動包含其 children。Focus-only mode 會一致套用到 Tree、Command Palette 的 Quick Pick
+與 `Copy All Paths`，toggle 狀態與 Focus list 都跨 workspace 保留。
 
 #### 從面板移除路徑
 
@@ -604,8 +617,8 @@ terminals。每列 description 顯示
 預設後，Filter 與 Match toggles 交由 VS Code 保留本次 runtime 內的使用者選擇。
 Superset 不另存 query，也不修改全域 `workbench.list.*` settings。
 
-Native Find Control 的 query 由 VS Code 擁有，`Copy All Paths` 因此固定複製完整 CLI
-catalog，不受目前畫面上的搜尋結果影響。
+Native Find Control 的 query 由 VS Code 擁有，`Copy All Paths` 因此固定複製目前 Focus
+projection 的完整 catalog，不受目前畫面上的搜尋結果影響。
 
 #### 設定
 
@@ -613,10 +626,12 @@ catalog，不受目前畫面上的搜尋結果影響。
 | --- | --- | --- |
 | `superset.cliLauncher.roots` | `["~/projects"]` | 要掃描的根目錄；兩層內預設只顯示 Git repositories，設成 `[]` 即關閉掃描 |
 | `superset.cliLauncher.entries` | `[]` | 明確加入的 literal Pinned Paths 與從兩層 scan candidates 動態選取的 Regex rules，可包含 non-repository，排在預設結果之前 |
+| `superset.cliLauncher.focused` | `[]` | Focus list 的 exact paths；由 path context menu 加入或移除，不接受 Regex |
+| `superset.cliLauncher.focusedOnly` | `false` | 只投影 Focused paths 與必要的 ancestor category |
 | `superset.cliLauncher.hidden` | `[]` | literal paths 或 Regex rules;符合的掃描路徑連同其子路徑隱藏 |
 | `superset.cliLauncher.agentCommands` | `{}` | 覆寫三顆按鈕的命令,可含旗標 |
 
-四個設定都是 `application` scope,寫入 User settings,不隨 workspace 切換而變。
+六個設定都是 `application` scope,寫入 User settings,不隨 workspace 切換而變。
 按鈕沒反應時,`Superset: Show Diagnostic Logs` 會列出解析到的項目與實際送進
 terminal 的字串。
 
@@ -720,7 +735,9 @@ code --install-extension superset-*.vsix
 | `CLI: Open in New Window`                       | `Cmd+N`(CLI 面板且已選 path) | 以獨立 VS Code window 開啟選取路徑                                      |
 | `CLI: Create Subfolder`                         | —                   | 在每個選取路徑建立同名 direct subfolder                                       |
 | `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
-| `CLI: Copy All Paths`                           | —                   | 逐行複製完整 CLI catalog 的所有路徑到剪貼簿                                  |
+| `CLI: Add to Focus List` / `Remove from Focus List` | —               | 管理所選 exact paths 的 Focus 狀態                                            |
+| `CLI: Show Focused Paths Only` / `Show All Paths` | —                 | 在 Focus projection 與完整 catalog 間切換                                    |
+| `CLI: Copy All Paths`                           | —                   | 逐行複製目前 Focus projection 的完整 catalog 到剪貼簿                        |
 | `CLI: Filter Paths`                             | `Cmd+F`(CLI 面板)   | 開啟 VS Code native Find Control；預設 `Filter` + `Fuzzy Match`               |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。

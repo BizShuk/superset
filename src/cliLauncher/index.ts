@@ -10,15 +10,20 @@ import type { PluginContext } from "../plugin";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import { AGENT_IDS, type AgentId } from "./command";
 import {
+    addFocusedPath,
     addEntry,
     CONFIG_SECTION,
     hidePath,
     loadAgentCommands,
     loadEntrySelectors,
     loadEntries,
+    loadFocusedOnly,
+    loadFocusedPaths,
     loadHiddenRules,
     loadRoots,
+    removeFocusedPath,
     removeEntry,
+    setFocusedOnly,
     unhideRule,
 } from "./config";
 import {
@@ -29,6 +34,7 @@ import {
     type CLIEntry,
 } from "./entries";
 import { buildCLILauncherCatalog } from "./catalog";
+import { projectFocusedPaths } from "./focus";
 import { log, setCLILauncherLog } from "./log";
 import { createNativeFindHandler } from "./nativeFind";
 import { filterRepositoryFolders } from "./repositoryDiscovery";
@@ -192,6 +198,42 @@ export function register(ctx: PluginContext): void {
             }
         ),
         vscode.commands.registerCommand(
+            "superset.cliLauncherAddPathToFocus",
+            async (target: unknown, targets?: unknown[]) => {
+                await runCommand(
+                    "superset.cliLauncherAddPathToFocus",
+                    { target, targets, view },
+                    async (entries) => {
+                        await updateFocusList(entries, true);
+                    }
+                );
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherRemovePathFromFocus",
+            async (target: unknown, targets?: unknown[]) => {
+                await runCommand(
+                    "superset.cliLauncherRemovePathFromFocus",
+                    { target, targets, view },
+                    async (entries) => {
+                        await updateFocusList(entries, false);
+                    }
+                );
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherShowFocusedOnly",
+            async () => {
+                await updateFocusedOnly(true);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherShowAllPaths",
+            async () => {
+                await updateFocusedOnly(false);
+            }
+        ),
+        vscode.commands.registerCommand(
             "superset.cliLauncherCreateSubfolder",
             async (target: unknown, targets?: unknown[]) => {
                 await runCommand(
@@ -279,6 +321,10 @@ export function register(ctx: PluginContext): void {
             "superset.cliLauncherDiscardChanges",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherAddPath",
+            "superset.cliLauncherAddPathToFocus",
+            "superset.cliLauncherRemovePathFromFocus",
+            "superset.cliLauncherShowFocusedOnly",
+            "superset.cliLauncherShowAllPaths",
             "superset.cliLauncherCreateSubfolder",
             "superset.cliLauncherRemovePath",
             "superset.cliLauncherRestoreHidden",
@@ -411,10 +457,16 @@ async function listAllEntries(): Promise<CLIEntry[]> {
         loadHiddenRules(),
         home
     );
-    const entries = catalog.entries.map(({ entry }) => entry);
     const defaultFolders = await filterRepositoryFolders(catalog.folders);
+    const projection = projectFocusedPaths(
+        catalog.entries,
+        defaultFolders,
+        loadFocusedPaths(),
+        loadFocusedOnly()
+    );
+    const entries = projection.entries.map(({ entry }) => entry);
 
-    for (const folder of defaultFolders) {
+    for (const folder of projection.folders) {
         for (const candidate of [folder.entry, ...folder.children]) {
             entries.push(candidate);
         }
@@ -423,11 +475,54 @@ async function listAllEntries(): Promise<CLIEntry[]> {
     return entries;
 }
 
+async function updateFocusList(
+    entries: readonly CLIEntry[],
+    focused: boolean
+): Promise<void> {
+    let changed = 0;
+    for (const entry of entries) {
+        const updated = focused
+            ? await addFocusedPath(entry.path)
+            : await removeFocusedPath(entry.path);
+        changed += updated ? 1 : 0;
+        log(
+            `${
+                focused
+                    ? "superset.cliLauncherAddPathToFocus"
+                    : "superset.cliLauncherRemovePathFromFocus"
+            }: ${entry.path} — ${updated ? "ok" : "no change"}`
+        );
+    }
+
+    if (changed === 0) {
+        await vscode.window.showInformationMessage(
+            focused
+                ? "CLI: 所選路徑已在 Focus list。"
+                : "CLI: 所選路徑已不在 Focus list。"
+        );
+    }
+}
+
+async function updateFocusedOnly(active: boolean): Promise<void> {
+    const commandID = active
+        ? "superset.cliLauncherShowFocusedOnly"
+        : "superset.cliLauncherShowAllPaths";
+    try {
+        const changed = await setFocusedOnly(active);
+        log(`${commandID}: ${changed ? "updated" : "no change"}`);
+    } catch (error: unknown) {
+        log(`${commandID}: failed — ${describeError(error)}`);
+        await vscode.window.showErrorMessage(
+            `CLI: 切換 Focus 顯示失敗 — ${describeError(error)}`
+        );
+    }
+}
+
 /**
- * `Copy All Paths`:把完整 catalog 的每一個項目 (釘選 + 掃描兩層,與 tree view
- * 的基礎順序一致) 的絕對路徑各佔一行寫進剪貼簿。不看選取狀態 —— 這是「複製全部」,
- * 不是「複製選取」。native Find Control 的 query 由 VS Code 擁有,因此這裡複製
- * catalog 的完整 path set。
+ * `Copy All Paths`:把目前 Focus projection 的每一個項目 (釘選 + 掃描兩層,與
+ * tree view 的基礎順序一致) 的絕對路徑各佔一行寫進剪貼簿。不看選取狀態 ——
+ * 這是「複製全部」,不是「複製選取」。native Find Control 的 query 由 VS Code
+ * 擁有,因此這裡不套用 native query。
  */
 async function copyAllPathsToClipboard(): Promise<void> {
     const commandID = "superset.cliLauncherCopyAllPaths";

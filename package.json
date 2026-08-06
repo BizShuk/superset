@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.41.1",
+    "version": "0.42.0",
     "scripts": {
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -167,6 +167,21 @@
                             ]
                         },
                         "markdownDescription": "排在預設 Git repository 結果之前的 explicit paths,也可明確加入 non-repository。literal 字串簡寫等同 `{ \"path\": \"...\" }`;`{ \"regex\": \"...\", \"flags\": \"i\" }` 會從 `#superset.cliLauncher.roots#` 的兩層 scan candidates 動態選取。Regex 比對 absolute 與 `~/...` path,`hidden` 可排除 Dynamic Entry;格式錯誤的項目直接忽略。"
+                    },
+                    "superset.cliLauncher.focused": {
+                        "type": "array",
+                        "scope": "application",
+                        "default": [],
+                        "items": {
+                            "type": "string"
+                        },
+                        "markdownDescription": "Focus list 的 exact paths。可由 `Repo Path` context menu 加入或移除;不支援 Regex,也不改變 Git-only discovery。"
+                    },
+                    "superset.cliLauncher.focusedOnly": {
+                        "type": "boolean",
+                        "scope": "application",
+                        "default": false,
+                        "markdownDescription": "只顯示 Focus list 內的 exact paths,並保留抵達 focused child 所需的 ancestor category。Tree、Quick Pick 與 Copy All Paths 共用此 projection。"
                     },
                     "superset.cliLauncher.hidden": {
                         "type": "array",
@@ -659,6 +674,30 @@
                 "icon": "$(add)"
             },
             {
+                "command": "superset.cliLauncherAddPathToFocus",
+                "title": "Add to Focus List",
+                "category": "CLI",
+                "icon": "$(star-empty)"
+            },
+            {
+                "command": "superset.cliLauncherRemovePathFromFocus",
+                "title": "Remove from Focus List",
+                "category": "CLI",
+                "icon": "$(star-full)"
+            },
+            {
+                "command": "superset.cliLauncherShowFocusedOnly",
+                "title": "Show Focused Paths Only",
+                "category": "CLI",
+                "icon": "$(filter)"
+            },
+            {
+                "command": "superset.cliLauncherShowAllPaths",
+                "title": "Show All Paths",
+                "category": "CLI",
+                "icon": "$(filter-filled)"
+            },
+            {
                 "command": "superset.cliLauncherCreateSubfolder",
                 "title": "Create Subfolder",
                 "category": "CLI",
@@ -811,7 +850,7 @@
         "viewsWelcome": [
             {
                 "view": "superset.cliLauncher.paths",
-                "contents": "找不到可列出的 Git repository。預設會掃描 `~/projects` 底下兩層,非 repository 請用 `superset.cliLauncher.entries` 明確加入。\n[釘選路徑](command:superset.cliLauncherAddPath)"
+                "contents": "找不到可列出的 Git repository。預設會掃描 `~/projects` 底下兩層;若已啟用 Focus-only,請切回 `Show All Paths` 或先加入 Focus list。非 repository 請用 `superset.cliLauncher.entries` 明確加入。\n[釘選路徑](command:superset.cliLauncherAddPath)"
             }
         ],
         "menus": {
@@ -920,6 +959,16 @@
                     "command": "superset.cliLauncherFilter",
                     "when": "view == superset.cliLauncher.paths",
                     "group": "navigation@1"
+                },
+                {
+                    "command": "superset.cliLauncherShowFocusedOnly",
+                    "when": "view == superset.cliLauncher.paths && config.superset.cliLauncher.focusedOnly != true",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "superset.cliLauncherShowAllPaths",
+                    "when": "view == superset.cliLauncher.paths && config.superset.cliLauncher.focusedOnly == true",
+                    "group": "navigation@2"
                 },
                 {
                     "command": "superset.cliLauncherAddPath",
@@ -1125,38 +1174,48 @@
                 },
                 {
                     "command": "superset.cliLauncherRunClaude",
-                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder || viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
                     "group": "inline@1"
                 },
                 {
                     "command": "superset.cliLauncherRunCodex",
-                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder || viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
                     "group": "inline@2"
                 },
                 {
                     "command": "superset.cliLauncherRunGrok",
-                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder || viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
                     "group": "inline@3"
                 },
                 {
                     "command": "superset.cliLauncherOpen",
-                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder || viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
                     "group": "1_run@1"
                 },
                 {
                     "command": "superset.cliLauncherOpenNewWindow",
-                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder || viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
                     "group": "1_run@2"
                 },
                 {
                     "command": "superset.cliLauncherCreateSubfolder",
-                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder || viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
                     "group": "2_modify@1"
                 },
                 {
-                    "command": "superset.cliLauncherRemovePath",
+                    "command": "superset.cliLauncherAddPathToFocus",
                     "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
                     "group": "2_modify@2"
+                },
+                {
+                    "command": "superset.cliLauncherRemovePathFromFocus",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
+                    "group": "2_modify@2"
+                },
+                {
+                    "command": "superset.cliLauncherRemovePath",
+                    "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder || viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused)",
+                    "group": "2_modify@3"
                 },
                 {
                     "command": "superset.cliLauncherDiscardChanges",

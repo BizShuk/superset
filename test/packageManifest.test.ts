@@ -248,6 +248,18 @@ describe("CLI Launcher manifest contributions", () => {
             "Create Subfolder"
         );
         expect(titles.get("superset.cliLauncherAddPath")).toBe("Pin Path");
+        expect(titles.get("superset.cliLauncherAddPathToFocus")).toBe(
+            "Add to Focus List"
+        );
+        expect(titles.get("superset.cliLauncherRemovePathFromFocus")).toBe(
+            "Remove from Focus List"
+        );
+        expect(titles.get("superset.cliLauncherShowFocusedOnly")).toBe(
+            "Show Focused Paths Only"
+        );
+        expect(titles.get("superset.cliLauncherShowAllPaths")).toBe(
+            "Show All Paths"
+        );
         expect(titles.get("superset.cliLauncherRemovePath")).toBe(
             "Remove from Panel"
         );
@@ -290,6 +302,20 @@ describe("CLI Launcher manifest contributions", () => {
             (m) => m.command === "superset.cliLauncherClearFilter"
         );
         expect(clear).toBeUndefined();
+    });
+
+    it("offers one persistent Focus toggle in the CLI title bar", () => {
+        const titleMenu = manifest.contributes.menus["view/title"];
+        expect(titleMenu).toContainEqual({
+            command: "superset.cliLauncherShowFocusedOnly",
+            when: `view == ${VIEW_ID} && config.superset.cliLauncher.focusedOnly != true`,
+            group: "navigation@2",
+        });
+        expect(titleMenu).toContainEqual({
+            command: "superset.cliLauncherShowAllPaths",
+            when: `view == ${VIEW_ID} && config.superset.cliLauncher.focusedOnly == true`,
+            group: "navigation@2",
+        });
     });
 
     it("offers Refresh from both Repo Path and Change views", () => {
@@ -437,8 +463,11 @@ describe("CLI Launcher manifest contributions", () => {
     });
 
     it("shows the three agent buttons inline on every row kind", () => {
-        const rowKinds =
+        const unfocusedRowKinds =
             "viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder";
+        const focusedRowKinds =
+            "viewItem == superset.cliLauncher.entry.focused || viewItem == superset.cliLauncher.folder.focused";
+        const rowKinds = `${unfocusedRowKinds} || ${focusedRowKinds}`;
         const inline = manifest.contributes.menus["view/item/context"].filter(
             (m) => m.command?.startsWith("superset.cliLauncherRun")
         );
@@ -458,7 +487,7 @@ describe("CLI Launcher manifest contributions", () => {
             (m) => m.command === "superset.cliLauncherRemovePath"
         );
         expect(remove?.when).toBe(`view == ${VIEW_ID} && (${rowKinds})`);
-        expect(remove?.group).toBe("2_modify@2");
+        expect(remove?.group).toBe("2_modify@3");
 
         const createSubfolder = manifest.contributes.menus[
             "view/item/context"
@@ -470,6 +499,30 @@ describe("CLI Launcher manifest contributions", () => {
             command: "superset.cliLauncherCreateSubfolder",
             when: `view == ${VIEW_ID} && (${rowKinds})`,
             group: "2_modify@1",
+        });
+
+        const addFocus = manifest.contributes.menus[
+            "view/item/context"
+        ].find(
+            (item) =>
+                item.command === "superset.cliLauncherAddPathToFocus"
+        );
+        expect(addFocus).toEqual({
+            command: "superset.cliLauncherAddPathToFocus",
+            when: `view == ${VIEW_ID} && (${unfocusedRowKinds})`,
+            group: "2_modify@2",
+        });
+
+        const removeFocus = manifest.contributes.menus[
+            "view/item/context"
+        ].find(
+            (item) =>
+                item.command === "superset.cliLauncherRemovePathFromFocus"
+        );
+        expect(removeFocus).toEqual({
+            command: "superset.cliLauncherRemovePathFromFocus",
+            when: `view == ${VIEW_ID} && (${focusedRowKinds})`,
+            group: "2_modify@2",
         });
 
         const openNewWindow = manifest.contributes.menus[
@@ -491,7 +544,7 @@ describe("CLI Launcher manifest contributions", () => {
         expect(restore?.when).toBe(`view == ${VIEW_ID}`);
     });
 
-    it("declares the four application-scoped settings", () => {
+    it("declares the six application-scoped settings", () => {
         const configuration = manifest.contributes
             .configuration as ManifestConfigBlock[];
         const block = configuration.find(
@@ -501,6 +554,8 @@ describe("CLI Launcher manifest contributions", () => {
         expect(Object.keys(block!.properties).sort()).toEqual([
             "superset.cliLauncher.agentCommands",
             "superset.cliLauncher.entries",
+            "superset.cliLauncher.focused",
+            "superset.cliLauncher.focusedOnly",
             "superset.cliLauncher.hidden",
             "superset.cliLauncher.roots",
         ]);
@@ -523,6 +578,19 @@ describe("CLI Launcher manifest contributions", () => {
             items?: { oneOf?: Array<{ required?: string[] }> };
             markdownDescription?: string;
         };
+        const focused = block!.properties["superset.cliLauncher.focused"] as {
+            type?: string;
+            default?: unknown;
+            items?: { type?: string };
+            markdownDescription?: string;
+        };
+        const focusedOnly = block!.properties[
+            "superset.cliLauncher.focusedOnly"
+        ] as {
+            type?: string;
+            default?: unknown;
+            markdownDescription?: string;
+        };
         expect(entries.items?.oneOf).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({ required: ["path"] }),
@@ -538,6 +606,23 @@ describe("CLI Launcher manifest contributions", () => {
         expect(entries.markdownDescription).toContain("non-repository");
         expect(roots.markdownDescription).toContain("Git repositories");
         expect(hidden.markdownDescription).toContain("Regex");
+        expect(focused).toEqual(
+            expect.objectContaining({
+                type: "array",
+                scope: "application",
+                default: [],
+                items: { type: "string" },
+            })
+        );
+        expect(focused.markdownDescription).toContain("exact paths");
+        expect(focusedOnly).toEqual(
+            expect.objectContaining({
+                type: "boolean",
+                scope: "application",
+                default: false,
+            })
+        );
+        expect(focusedOnly.markdownDescription).toContain("ancestor category");
     });
 });
 

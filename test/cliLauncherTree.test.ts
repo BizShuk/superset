@@ -57,6 +57,10 @@ let selectors: EntrySelector[] = [];
 let scanned: ScannedFolder[] = [];
 /** `superset.cliLauncher.hidden` 的 normalized literal / Regex rules。 */
 let hidden: HiddenRule[] = [];
+/** `superset.cliLauncher.focused` 的 normalized exact paths。 */
+let focused: string[] = [];
+/** Focus-only title toggle 的 persistent state。 */
+let focusedOnly = false;
 /** 預設 discovery 中具備自身 `.git` marker 的路徑。 */
 let repositoryPaths = new Set<string>();
 /** 路徑 → git 分支與行數增減;沒有列出的路徑代表不是 repository。 */
@@ -142,6 +146,8 @@ vi.mock("../src/cliLauncher/config", () => ({
     loadEntrySelectors: () => selectors,
     loadRoots: () => [`${HOME}/projects`],
     loadHiddenRules: () => hidden,
+    loadFocusedPaths: () => focused,
+    loadFocusedOnly: () => focusedOnly,
 }));
 
 vi.mock("../src/cliLauncher/scan", () => ({
@@ -210,6 +216,8 @@ beforeEach(() => {
     gitStatus = new Map();
     gitReads = 0;
     hidden = [];
+    focused = [];
+    focusedOnly = false;
 });
 
 describe("CLILauncherTreeProvider", () => {
@@ -221,6 +229,49 @@ describe("CLILauncherTreeProvider", () => {
             "Ops CLI",
             "platform",
             "ai",
+        ]);
+        provider.dispose();
+    });
+
+    it("shows only Focused paths while retaining an unfocused ancestor category", async () => {
+        focused = [`${HOME}/projects/platform/superset`];
+        focusedOnly = true;
+        const provider = new CLILauncherTreeProvider();
+
+        const items = await provider.getChildren();
+        expect(items.map((item) => item.label)).toEqual(["platform"]);
+        expect(items[0].contextValue).toBe(
+            "superset.cliLauncher.folder"
+        );
+
+        const children = await provider.getChildren(items[0]);
+        expect(children.map((item) => item.label)).toEqual(["superset"]);
+        expect(children[0].contextValue).toBe(
+            "superset.cliLauncher.folder.focused"
+        );
+        provider.dispose();
+    });
+
+    it("marks exact Focused rows without filtering while Focus-only mode is off", async () => {
+        focused = [
+            "/opt/tools/cli",
+            `${HOME}/projects/platform/superset`,
+        ];
+        const provider = new CLILauncherTreeProvider();
+
+        const items = await provider.getChildren();
+        expect(items.map((item) => item.label)).toEqual([
+            "Ops CLI",
+            "platform",
+            "ai",
+        ]);
+        expect(items[0].contextValue).toBe(
+            "superset.cliLauncher.entry.focused"
+        );
+        const platformChildren = await provider.getChildren(items[1]);
+        expect(platformChildren.map((item) => item.contextValue)).toEqual([
+            "superset.cliLauncher.folder.focused",
+            "superset.cliLauncher.folder",
         ]);
         provider.dispose();
     });

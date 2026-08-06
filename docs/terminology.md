@@ -351,6 +351,9 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Path Terminal Indicator` | Path description 最前面的 `🟡 <count>`；只在 count 大於零時顯示，後方才接 git summary。                              |
 | `CLI Terminal State`   | Terminal child row 的二態 description：內部 `pending` / `running` 顯示 `running`，內部 `idle` 顯示 `idle`。              |
 | `Hidden Rule`          | `superset.cliLauncher.hidden` 中的一個 literal path 或 Regex Path Rule；命中 path 與 descendants 都不列出，只影響面板。 |
+| `Focus List`           | `superset.cliLauncher.focused` 的 application-scoped exact path list；由 Repo Path context menu 加入或移除，不接受 Regex。 |
+| `Focused Path`         | Focus List 內 exact match 的 path；其 row context value 在原 row kind 後加 `.focused`。                                |
+| `Focus-only Mode`      | `superset.cliLauncher.focusedOnly` 啟用的 shared projection；只保留 Focused Paths 與抵達 focused child 所需的 ancestor category。 |
 | `Remove from Panel`    | `superset.cliLauncherRemovePath` 的顯示名稱。Pinned Path 會移出 `entries`；Scanned Folder / Dynamic Entry 會寫入 `hidden`。 |
 | `Open in New Window`   | `superset.cliLauncherOpenNewWindow` 的顯示名稱。以獨立 VS Code window 開啟所選 path，不建立 terminal。                 |
 | `Direct Subfolder`     | 所選 path 正下方的一層 child directory；名稱不含 path separator，不代表 nested relative path。                        |
