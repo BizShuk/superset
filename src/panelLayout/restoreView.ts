@@ -2,8 +2,7 @@
 // focus function (typically `vscode.commands.executeCommand`), try to
 // surface the corresponding TreeView. Wraps focus in a try/catch so a
 // hidden or renamed view fails silently instead of crashing the
-// activation (see `plans/2026-07-05-architecture-panel-layout-
-// persistence.md` §7 risk-2).
+// activation.
 //
 // The focus function is injectable so the file stays free of `vscode`
 // imports and unit-testable in plain Node — the production caller

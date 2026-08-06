@@ -1,7 +1,7 @@
 // CLI Change View 的 Git process boundary。
 //
 // 所有操作都限定在 selected path 自己的 `.git` marker，不允許 Git 沿 parent
-// repository 往上找。參數直接交給 `execFile`，commit message 不經 shell。
+// repository 往上找。所有 Git 參數直接交給 `execFile`，不經 shell。
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -28,7 +28,6 @@ export interface GitSCMRepository {
         relativePaths: readonly string[]
     ): Promise<void>;
     isTrackedInHead(repoPath: string, relativePath: string): Promise<boolean>;
-    commitStaged(repoPath: string, message: string): Promise<void>;
     readHeadFile(repoPath: string, relativePath: string): Promise<string>;
     readIndexFile(repoPath: string, relativePath: string): Promise<string>;
 }
@@ -214,15 +213,6 @@ export const gitSCMRepository: GitSCMRepository = {
             READ_TIMEOUT_MS
         );
         return output !== "";
-    },
-
-    async commitStaged(repoPath, message) {
-        const trimmed = message.trim();
-        if (trimmed === "") {
-            throw new Error("A commit message is required.");
-        }
-        await assertRepository(repoPath);
-        await runGit(repoPath, ["commit", "-m", trimmed], WRITE_TIMEOUT_MS);
     },
 
     async readHeadFile(repoPath, relativePath) {

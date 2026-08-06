@@ -1,5 +1,4 @@
-// Sessions feature — consumer of the `sessiond` JSONL store
-// (plan `plans/2026-07-19-multi-agent-session-summary.md` §7).
+// Sessions feature — consumer of the `sessiond` JSONL store.
 //
 // Layer 1: a TreeView grouping sessions by the current workspace root and
 //          descendant workspace paths recorded by sessiond.

@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.40.0",
+    "version": "0.41.1",
     "scripts": {
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -28,9 +28,6 @@
     },
     "extensionKind": [
         "workspace"
-    ],
-    "enabledApiProposals": [
-        "contribSourceControlHistoryItemMenu"
     ],
     "categories": [
         "Other",
@@ -320,16 +317,6 @@
             {
                 "command": "superset.installDefaultProject",
                 "title": "Superset: Install Default Project"
-            },
-            {
-                "command": "superset.gitResetHard",
-                "title": "Superset: Reset Hard (this commit)",
-                "icon": "$(discard)"
-            },
-            {
-                "command": "superset.gitResetSoft",
-                "title": "Superset: Reset Soft (this commit)",
-                "icon": "$(arrow-up)"
             },
             {
                 "command": "superset.copyGitHubUrl",
@@ -720,20 +707,6 @@
                 "icon": "$(discard)"
             },
             {
-                "command": "superset.cliLauncherCommitStaged",
-                "title": "Commit Staged Changes",
-                "category": "CLI",
-                "icon": "$(check)",
-                "enablement": "superset.cliLauncher.hasStagedChanges"
-            },
-            {
-                "command": "superset.cliLauncherGenerateCommitMessage",
-                "title": "Generate Commit Message",
-                "category": "CLI",
-                "icon": "$(sparkle)",
-                "enablement": "superset.cliLauncher.hasStagedChanges"
-            },
-            {
                 "command": "superset.cliLauncherOpen",
                 "title": "Open Terminal at Path",
                 "category": "CLI",
@@ -964,19 +937,9 @@
                     "group": "navigation@5"
                 },
                 {
-                    "command": "superset.cliLauncherGenerateCommitMessage",
-                    "when": "view == superset.cliLauncher.changes",
-                    "group": "navigation@1"
-                },
-                {
-                    "command": "superset.cliLauncherCommitStaged",
-                    "when": "view == superset.cliLauncher.changes",
-                    "group": "navigation@2"
-                },
-                {
                     "command": "superset.cliLauncherRefresh",
                     "when": "view == superset.cliLauncher.changes",
-                    "group": "navigation@3"
+                    "group": "navigation@1"
                 },
                 {
                     "command": "superset.cliLauncherRestoreHidden",
@@ -1236,18 +1199,6 @@
                     "command": "superset.copyGitHubUrl",
                     "when": "resourceScheme == file && !explorerResourceIsRoot",
                     "group": "6_copypath@100"
-                }
-            ],
-            "scm/historyItem/context": [
-                {
-                    "command": "superset.gitResetSoft",
-                    "when": "scmProvider == git && !listMultiSelection",
-                    "group": "4_modify@2"
-                },
-                {
-                    "command": "superset.gitResetHard",
-                    "when": "scmProvider == git && !listMultiSelection",
-                    "group": "4_modify@3"
                 }
             ]
         },

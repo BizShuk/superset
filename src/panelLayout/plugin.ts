@@ -2,8 +2,7 @@
 //
 // Responsibility (single reason to change): remember the last-active
 // sub-view inside the `superset` view container and restore it on
-// next activation. See
-// `plans/2026-07-05-architecture-panel-layout-persistence.md`.
+// next activation.
 //
 // Architecture:
 //  - Storage: workspaceState[`superset.activeViewId`] = viewId
@@ -13,9 +12,9 @@
 //  - Restore: on activate, read the stored viewId and execute
 //    `${viewId}.focus` via `vscode.commands`. The focus call is
 //    scheduled via `setTimeout` so all sibling view plugins finish
-//    `createTreeView` first (plan §7 risk-1). Both the focus call
+//    `createTreeView` first. Both the focus call
 //    and the panel call go through try/catch in either module so a
-//    hidden/removed view can't break activation (plan §7 risk-2).
+//    hidden/removed view can't break activation.
 //
 // Activation order contract: `panelLayoutPlugin` MUST be appended
 // LAST to the `plugins` array in `extension.ts` after every other

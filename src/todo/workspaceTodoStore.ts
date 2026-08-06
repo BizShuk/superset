@@ -13,9 +13,7 @@ import type { WorkspaceTodoChange, WorkspaceTodoListener } from "./types";
  * - 每個命中資料夾建立/維護一個 `TodoStore` 實例,
  *   TreeProvider 以相對路徑建立 sub-project group。
  *
- * 掃描邊界只有 workspace 一條 —— 跨 `~/projects` 的一覽隨
- * `Overall` 面板一併移除(見
- * `docs/specs/2026-08-05-remove-overall-panel.md`)。
+ * 掃描邊界只有 workspace 一條,不得跨到 `~/projects`。
  */
 export class WorkspaceTodoStore {
     private readonly listeners = new Set<WorkspaceTodoListener>();

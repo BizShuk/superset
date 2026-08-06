@@ -332,8 +332,6 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Change Item`          | Change Group 內 compact folder hierarchy 的 file Tree Item；同一 path 可同時出現在 staged 與 unstaged，點擊後開啟對應狀態的 VS Code Diff Editor。 |
 | `Change Marker`        | Change Item 的單字元狀態：`U` updated、`A` newly added、`!` conflict、`D` deleted。                                      |
 | `Change Action`        | Group/folder/file 的 native inline `Discard` 與 `Stage` / `Unstage`；使用 SCM-style `discard` / `add` / `remove` Codicons，`Discard` 必須確認，untracked / newly staged files 移到 Trash。 |
-| `Commit Staged`        | Change View title action；以 native Input Box review message，只 commit selected repository 的 staged changes。        |
-| `Generate Commit Message` | Change View title action；將 selected repository 設為 Git generation target 後委派 Antigravity，並在 native Input Box 預填 non-empty result 供 review。 |
 | `Scan Root`            | `superset.cliLauncher.roots` 中的一個根目錄。root 本身不是節點，只列出其下的 Layer 1／Layer 2。                         |
 | `Layer 1` / `Layer 2`  | `<root>/<layer1>` 為 top-level item，`<root>/<layer1>/<layer2>` 為其 leaf child。掃描深度固定兩層。                     |
 | `Scan Candidate`       | Raw two-layer scan 找到的可列出 directory；供 explicit Regex selection 與 default repository discovery 使用，本身不保證顯示。 |
@@ -383,12 +381,6 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 
 | 術語                         | 定義                                                                                                             |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `Source Control Graph`       | VS Code Source Control 的 commit graph surface。不要泛稱為 Superset Panel。                                      |
-| `History Item`               | Graph 中代表一個 commit、提供 SHA 與 subject 的 context item。                                                   |
-| `SCM Context Command`        | 由 `scm/historyItem/context` menu contribution 取得 repository 與 History Item 的 command。                      |
-| `Reset Soft`                 | 執行 `git reset --soft <sha>`；移動 HEAD，保留 index 與 working tree。                                           |
-| `Reset Hard`                 | 執行 `git reset --hard <sha>`；重設 HEAD、index 與 working tree，必須先 Modal Confirmation。                     |
-| `Proposed SCM API`           | `contribSourceControlHistoryItemMenu` proposed API；host 必須明確以 `--enable-proposed-api shuk.superset` 啟動。 |
 | `Explorer Context Command`   | 從 Explorer file context menu 接收 resource URI 的 command。                                                     |
 | `Copy GitHub URL`            | 依本機 repository、remote 與 relative file path 產生 fixed-`master` GitHub URL；不呼叫 GitHub API。              |
 | `GitHub Remote`              | 可解析為 GitHub owner/repository 的 fetch 或 push URL。                                                          |

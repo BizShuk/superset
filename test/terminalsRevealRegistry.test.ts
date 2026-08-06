@@ -1,6 +1,5 @@
-// Reveal-in-tree wiring for the terminals panel. See
-// `plans/2026-07-05-architecture-reveal-in-tree.md` §6 step 4: the
-// terminals treeView must be registered into the cross-panel
+// Reveal-in-tree wiring for the terminals panel. The terminals treeView
+// must be registered into the cross-panel
 // TreeViewRegistry so `superset.revealInTree` and the
 // `superset.revealTerminal` shortcut can walk + reveal rows.
 

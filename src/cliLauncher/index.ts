@@ -180,18 +180,6 @@ export function register(ctx: PluginContext): void {
             }
         ),
         vscode.commands.registerCommand(
-            "superset.cliLauncherCommitStaged",
-            async () => {
-                await changesProvider.commitStaged();
-            }
-        ),
-        vscode.commands.registerCommand(
-            "superset.cliLauncherGenerateCommitMessage",
-            async () => {
-                await changesProvider.generateCommitMessage();
-            }
-        ),
-        vscode.commands.registerCommand(
             "superset.cliLauncherCopyAllPaths",
             async () => {
                 await copyAllPathsToClipboard();
@@ -289,8 +277,6 @@ export function register(ctx: PluginContext): void {
             "superset.cliLauncherStageChanges",
             "superset.cliLauncherUnstageChanges",
             "superset.cliLauncherDiscardChanges",
-            "superset.cliLauncherCommitStaged",
-            "superset.cliLauncherGenerateCommitMessage",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherAddPath",
             "superset.cliLauncherCreateSubfolder",

@@ -32,7 +32,6 @@ function repositoryMock(): GitSCMRepository {
         discardWorktreeChanges: vi.fn(async () => undefined),
         discardTrackedChanges: vi.fn(async () => undefined),
         isTrackedInHead: vi.fn(async () => true),
-        commitStaged: vi.fn(async () => undefined),
         readHeadFile: vi.fn(async () => ""),
         readIndexFile: vi.fn(async () => ""),
     };

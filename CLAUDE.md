@@ -3,7 +3,7 @@
 Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO / 專案 / 網路面板，以及 Markdown `tree` 與 `README.todo` 預覽。對外功能、安裝與使用方式見 [`README.md`](README.md)；本檔只保留維護所需的技術脈絡與入口。
 
 - 進行中、尚未實作的設計放在 [`plans/`](plans/)。
-- 已實作的設計與歷史決策放在 [`docs/specs/`](docs/specs/)。
+- 已實作的現行設計與仍需維持的問題解法放在 [`docs/specs/`](docs/specs/)。
 - Superset 全專案術語、VS Code UI 名稱與各 feature domain 用語以 [`docs/terminology.md`](docs/terminology.md) 為準。
 - 每次變更都依 semantic versioning (`major` / `minor` / `patch`) 更新 `package.json` 與 `package-lock.json` 的 package version。
 
@@ -30,7 +30,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | 單獨打包 `.vsix` | `npm run build:vsix` |
 | 產生 Sessions 面板假資料 | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
 
-執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。VS Code baseline 與 API 相容性決策見 [`docs/specs/2026-06-23-chore-vscode-baseline-alignment.md`](docs/specs/2026-06-23-chore-vscode-baseline-alignment.md)。
+執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。現行設計與相容性問題集中於 [`docs/specs/2026-08-06-Summary.md`](docs/specs/2026-08-06-Summary.md)。
 
 ## 架構速覽 (Architecture)
 
@@ -46,16 +46,16 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | `src/topology/` | 網路拓撲掃描與 tree 轉換 | `topologyPlugin` |
 | `src/sessions/` | Agent session 清單與 summary markdown(讀 `sessiond` JSONL) | `sessionsPlugin` |
 | `src/todo/` | 當前 workspace 遞迴掃描的 `README.todo` 與 plans（含 workspace store / tree provider） | `todoPlugin` |
-| `src/git/` | SCM reset、Explorer GitHub URL、Git hooks Install/Link 與 Status Bar | `gitPlugin` |
+| `src/git/` | Explorer GitHub URL、Git hooks Install/Link 與 Status Bar | `gitPlugin` |
 | `src/editorLayout/` | Editor group 四模式佈局（水平/垂直 × 均分/放大）與網格形狀 | `editorLayoutPlugin` |
 | `src/diskUsage/` | 第一個 workspace volume 的 disk capacity Status Bar 顯示與週期刷新 | `diskUsagePlugin` |
-| `src/cliLauncher/` | 獨立「CLI」container：`Repo Path` 掃描與 agent terminals；`Change` 提供 grouped status、staging actions、commit 與 Diff Editor | `cliLauncherPlugin` |
+| `src/cliLauncher/` | 獨立「CLI」container：`Repo Path` 掃描與 agent terminals；`Change` 提供 grouped status、staging actions 與 Diff Editor | `cliLauncherPlugin` |
 | `src/installCommands.ts` | Default Project、Default Tools、Skill Install 與 Projects Setup commands | `registerInstallCommands` |
 | `src/treePreview/` | Markdown `tree` fence 渲染 | `treePreviewPlugin` |
 | `src/todoPreview/` | `README.todo` 預覽重組與 CSS 互動 | `todoPreviewPlugin` |
 | `src/panelLayout/` | TreeView layout persistence | `panelLayoutPlugin` |
 
-目前 module 行為、資料流與歷史規格索引集中於 [`docs/specs/2026-07-20-architecture-current-modules.md`](docs/specs/2026-07-20-architecture-current-modules.md)。
+目前 module 行為、資料流與已遇到的問題集中於 [`docs/specs/2026-08-06-Summary.md`](docs/specs/2026-08-06-Summary.md)。
 
 ## 維護契約 (Invariants)
 
@@ -65,7 +65,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - 根 `deactivate()` 必須 await `PluginManager.deactivateAll()`，再 dispose diagnostic channel。`PluginContext.registerDisposable()` 寫入的是 manager-owned pool，不是 VS Code 的 `ExtensionContext.subscriptions`，不得假設 host 會自動釋放；啟用失敗也必須立即清掉該 plugin 已註冊的部分資源與 diagnostics provider。長週期 maintenance timer 仍須 `unref()`，但 `unref()` 只是防線，不能取代 teardown。
 - `Superset: Reset Caches` 清除 workspace cache 後必須 await `PluginContext.resetAll()`；feature reset 只能透過 `registerResetHandler()` 註冊。`Superset: Show Diagnostics` 只讀 live provider，不得使用 placeholder count；單一 provider 失敗必須 fail-soft 並保留其他 plugin snapshot。
 - TODO link parsing 與 copy formatting 的唯一 source of truth 是 `src/todoEngine/linkUtils.ts`，TODO 面板與 Markdown 預覽不另建副本。
-- Terminal 一律由 VS Code 擁有。Superset 不持有 pseudoterminal、不 wrap、不替換、不重建既有 terminal；唯一開 terminal 的地方是 `src/terminals/nativeTerminal.ts#createNativeTerminal`（`vscode.window.createTerminal`），composition root 將它注入 `PluginContext.createTerminal`，面板命令、install/Git/mDNS actions 與 CLI Launcher 都走此 capability，不得在其他 call site 直接呼叫 `vscode.window.createTerminal`。`createNativeTerminal` 的選用 `options.location` 只服務 CLI Launcher 的 editor-area 分頁需求；不傳時產生的 creation options 必須與原本的 panel 預設完全一致。決策記錄見 [`docs/specs/2026-08-04-remove-pty-use-native-terminals.md`](docs/specs/2026-08-04-remove-pty-use-native-terminals.md)。
+- Terminal 一律由 VS Code 擁有。Superset 不持有 pseudoterminal、不 wrap、不替換、不重建既有 terminal；唯一開 terminal 的地方是 `src/terminals/nativeTerminal.ts#createNativeTerminal`（`vscode.window.createTerminal`），composition root 將它注入 `PluginContext.createTerminal`，面板命令、install/Git/mDNS actions 與 CLI Launcher 都走此 capability，不得在其他 call site 直接呼叫 `vscode.window.createTerminal`。`createNativeTerminal` 的選用 `options.location` 只服務 CLI Launcher 的 editor-area 分頁需求；不傳時產生的 creation options 必須與原本的 panel 預設完全一致。
 - `TerminalRegistry` 是終端機狀態來源；`markUnseen` 必須保持 idempotent。`onDidOpenTerminal` 只做 `registry.add`，唯一排除條件是 `terminalFilter.ts#shouldTrackTerminal`（agent-owned 名稱），不得再依 creation options 分流。
 - Tree View visibility 一律由 `src/plugin/viewVisibility.ts#registerViewVisibility` 接線並解構 event 的 `visible` boolean。UI-only polling / watcher 必須隨 View visibility 啟停；terminal activity source `A` / `B` 與 registry subscriptions 不屬於 UI-only work，不得因面板隱藏而停止。
 - Activity 偵測的預設路徑是`零位元組`的來源 `A`（`processActivitySource`，進程樹輪詢）與 `B`（`shellIntegrationActivitySource`，execution start/end edge）。來源 `B` 不得呼叫 `execution.read()`；讀取位元組的 `OutputWatcher` 只在 `superset.terminals.legacyOutputWatcher` 開啟時建立。抑制政策（不在 registry / 正在 focus / 最近 focus / 已是 unseen）只能存在於 `ActivityCoordinator` 一處，不得再複製回各來源。
@@ -87,9 +87,9 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - CLI View Container 固定包含 `superset.cliLauncher.paths` 的 native `Repo Path` Tree View 與 `superset.cliLauncher.changes` 的 native `Change` Tree View。`Change` 只接受一個 normalized path selection；零選取與多選都不得猜 repository。explicit non-repository 仍可留在 `Repo Path`，但 `Change` 必須先以 path 自身 `.git` marker 守住 Git boundary。
 - `Change` status 的唯一輸入是 NUL-delimited `git status --porcelain=v1 -z --untracked-files=all`；marker 固定為 `U` update、`A` newly added、`!` conflict、`D` deleted。Parser 不得以 newline 切 record，rename / copy 必須保留 original path；同一 path 同時存在 index 與 working-tree delta 時，必須分別投影到 staged 與 unstaged groups。
 - `Change` 只顯示非空的 `Staged Changes`、`Unstaged Changes`、`Untracked Changes` top-level Tree Items，下一層依 repository-relative path 建立 compact folder/file hierarchy。Group、folder 與 file 都有 `Discard` 及對應的 `Stage` / `Unstage`，使用 native `view/item/context` 與 SCM-style `discard` / `add` / `remove` Codicons。Mutation 只接受目前 Extension Host 保存的 opaque node id，不接受 command argument 傳入 repository/path。`Discard` 先顯示單一 modal confirmation，untracked 與 newly staged files 使用 VS Code Trash。
-- `Change` 的 `Commit Staged Changes` 與 `Generate Commit Message` 是 native View title actions。Commit message 一律透過 native Input Box review；trimmed message 不得為空，以 `execFile` argument 執行 `git commit -m <message>`，不得經 shell 或隱式 stage unstaged/untracked changes。Generation 必須先將目前 selected repository 設為 VS Code Git provider 的 generation target，再以 provider 確認的 repository root 呼叫 `antigravity.generateCommitMessage`，並將 non-empty result 預填至 Input Box；selection 改變時不得套用 stale result。Commit 失敗必須保留 message、重新讀取 status、寫 diagnostic log 並顯示 Notification；成功必須刷新 `Repo Path` 與 `Change`。
+- `Change` 不提供 commit-related title action。Commit input、message generation 與 Commit button 一律由 VS Code native Source Control 擁有；不得恢復 Superset-owned Input Box、commit draft、provider handoff、message-generation invocation 或 direct `git commit` path。
 - Change Item 點擊開啟 group-aware Diff Editor：staged 是 `HEAD → index`、unstaged 是 `index → working tree`、untracked 是 `empty → working tree`。Virtual side 由 read-only content provider 供應，working side 使用 file URI；任何 relative path 必須先確認沒有逃出 selected repository。
-- Superset 只有 `SuperSet` 與 `CLI` 兩個 View Container；`Overall`（`superset-overall`）連同 `Workspace TODO` / `Projects TODO` 兩個 view、`superset.projectsTodo*` 命令與 `~/projects` 跨專案掃描已整批移除（見 [`docs/specs/2026-08-05-remove-overall-panel.md`](docs/specs/2026-08-05-remove-overall-panel.md)）。TODO domain 只剩一個面板、一組 `superset.todo*` 命令與一組 `todo*` context values，不得再引入第二個 command prefix。
+- Superset 只有 `SuperSet` 與 `CLI` 兩個 View Container。TODO domain 只有一個面板、一組 `superset.todo*` 命令與一組 `todo*` context values，不得引入第二個 command prefix 或跨 `~/projects` 掃描。
 - `TODO` 只認大小寫完全相符的 `README.todo`，掃描邊界固定是 current workspace root：root 為 depth 0，預設最大 depth 5（設定 `superset.todo.maxDepth`，範圍 1–10），命中後仍繼續掃描子孫。掃描不得越過 workspace root（不再有 `~/projects` 一覽）。
 - `superset.openProject` 由 `src/todo/` 註冊，只服務 `todoProject` / `todoPlan` 兩種 row，`projectPath` 為空時必須早返 —— 合成的 wrapper row 帶空字串，直接開會落到 process cwd。
 - 每列 mutation 一律走 `src/todo/storeDispatch.ts#invokeTodoStoreMutation`：`TodoStore` 的方法讀 `this.repository`，把方法取出來當裸函式呼叫會讓 receiver 消失。
@@ -117,10 +117,8 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 | 目錄 | 狀態 | 規則 |
 | --- | --- | --- |
-| `plans/` | 進行中 / 未實作 | 使用 `YYYY-MM-DD-<topic>.md`；完成並進入 git history 後才移入 specs |
-| `docs/specs/` | 已實作的歷史記錄 | 新行為以新的 dated spec 補充，不改寫舊規格造成的歷史語意 |
-
-SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-scm-graph-proposed-api.md`](plans/2026-07-17-scm-graph-proposed-api.md) 為準，不得描述成已完成規格。
+| `plans/` | 未解問題 / 驗收中 | 目前集中於單一 dated `Refresh`；完成後刪除對應問題 |
+| `docs/specs/` | 現行設計 / 問題解法 | 目前集中於單一 dated `Summary`；被取代內容只由 Git history 追溯 |
 
 ## 測試 (Testing)
 
@@ -136,49 +134,11 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 - Workflow 預設與 build job 只有 `contents: read`；checkout 不持久化 credentials。只有依賴 verified one-day artifact 的 release job 取得 `contents: write`，所有第三方 Actions 必須固定到完整 commit SHA。
 - GitHub Release 只上傳單一固定檔名 `superset.vsix` asset，不上傳其他 build 產物。
 
-## 規格索引 (Specification Index)
+## 設計與問題索引 (Design and Problem Index)
 
-- Unified Plugin Lifecycle 與 Live Diagnostics：[`docs/specs/2026-08-06-unified-plugin-lifecycle-live-diagnostics.md`](docs/specs/2026-08-06-unified-plugin-lifecycle-live-diagnostics.md)
-- Current module map：[`docs/specs/2026-07-20-architecture-current-modules.md`](docs/specs/2026-07-20-architecture-current-modules.md)
-- Disk Usage Status Bar：[`docs/specs/2026-08-02-disk-usage-status-bar.md`](docs/specs/2026-08-02-disk-usage-status-bar.md)
-- CLI Launcher（含自 `vscode-plugin-experiment` 移入的差異）：[`docs/specs/2026-08-04-cli-launcher.md`](docs/specs/2026-08-04-cli-launcher.md)
-- CLI Launcher 路徑過濾（subsequence match）：[`docs/specs/2026-08-04-cli-launcher-path-filter.md`](docs/specs/2026-08-04-cli-launcher-path-filter.md)
-- CLI Launcher native Find Control（取代 extension-owned path filter）：[`docs/specs/2026-08-06-cli-launcher-native-find-control.md`](docs/specs/2026-08-06-cli-launcher-native-find-control.md)
-- CLI Launcher Filter 快捷鍵與 focus restoration：[`docs/specs/2026-08-05-cli-panel-filter-shortcut.md`](docs/specs/2026-08-05-cli-panel-filter-shortcut.md)
-- CLI Launcher Filter hotkey 改為 `Ctrl+F`：[`docs/specs/2026-08-06-cli-panel-filter-hotkey.md`](docs/specs/2026-08-06-cli-panel-filter-hotkey.md)
-- CLI Launcher Filter hotkey 改為 `Cmd+F`：[`docs/specs/2026-08-06-cli-panel-filter-command-hotkey.md`](docs/specs/2026-08-06-cli-panel-filter-command-hotkey.md)
-- CLI Launcher 預設只顯示 Git repositories：[`docs/specs/2026-08-06-cli-launcher-git-repository-discovery.md`](docs/specs/2026-08-06-cli-launcher-git-repository-discovery.md)
-- CLI Launcher git 分支與行數增減：[`docs/specs/2026-08-04-cli-launcher-git-branch-line-counts.md`](docs/specs/2026-08-04-cli-launcher-git-branch-line-counts.md)
-- CLI Launcher path terminal 清單：[`docs/specs/2026-08-04-cli-launcher-path-terminals.md`](docs/specs/2026-08-04-cli-launcher-path-terminals.md)
-- CLI Launcher 父列彙總子路徑 terminal 數：[`docs/specs/2026-08-05-cli-launcher-subtree-terminal-count.md`](docs/specs/2026-08-05-cli-launcher-subtree-terminal-count.md)
-- CLI Launcher 移除路徑與靜止 git 狀態：[`docs/specs/2026-08-04-cli-launcher-remove-path.md`](docs/specs/2026-08-04-cli-launcher-remove-path.md)
-- CLI Launcher 多選移除路徑：[`docs/specs/2026-08-05-cli-launcher-multi-select-remove.md`](docs/specs/2026-08-05-cli-launcher-multi-select-remove.md)
-- CLI Launcher 以新視窗開啟路徑：[`docs/specs/2026-08-05-cli-launcher-open-new-window.md`](docs/specs/2026-08-05-cli-launcher-open-new-window.md)
-- CLI Launcher 建立子資料夾：[`docs/specs/2026-08-05-cli-launcher-create-subfolder.md`](docs/specs/2026-08-05-cli-launcher-create-subfolder.md)
-- Sessions 直接刪除：[`docs/specs/2026-08-06-sessions-direct-delete.md`](docs/specs/2026-08-06-sessions-direct-delete.md)
-- Visibility-scoped runtime 與 Sessions cache：[`docs/specs/2026-07-27-visibility-scoped-runtime-work.md`](docs/specs/2026-07-27-visibility-scoped-runtime-work.md)
-- Security hardening：[`docs/specs/2026-07-27-security-hardening.md`](docs/specs/2026-07-27-security-hardening.md)
-- Overall architecture：[`docs/specs/2026-07-02-architecture-master.md`](docs/specs/2026-07-02-architecture-master.md)
-- Plugin framework：[`docs/specs/2026-07-02-architecture-pluginization.md`](docs/specs/2026-07-02-architecture-pluginization.md)
-- Terminals / TUI：[`docs/specs/2026-06-20-terminal-dashboard-panel.md`](docs/specs/2026-06-20-terminal-dashboard-panel.md)、[`docs/specs/2026-07-02-architecture-terminals.md`](docs/specs/2026-07-02-architecture-terminals.md)
-- Activity 偵測來源 `A` / `B`：[`docs/specs/2026-07-26-terminal-activity-sources-ab.md`](docs/specs/2026-07-26-terminal-activity-sources-ab.md)
-- 移除 PTY、改用原生 terminal：[`docs/specs/2026-08-04-remove-pty-use-native-terminals.md`](docs/specs/2026-08-04-remove-pty-use-native-terminals.md)（取代先前的 PTY backpressure 與 spawn-helper 規格，後者僅存歷史語意）
-- Extension host 關窗清理：[`docs/specs/2026-07-26-extension-host-shutdown-lifecycle.md`](docs/specs/2026-07-26-extension-host-shutdown-lifecycle.md)
-- 移除 `src/projects/` 與死碼清理：[`docs/specs/2026-07-26-remove-projects-feature-and-dead-code.md`](docs/specs/2026-07-26-remove-projects-feature-and-dead-code.md)
-- Todo / Plans：[`docs/specs/2026-07-02-architecture-superset.md`](docs/specs/2026-07-02-architecture-superset.md)、[`docs/specs/2026-07-08-feature-projects-todo-section-pending-badge.md`](docs/specs/2026-07-08-feature-projects-todo-section-pending-badge.md)、[`docs/specs/2026-07-09-feature-plans-source-scan.md`](docs/specs/2026-07-09-feature-plans-source-scan.md)、[`docs/specs/2026-07-22-projects-todo-recursive-scan.md`](docs/specs/2026-07-22-projects-todo-recursive-scan.md)
-- 移除 Overall 面板與跨專案 TODO：[`docs/specs/2026-08-05-remove-overall-panel.md`](docs/specs/2026-08-05-remove-overall-panel.md)
-- mDNS：[`docs/specs/2026-07-02-architecture-mdns.md`](docs/specs/2026-07-02-architecture-mdns.md)
-- Topology：[`docs/specs/2026-07-02-architecture-topology.md`](docs/specs/2026-07-02-architecture-topology.md)
-- Markdown previews：[`docs/specs/2026-07-05-tree-comment-highlight.md`](docs/specs/2026-07-05-tree-comment-highlight.md)、[`docs/specs/2026-07-10-chore-dedup-mermaid-extract.md`](docs/specs/2026-07-10-chore-dedup-mermaid-extract.md)
-- Explorer Copy GitHub URL：[`docs/specs/2026-07-17-copy-github-url.md`](docs/specs/2026-07-17-copy-github-url.md)、[`docs/specs/2026-07-17-copy-github-url-implementation.md`](docs/specs/2026-07-17-copy-github-url-implementation.md)
-- Git Hooks Install / Link：[`docs/specs/2026-07-20-git-hooks-install-link.md`](docs/specs/2026-07-20-git-hooks-install-link.md)
-- Git pre-push release 版本選擇：[`docs/specs/2026-07-22-git-pre-push-release-version.md`](docs/specs/2026-07-22-git-pre-push-release-version.md)
-- GitHub Release 固定 VSIX 檔名：[`docs/specs/2026-07-23-github-release-fixed-vsix-filename.md`](docs/specs/2026-07-23-github-release-fixed-vsix-filename.md)
-- Skill Install repository Quick Pick：[`docs/specs/2026-07-22-skill-install-repository-quick-pick.md`](docs/specs/2026-07-22-skill-install-repository-quick-pick.md)、[`docs/specs/2026-07-23-skill-install-expanded-repository-list.md`](docs/specs/2026-07-23-skill-install-expanded-repository-list.md)、[`docs/specs/2026-07-23-skill-install-custom-repository.md`](docs/specs/2026-07-23-skill-install-custom-repository.md)
-- Install Skills command title：[`docs/specs/2026-07-23-install-skills-command-title.md`](docs/specs/2026-07-23-install-skills-command-title.md)
-- Default Tools CLI set：[`docs/specs/2026-07-22-default-tools-cli-set.md`](docs/specs/2026-07-22-default-tools-cli-set.md)、[`docs/specs/2026-07-27-default-tools-autop.md`](docs/specs/2026-07-27-default-tools-autop.md)、[`docs/specs/2026-07-27-default-tools-auth.md`](docs/specs/2026-07-27-default-tools-auth.md)、[`docs/specs/2026-07-27-default-tools-proxy.md`](docs/specs/2026-07-27-default-tools-proxy.md)、[`docs/specs/2026-08-03-default-tools-mdserver.md`](docs/specs/2026-08-03-default-tools-mdserver.md)
-- Projects Setup：[`docs/specs/2026-07-22-projects-setup.md`](docs/specs/2026-07-22-projects-setup.md)、[`docs/specs/2026-07-23-projects-setup-repository-set.md`](docs/specs/2026-07-23-projects-setup-repository-set.md)
-- Session JSONL 格式與 hook 事件：隨 `sessiond` 專案移至 [BizShuk/sessiond](https://github.com/BizShuk/sessiond)（[本地 `~/projects/ai/sessiond/docs/session/`](../ai/sessiond/docs/session/)）
+- 現行設計與已遇到的問題：[`docs/specs/2026-08-06-Summary.md`](docs/specs/2026-08-06-Summary.md)
+- 尚未完成的驗收與目前問題：[`plans/2026-08-06-Refresh.md`](plans/2026-08-06-Refresh.md)
+- Session JSONL 格式與 hook 事件：隨 `sessiond` 專案移至 [BizShuk/sessiond](https://github.com/BizShuk/sessiond)（[本地 `~/projects/tools/sessiond/docs/session/`](../../tools/sessiond/docs/session/)）
 
 外部 API：
 

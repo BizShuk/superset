@@ -1,10 +1,8 @@
 // Interface-contract test for the `git` feature plugin. Mirrors
 // `terminalsPlugin.test.ts` / `mdnsPlugin.test.ts` — only asserts
 // the stable plugin contract (id / name / no markdown-it hook /
-// deactivate presence). Heavy integration coverage of the reset
-// commands lives in `gitReset.test.ts` (pure helpers) and the
-// install-command test file (same `spawnRunTerminal` bridge is
-// exercised end-to-end there).
+// deactivate presence). GitHub URL and Git hooks behavior have
+// focused domain and command coverage in their own test files.
 
 import { describe, it, vi } from "vitest";
 import { assertPluginContract } from "./pluginContract.shared";

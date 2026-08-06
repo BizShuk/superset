@@ -303,13 +303,18 @@ describe("extension activation via PluginManager", () => {
             "superset.cliLauncherStageChanges",
             "superset.cliLauncherUnstageChanges",
             "superset.cliLauncherDiscardChanges",
-            "superset.cliLauncherCommitStaged",
-            "superset.cliLauncherGenerateCommitMessage",
         ]) {
             expect(cmds.has(id), `missing CLI Launcher command: ${id}`).toBe(
                 true
             );
         }
+        expect(cmds.has("superset.cliLauncherCommitStaged")).toBe(false);
+        expect(cmds.has("superset.cliLauncherGenerateCommitMessage")).toBe(
+            false
+        );
+        expect(cmds.has("superset.cliLauncherOpenSourceControl")).toBe(false);
+        expect(cmds.has("superset.gitResetSoft")).toBe(false);
+        expect(cmds.has("superset.gitResetHard")).toBe(false);
         expect(cmds.has("superset.cliLauncherClearFilter")).toBe(false);
     });
 

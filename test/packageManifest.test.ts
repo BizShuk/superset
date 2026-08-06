@@ -83,28 +83,20 @@ describe("Install Skills manifest contribution", () => {
     });
 });
 
-describe("SCM Graph manifest contributions", () => {
-    it("declares the proposed Source Control history-item menu API", () => {
-        expect(manifest.enabledApiProposals).toContain(
-            "contribSourceControlHistoryItemMenu"
-        );
+describe("Removed SCM Graph reset", () => {
+    it("declares no Proposed API", () => {
+        expect(manifest.enabledApiProposals).toBeUndefined();
     });
 
-    it("places reset commands directly in the single-commit modify group", () => {
+    it("declares neither reset commands nor a history-item menu", () => {
+        const commandIDs = manifest.contributes.commands.map(
+            (command) => command.command
+        );
+        expect(commandIDs).not.toContain("superset.gitResetSoft");
+        expect(commandIDs).not.toContain("superset.gitResetHard");
         expect(
             manifest.contributes.menus["scm/historyItem/context"]
-        ).toEqual([
-            {
-                command: "superset.gitResetSoft",
-                when: "scmProvider == git && !listMultiSelection",
-                group: "4_modify@2",
-            },
-            {
-                command: "superset.gitResetHard",
-                when: "scmProvider == git && !listMultiSelection",
-                group: "4_modify@3",
-            },
-        ]);
+        ).toBeUndefined();
     });
 
     it("does not leave SCM menu ids at the wrong contributes level", () => {
@@ -276,13 +268,13 @@ describe("CLI Launcher manifest contributions", () => {
         expect(titles.get("superset.cliLauncherDiscardChanges")).toBe(
             "Discard Changes"
         );
-        expect(titles.get("superset.cliLauncherCommitStaged")).toBe(
-            "Commit Staged Changes"
-        );
-        expect(titles.get("superset.cliLauncherGenerateCommitMessage")).toBe(
-            "Generate Commit Message"
+        expect(titles.has("superset.cliLauncherOpenSourceControl")).toBe(false);
+        expect(titles.has("superset.cliLauncherCommitStaged")).toBe(false);
+        expect(titles.has("superset.cliLauncherGenerateCommitMessage")).toBe(
+            false
         );
         expect(titles.has("superset.cliLauncherClearFilter")).toBe(false);
+
     });
 
     it("offers one native Filter action in the CLI title bar", () => {
@@ -313,7 +305,7 @@ describe("CLI Launcher manifest contributions", () => {
             {
                 command: "superset.cliLauncherRefresh",
                 when: "view == superset.cliLauncher.changes",
-                group: "navigation@3",
+                group: "navigation@1",
             },
         ]);
     });
@@ -324,19 +316,9 @@ describe("CLI Launcher manifest contributions", () => {
         );
         expect(titleMenu).toEqual([
             {
-                command: "superset.cliLauncherGenerateCommitMessage",
-                when: "view == superset.cliLauncher.changes",
-                group: "navigation@1",
-            },
-            {
-                command: "superset.cliLauncherCommitStaged",
-                when: "view == superset.cliLauncher.changes",
-                group: "navigation@2",
-            },
-            {
                 command: "superset.cliLauncherRefresh",
                 when: "view == superset.cliLauncher.changes",
-                group: "navigation@3",
+                group: "navigation@1",
             },
         ]);
 

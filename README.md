@@ -6,8 +6,6 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 
 ---
 
-a
-
 ## 功能總覽 (Features at a Glance)
 
 | 面板 / 功能               | 用途                                                        | 適用對象                             |
@@ -19,13 +17,12 @@ a
 | `TODO`                    | 讀寫 workspace 內所有 `README.todo`,支援嵌套 + 優先級 + inline link | 用 `README.todo` 管理工作的人 |
 | Markdown `tree` 預覽      | ` ```tree ` fenced block 渲染為 📁/📄 icon 結構             | 撰寫文件時想插入目錄樹狀圖           |
 | `README.todo` 預覽        | 摺疊/展開/過濾互動式檢視                                    | 想在 Markdown 預覽裡直接編輯 todo    |
-| SCM Graph reset           | commit 右鍵直接執行 `Reset Soft` / `Reset Hard`             | 本機使用 proposed API 的 Git 使用者  |
 | Explorer GitHub URL       | 檔案右鍵複製固定 `master` branch 的 GitHub URL              | 分享 repository 檔案連結的人         |
 | Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒 | 使用 repository-local hooks 的開發者 |
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
-| `CLI` 面板                | 以 `Repo Path` 選 repository、啟動 agent CLI，並在 `Change` View 分組管理、commit 與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
+| `CLI` 面板                | 以 `Repo Path` 選 repository、啟動 agent CLI，並在 `Change` View 管理變更與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -304,20 +301,7 @@ subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無
 
 ---
 
-### 7. SCM Graph commit reset
-
-`功能`:在 `Source Control → Graph` 的單一 commit 上按右鍵,直接顯示 `Reset Soft` 與 `Reset Hard`。`Reset Hard` 會先顯示 modal confirmation;`Reset Soft` 直接執行。
-
-此功能使用 proposed `scm/historyItem/context`,Superset 宣告 `contribSourceControlHistoryItemMenu` 後,host 仍必須以 `--enable-proposed-api shuk.superset` 啟動。一般從 Dock 啟動不會自動帶入這個 flag。
-
-開發測試:
-
-1. 用 Antigravity IDE 開啟 repo。
-2. 選 `.vscode/launch.json` 的 `Run Superset with Proposed SCM Menu`。
-3. 按 `F5` 開 Extension Development Host。
-4. 在新視窗的 `Source Control → Graph` 對單一 commit 按右鍵驗證兩個 reset command。
-
-### 8. Explorer Copy GitHub URL
+### 7. Explorer Copy GitHub URL
 
 `功能`:在 Explorer 的 repository 檔案上按右鍵,選 `Copy GitHub URL`,將以下格式寫入 clipboard:
 
@@ -333,7 +317,7 @@ URL 固定使用 `master` branch。Superset 只讀取本機 Git repository 與 G
 2. 點 `Copy GitHub URL`。
 3. URL 寫入 clipboard;GitHub `origin` remote 優先,沒有時使用第一個 GitHub remote。
 
-### 9. Git Hooks 安裝與連結
+### 8. Git Hooks 安裝與連結
 
 `Superset: Install Git Hooks` 只在手動執行時,從 extension 內建模板補齊目前 VS Code 視窗第一個 opened folder 的 `.githooks/`。既有同名檔案不會被覆蓋;補齊成功後會設定 repository-local `core.hooksPath=.githooks`。
 
@@ -345,7 +329,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 10. Default Project Template — workspace 初始化
+### 9. Default Project Template — workspace 初始化
 
 `Superset: Install Default Project` 會在目前 workspace 根目錄執行內建安裝器，預設安裝三份標準 ignore files：
 
@@ -361,7 +345,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 11. Default Tools — Go CLI 安裝
+### 10. Default Tools — Go CLI 安裝
 
 `Superset: Install Default Tools` 會依序為目前使用者安裝九個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
 
@@ -392,7 +376,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 12. Projects Setup — projects workspace 初始化
+### 11. Projects Setup — projects workspace 初始化
 
 `Superset: Projects Setup` 會建立固定的 `~/projects` root，並從 GitHub clone 下列 BizShuk repositories：
 
@@ -419,7 +403,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 13. Editor Layout — 四個 editor group 佈局模式
+### 12. Editor Layout — 四個 editor group 佈局模式
 
 模式是`兩個方向各自`的 even／max `組合`，不是「選一個方向」：
 
@@ -451,7 +435,7 @@ mode = { horizontal: even | max } × { vertical: even | max }
 
 ---
 
-### 14. Disk Usage — Status Bar 磁碟容量
+### 13. Disk Usage — Status Bar 磁碟容量
 
 啟用 Superset 後，Status Bar 右側會顯示第一個 workspace 所在 volume 的已使用比例，例如
 `$(database) Disk 80%`。Hover tooltip 會列出 used、free 與 total capacity；資料每 30 秒刷新一次。
@@ -460,7 +444,7 @@ mode = { horizontal: even | max } × { vertical: even | max }
 
 ---
 
-### 15. `CLI` — 路徑啟動器
+### 14. `CLI` — 路徑啟動器
 
 Activity Bar 上獨立的 `CLI` 圖示，container 內有 `Repo Path` 與 `Change` 兩個 View。
 `Repo Path` 以`兩層`樹狀列出 `~/projects` 底下的 Git repositories：
@@ -491,17 +475,15 @@ Regex 明確加入。
 在 `Repo Path` 單選一個 Git repository，`Change` View 會以 `Staged Changes`、
 `Unstaged Changes`、`Untracked Changes` 三個非空 top-level Tree Items 顯示變更，下一層
 使用 compact folder/file hierarchy，整體沿用 VS Code native Tree View 與 File Icon Theme。
-多選時不會猜測 commit target，必須保留單一選取；explicit non-repository path 也會明確
+多選時不會猜測 repository，必須保留單一選取；explicit non-repository path 也會明確
 顯示不是 Git repository。
 
 每個 category 與每個 Change Item 都有兩個 actions：`Staged Changes` 提供 `Discard` 與
 `Unstage`，其餘兩組提供 `Discard` 與 `Stage`。`Discard` 一律先確認；untracked 與 newly
 staged files 會移到作業系統 Trash。Actions 採用 VS Code SCM-style 的 `discard`、`add`、
-`remove` Codicons，全部由 native `view/item/context` 呈現。View title 的 `Commit Staged
-Changes` 以 native Input Box 收集訊息，只提交 staged changes，不會隱式 stage 其他變更。
-`Generate Commit Message` 會將目前選取的 repository 設為 Git generation target，再執行
-Antigravity command，並以預填的 native Input Box 讓使用者 review 後確認 commit；generation、
-commit、hook 或 action 失敗時會顯示原因。
+`remove` Codicons，全部由 native `view/item/context` 呈現。`Change` 不提供 commit input、
+message generation 或 Commit button；這些操作直接使用 VS Code native Source Control，
+Superset 不建立重複 workflow。Change action 失敗時會顯示原因。
 
 每個 Change Item 的 marker 固定為：
 
@@ -560,8 +542,7 @@ terminals。每列 description 顯示
 2. 在 `Repo Path` 單選 repository，於 `Change` View 檢查三個 categories 與 marker；
    點任一 Change Item 會開啟對應狀態的 Diff Editor。
 3. 透過 group、folder 或 file actions 執行 `Stage` / `Unstage` / `Discard`；從 View title
-   開啟 native Input Box 輸入 commit message，或由 Antigravity 產生並 review；只會提交
-   `Staged Changes`。
+   可執行 `Refresh`。需要 commit 時直接使用 VS Code native Source Control。
 4. Hover 任一列,右側出現三顆按鈕:`Open with Claude`、`Open with Codex`、
    `Open with Grok`。點下去會在`編輯區`開一個 terminal 分頁,cwd 設在該路徑並執行
    對應的 CLI。
@@ -721,8 +702,6 @@ code --install-extension superset-*.vsix
 | `Superset: Open Settings`                       | —                   | 開啟並過濾 Superset 的 native Settings                                        |
 | `Superset: Show Diagnostics`                    | —                   | 顯示 active plugins 與各 subsystem 的 live count                              |
 | `Superset: Show Diagnostic Logs`                | —                   | 開啟 Output Channel 看診斷 log                                                |
-| `Superset: Reset Soft (this commit)`            | —                   | Graph commit 右鍵移動 HEAD,保留 index / working tree                          |
-| `Superset: Reset Hard (this commit)`            | —                   | Graph commit 右鍵重置 HEAD / index / working tree                             |
 | `Copy GitHub URL`                               | —                   | Explorer 檔案右鍵複製固定 `master` GitHub URL                                 |
 | `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                                 |
 | `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                       |
@@ -761,9 +740,8 @@ npm run test:watch       # watch 模式
 ### 在 VSCode 裡試跑
 
 1. 用 VSCode 打開 `superset/` 資料夾。
-2. 一般功能直接按 `F5`;測試 SCM Graph reset 時選 `Run Superset with Proposed SCM Menu` launch configuration。
-3. 按 `F5` → 跳出帶有 `--enable-proposed-api shuk.superset` 的 `Extension Development Host` 視窗。
-4. 在新視窗驗證功能。
+2. 按 `F5` 開啟 `Extension Development Host`。
+3. 在新視窗驗證功能。
 
 ### 打包
 
@@ -792,15 +770,6 @@ npm run build:vsix
 | VSIX 安裝後沒生效                     | 沒重啟 VSCode                                        | 重新啟動視窗                                                                                      |
 
 ---
-
-## 已淘汰功能 (Deprecated Features)
-
-| 淘汰日期   | 功能                                                            | 原始文件                                         | 說明                                                                                                 |
-| ---------- | --------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| 2026-07-26 | 整併完成 — 41 份 `docs/specs/` 2026-06-20 ~ 2026-07-10 歷史文件 | `docs/specs/2026-06-20-*.md` ~ `2026-07-10-*.md` | 全部 contents 收進 [`docs/specs/2026-07-26-Summary.md`](docs/specs/2026-07-26-Summary.md);無功能淘汰 |
-| 2026-08-04 | PTY-backed terminal 與 `Superset: Open TUI Terminal` 命令 | [`docs/specs/2026-08-04-remove-pty-use-native-terminals.md`](docs/specs/2026-08-04-remove-pty-use-native-terminals.md) | Superset 不再持有 pseudoterminal:terminal 一律由 VSCode 開,`node-pty` 相依、auto-replace 層與 `superset.terminals.highWaterMark` / `lowWaterMark` 設定同時移除 |
-
-`2026-07-26-Summary.md` 已由 [`2026-07-31-Summary.md`](docs/specs/2026-07-31-Summary.md) 吸收；既有歷史列保留原文，完整內容仍可從 git history 追溯。
 
 ## 授權 (License)
 

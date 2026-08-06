@@ -7,7 +7,6 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import type { CLIEntry } from "./entries";
 import type { SCMActionService } from "./scmActions";
-import { generateCommitMessageForRepository } from "./scmCommitMessage";
 import type { SCMDiffProvider } from "./scmDiff";
 import { resolveRepositoryPath } from "./scmPath";
 import type { GitSCMRepository } from "./scmRepository";
@@ -18,8 +17,6 @@ import type {
 } from "./scmStatus";
 
 export const CHANGE_VIEW_ID = "superset.cliLauncher.changes";
-export const HAS_STAGED_CHANGES_CONTEXT_KEY =
-    "superset.cliLauncher.hasStagedChanges";
 
 export const SCM_TREE_CONTEXT_VALUES: Record<GitChangeGroup, string> = {
     staged: "superset.cliLauncher.scm.staged",
@@ -147,7 +144,6 @@ export class CLIChangesTreeProvider
     private revision = 0;
     private nextNodeID = 0;
     private busy = false;
-    private commitDraft = "";
     private _message: string | undefined =
         "請在 Repo Path 選取一個 repository。";
 
@@ -182,14 +178,12 @@ export class CLIChangesTreeProvider
         const unique = [
             ...new Map(entries.map((entry) => [entry.path, entry])).values(),
         ];
-        this.commitDraft = "";
 
         if (unique.length === 0) {
             this.revision += 1;
             this.clearTree();
             this.selected = undefined;
             this.setMessage("請在 Repo Path 選取一個 repository。");
-            this.updateStagedContext();
             return;
         }
         if (unique.length > 1) {
@@ -199,7 +193,6 @@ export class CLIChangesTreeProvider
             this.setMessage(
                 "一次只能檢視一個 repository，請在 Repo Path 保留單一選取。"
             );
-            this.updateStagedContext();
             return;
         }
 
@@ -292,63 +285,12 @@ export class CLIChangesTreeProvider
         }
     }
 
-    async commitStaged(): Promise<void> {
-        await this.promptAndCommit(this.commitDraft);
-    }
-
-    async generateCommitMessage(): Promise<void> {
-        const selected = this.selected;
-        const requestRevision = this.revision;
-        if (this.busy || !selected || !this.hasStagedChanges()) {
-            return;
-        }
-
-        this.busy = true;
-        try {
-            const generated = await generateCommitMessageForRepository(
-                selected.path
-            );
-            if (
-                !this.isCurrent(requestRevision, selected.path) ||
-                typeof generated !== "string" ||
-                generated.trim() === ""
-            ) {
-                return;
-            }
-
-            this.commitDraft = generated.trim();
-            await this.restoreChangeView();
-        } catch (error: unknown) {
-            const detail = describeError(error);
-            this.log(
-                `cliLauncher changes: generate commit message failed — ${detail}`
-            );
-            if (this.isCurrent(requestRevision, selected.path)) {
-                await vscode.window.showErrorMessage(
-                    `CLI Change: Generate Commit Message 失敗 — ${detail}`
-                );
-            }
-            return;
-        } finally {
-            this.busy = false;
-        }
-
-        if (this.isCurrent(requestRevision, selected.path)) {
-            await this.promptAndCommit(this.commitDraft);
-        }
-    }
-
     dispose(): void {
         this.revision += 1;
         this.selected = undefined;
         this.clearTree();
         this.treeEmitter.dispose();
         this.messageEmitter.dispose();
-        void vscode.commands.executeCommand(
-            "setContext",
-            HAS_STAGED_CHANGES_CONTEXT_KEY,
-            false
-        );
     }
 
     private async loadSelected(): Promise<void> {
@@ -362,16 +304,18 @@ export class CLIChangesTreeProvider
         // 在 git 操作完成前設定 loading message，避免 VS Code 在「空 tree + 無 message」
         // 時顯示 loading spinner。
         this.setMessage(`正在讀取 ${selected.label}…`);
-        this.updateStagedContext();
 
         try {
-            if (!(await this.repository.isRepository(selected.path))) {
-                if (this.isCurrent(revision, selected.path)) {
-                    this.setMessage(
-                        `${selected.label}：這個路徑不是 Git repository。`
-                    );
-                    this.updateStagedContext();
-                }
+            const isRepository = await this.repository.isRepository(
+                selected.path
+            );
+            if (!this.isCurrent(revision, selected.path)) {
+                return;
+            }
+            if (!isRepository) {
+                this.setMessage(
+                    `${selected.label}：這個路徑不是 Git repository。`
+                );
                 return;
             }
 
@@ -385,7 +329,6 @@ export class CLIChangesTreeProvider
             this.setMessage(
                 changes.length === 0 ? "沒有未提交變更。" : undefined
             );
-            this.updateStagedContext();
             this.fireTreeChange();
         } catch (error: unknown) {
             if (!this.isCurrent(revision, selected.path)) {
@@ -394,7 +337,6 @@ export class CLIChangesTreeProvider
             const detail = describeError(error);
             this.log(`cliLauncher changes: refresh failed — ${detail}`);
             this.setMessage(`無法讀取 repository changes：${detail}`);
-            this.updateStagedContext();
             this.fireTreeChange();
         }
     }
@@ -543,61 +485,6 @@ export class CLIChangesTreeProvider
         return id ? this.items.get(id) : undefined;
     }
 
-    private async promptAndCommit(initialValue: string): Promise<void> {
-        const selected = this.selected;
-        const requestRevision = this.revision;
-        if (this.busy || !selected || !this.hasStagedChanges()) {
-            return;
-        }
-
-        const message = await vscode.window.showInputBox({
-            title: "Commit Staged Changes",
-            prompt: "Commits staged changes only.",
-            placeHolder: "Commit message",
-            value: initialValue,
-            ignoreFocusOut: true,
-            validateInput: (value) =>
-                value.trim() === "" ? "Commit message is required." : undefined,
-        });
-        if (!this.isCurrent(requestRevision, selected.path)) {
-            return;
-        }
-        if (message === undefined) {
-            this.commitDraft = initialValue;
-            return;
-        }
-
-        const trimmed = message.trim();
-        if (trimmed === "") {
-            return;
-        }
-        this.commitDraft = trimmed;
-        this.busy = true;
-        try {
-            await this.repository.commitStaged(selected.path, trimmed);
-            this.commitDraft = "";
-            if (this.selected?.path === selected.path) {
-                await this.loadSelected();
-            }
-            await this.notifyRepositoryChanged();
-        } catch (error: unknown) {
-            const detail = describeError(error);
-            this.log(`cliLauncher changes: commit failed — ${detail}`);
-            if (this.selected?.path === selected.path) {
-                await this.loadSelected();
-            }
-            await vscode.window.showErrorMessage(
-                `CLI Change: commit 失敗 — ${detail}`
-            );
-        } finally {
-            this.busy = false;
-        }
-    }
-
-    private hasStagedChanges(): boolean {
-        return this.changes.some((change) => change.group === "staged");
-    }
-
     private isCurrent(revision: number, repoPath: string): boolean {
         return revision === this.revision && this.selected?.path === repoPath;
     }
@@ -622,31 +509,12 @@ export class CLIChangesTreeProvider
         this.treeEmitter.fire(undefined);
     }
 
-    private updateStagedContext(): void {
-        void vscode.commands.executeCommand(
-            "setContext",
-            HAS_STAGED_CHANGES_CONTEXT_KEY,
-            this.hasStagedChanges()
-        );
-    }
-
     private async notifyRepositoryChanged(): Promise<void> {
         try {
             await this.onRepositoryChanged();
         } catch (error: unknown) {
             this.log(
                 `cliLauncher changes: path refresh failed — ${describeError(error)}`
-            );
-        }
-    }
-
-    private async restoreChangeView(): Promise<void> {
-        try {
-            await vscode.commands.executeCommand("workbench.view.extension.cli");
-            await vscode.commands.executeCommand(`${CHANGE_VIEW_ID}.focus`);
-        } catch (error: unknown) {
-            this.log(
-                `cliLauncher changes: restore Change view failed — ${describeError(error)}`
             );
         }
     }

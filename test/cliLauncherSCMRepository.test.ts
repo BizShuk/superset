@@ -220,48 +220,6 @@ describe("gitSCMRepository", () => {
         ).resolves.toBe(false);
     });
 
-    it("commits only staged changes with the exact trimmed message", async () => {
-        await writeFile(join(repository, "modified.txt"), "after\n");
-        await gitSCMRepository.stage(repository, ["modified.txt"]);
-        await writeFile(join(repository, "added.txt"), "new\n");
-        await unlink(join(repository, "deleted.txt"));
-
-        await gitSCMRepository.commitStaged(
-            repository,
-            "  feat: commit staged change  "
-        );
-
-        await expect(git(repository, ["status", "--porcelain"])).resolves.toBe(
-            " D deleted.txt\n?? added.txt\n"
-        );
-        await expect(
-            git(repository, ["log", "-1", "--format=%s"])
-        ).resolves.toBe("feat: commit staged change\n");
-    });
-
-    it("passes commit messages as arguments without shell interpretation", async () => {
-        await writeFile(join(repository, "modified.txt"), "after\n");
-        await gitSCMRepository.stage(repository, ["modified.txt"]);
-        const message = "feat: keep 'quotes' and $(shell) literal";
-
-        await gitSCMRepository.commitStaged(repository, message);
-
-        await expect(
-            git(repository, ["log", "-1", "--format=%s"])
-        ).resolves.toBe(`${message}\n`);
-    });
-
-    it("rejects an empty commit message without changing staging", async () => {
-        await writeFile(join(repository, "modified.txt"), "after\n");
-
-        await expect(
-            gitSCMRepository.commitStaged(repository, "   \n  ")
-        ).rejects.toThrow("commit message");
-        await expect(
-            git(repository, ["diff", "--cached", "--name-only"])
-        ).resolves.toBe("");
-    });
-
     it("does not let Git walk up to a parent repository", async () => {
         const plainDirectory = join(repository, "plain-directory");
         await mkdir(plainDirectory);
@@ -271,12 +229,6 @@ describe("gitSCMRepository", () => {
         ).resolves.toBe(false);
         await expect(
             gitSCMRepository.readChanges(plainDirectory)
-        ).rejects.toThrow("Git repository");
-        await expect(
-            gitSCMRepository.commitStaged(
-                plainDirectory,
-                "must not commit parent"
-            )
         ).rejects.toThrow("Git repository");
         await expect(
             gitSCMRepository.stage(plainDirectory, ["file.txt"])

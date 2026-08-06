@@ -1,30 +1,3 @@
-const gitProviderMocks = vi.hoisted(() => {
-    const uriFile = vi.fn((fsPath: string) => ({
-        scheme: "file",
-        fsPath,
-        path: fsPath,
-    }));
-    const openRepository = vi.fn(async (rootUri: { fsPath: string }) => ({
-        rootUri,
-    }));
-    const getAPI = vi.fn(() => ({ openRepository }));
-    const exports = { getAPI };
-    const activate = vi.fn(async () => exports);
-    const getExtension = vi.fn(() => ({
-        isActive: true,
-        exports,
-        activate,
-    }));
-
-    return {
-        activate,
-        getAPI,
-        getExtension,
-        openRepository,
-        uriFile,
-    };
-});
-
 vi.mock("vscode", () => {
     class EventEmitter<T> {
         private readonly listeners = new Set<(event: T) => void>();
@@ -60,18 +33,14 @@ vi.mock("vscode", () => {
         TreeItem,
         TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
         Uri: {
-            file: gitProviderMocks.uriFile,
-        },
-        commands: {
-            executeCommand: vi.fn(async () => undefined),
-        },
-        extensions: {
-            getExtension: gitProviderMocks.getExtension,
+            file: (fsPath: string) => ({
+                scheme: "file",
+                fsPath,
+                path: fsPath,
+            }),
         },
         window: {
             showErrorMessage: vi.fn(async () => undefined),
-            showInformationMessage: vi.fn(async () => undefined),
-            showInputBox: vi.fn(async () => undefined),
             showWarningMessage: vi.fn(async () => "Discard"),
         },
     };
@@ -136,7 +105,6 @@ function repositoryMock(): GitSCMRepository {
         discardWorktreeChanges: vi.fn(async () => undefined),
         discardTrackedChanges: vi.fn(async () => undefined),
         isTrackedInHead: vi.fn(async () => true),
-        commitStaged: vi.fn(async () => undefined),
         readHeadFile: vi.fn(async () => ""),
         readIndexFile: vi.fn(async () => ""),
     };
@@ -175,19 +143,7 @@ describe("CLIChangesTreeProvider", () => {
             onRepositoryChanged,
             log
         );
-        vi.mocked(vscode.commands.executeCommand).mockReset();
-        vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
-        gitProviderMocks.activate.mockClear();
-        gitProviderMocks.getAPI.mockClear();
-        gitProviderMocks.getExtension.mockClear();
-        gitProviderMocks.openRepository.mockClear();
-        gitProviderMocks.openRepository.mockImplementation(async (rootUri) => ({
-            rootUri,
-        }));
-        gitProviderMocks.uriFile.mockClear();
         vi.mocked(vscode.window.showErrorMessage).mockClear();
-        vi.mocked(vscode.window.showInformationMessage).mockClear();
-        vi.mocked(vscode.window.showInputBox).mockReset();
         vi.mocked(vscode.window.showWarningMessage).mockReset();
         vi.mocked(vscode.window.showWarningMessage).mockResolvedValue("Discard");
     });
@@ -385,103 +341,6 @@ describe("CLIChangesTreeProvider", () => {
         expect(actions.discard).not.toHaveBeenCalled();
     });
 
-    it("commits staged changes through a native InputBox", async () => {
-        const staged = change("staged", "U", "staged.ts");
-        vi.mocked(repository.readChanges)
-            .mockResolvedValueOnce([staged])
-            .mockResolvedValueOnce([]);
-        vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce(
-            "  feat: native commit  "
-        );
-        await provider.setSelection([entry("/repo/project", "project")]);
-
-        await provider.commitStaged();
-
-        expect(vscode.window.showInputBox).toHaveBeenCalledWith(
-            expect.objectContaining({
-                title: "Commit Staged Changes",
-                prompt: "Commits staged changes only.",
-                value: "",
-            })
-        );
-        const options = vi.mocked(vscode.window.showInputBox).mock.calls[0]?.[0];
-        expect(options?.validateInput?.("   ")).toContain("Commit message");
-        expect(repository.commitStaged).toHaveBeenCalledWith(
-            "/repo/project",
-            "feat: native commit"
-        );
-        expect(onRepositoryChanged).toHaveBeenCalledTimes(1);
-    });
-
-    it("generates a draft, restores Change, and opens the native commit prompt", async () => {
-        vi.mocked(repository.readChanges)
-            .mockResolvedValueOnce([change("staged", "U", "staged.ts")])
-            .mockResolvedValueOnce([]);
-        vi.mocked(vscode.commands.executeCommand).mockImplementation(
-            async (command: string) =>
-                command === "antigravity.generateCommitMessage"
-                    ? "feat: generated"
-                    : undefined
-        );
-        vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce(
-            "feat: generated and reviewed"
-        );
-        await provider.setSelection([entry("/repo/project")]);
-
-        await provider.generateCommitMessage();
-
-        expect(gitProviderMocks.getExtension).toHaveBeenCalledWith(
-            "vscode.git"
-        );
-        expect(gitProviderMocks.uriFile).toHaveBeenCalledWith(
-            "/repo/project"
-        );
-        expect(gitProviderMocks.openRepository).toHaveBeenCalledWith({
-            scheme: "file",
-            fsPath: "/repo/project",
-            path: "/repo/project",
-        });
-        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-            "antigravity.generateCommitMessage",
-            "/repo/project"
-        );
-        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-            "workbench.view.extension.cli"
-        );
-        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-            `${CHANGE_VIEW_ID}.focus`
-        );
-        expect(vscode.window.showInputBox).toHaveBeenCalledWith(
-            expect.objectContaining({ value: "feat: generated" })
-        );
-        expect(repository.commitStaged).toHaveBeenCalledWith(
-            "/repo/project",
-            "feat: generated and reviewed"
-        );
-    });
-
-    it("does not apply generated text after repository selection changes", async () => {
-        const generated = deferred<string>();
-        vi.mocked(repository.readChanges)
-            .mockResolvedValueOnce([change("staged", "U", "first.ts")])
-            .mockResolvedValueOnce([change("staged", "U", "second.ts")]);
-        vi.mocked(vscode.commands.executeCommand).mockImplementation(
-            (command: string) =>
-                command === "antigravity.generateCommitMessage"
-                    ? generated.promise
-                    : Promise.resolve(undefined)
-        );
-        await provider.setSelection([entry("/repo/first")]);
-
-        const generation = provider.generateCommitMessage();
-        await provider.setSelection([entry("/repo/second")]);
-        generated.resolve("feat: stale first message");
-        await generation;
-
-        expect(vscode.window.showInputBox).not.toHaveBeenCalled();
-        expect(repository.commitStaged).not.toHaveBeenCalled();
-    });
-
     it("discards stale status reads after the selected repository changes", async () => {
         const firstRead = deferred<GitChange[]>();
         const secondRead = deferred<GitChange[]>();
@@ -490,7 +349,13 @@ describe("CLIChangesTreeProvider", () => {
             .mockReturnValueOnce(secondRead.promise);
 
         const first = provider.setSelection([entry("/repo/first")]);
+        await vi.waitFor(() => {
+            expect(repository.readChanges).toHaveBeenCalledTimes(1);
+        });
         const second = provider.setSelection([entry("/repo/second")]);
+        await vi.waitFor(() => {
+            expect(repository.readChanges).toHaveBeenCalledTimes(2);
+        });
         secondRead.resolve([change("untracked", "A", "second.ts")]);
         await second;
         firstRead.resolve([change("unstaged", "U", "first.ts")]);
