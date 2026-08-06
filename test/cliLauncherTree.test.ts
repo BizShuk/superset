@@ -212,10 +212,9 @@ beforeEach(() => {
     hidden = [];
 });
 
-describe("CLILauncherTreeProvider filtering", () => {
-    it("starts unfiltered and lists pinned entries before scanned folders", async () => {
+describe("CLILauncherTreeProvider", () => {
+    it("lists pinned entries before scanned folders", async () => {
         const provider = new CLILauncherTreeProvider();
-        expect(provider.filter).toBe("");
 
         const items = await provider.getChildren();
         expect(items.map((item) => item.label)).toEqual([
@@ -268,64 +267,6 @@ describe("CLILauncherTreeProvider filtering", () => {
             (await provider.getChildren(items[2])).map((item) => item.label)
         ).toEqual(["superset"]);
         expect(await provider.getChildren(items[3])).toEqual([]);
-        provider.dispose();
-    });
-
-    it("normalizes the query and refreshes only when it changes", () => {
-        const provider = new CLILauncherTreeProvider();
-        let refreshes = 0;
-        provider.onDidChangeTreeData(() => {
-            refreshes += 1;
-        });
-
-        expect(provider.setFilter(" SUP set ")).toBe(true);
-        expect(provider.filter).toBe("supset");
-        expect(provider.setFilter("supset")).toBe(false);
-        expect(refreshes).toBe(1);
-        provider.dispose();
-    });
-
-    it("keeps only the folders reachable from the query", async () => {
-        const provider = new CLILauncherTreeProvider();
-        provider.setFilter("gateway");
-
-        const items = await provider.getChildren();
-        expect(items.map((item) => item.label)).toEqual(["platform"]);
-
-        const children = await provider.getChildren(items[0]);
-        expect(children.map((item) => item.label)).toEqual(["gateway"]);
-        provider.dispose();
-    });
-
-    it("expands matching folders while filtering and collapses them after", async () => {
-        const provider = new CLILauncherTreeProvider();
-        provider.setFilter("sessiond");
-        const filtered = await provider.getChildren();
-        expect(filtered[0].collapsibleState).toBe(2); // Expanded
-
-        provider.setFilter("");
-        const restored = await provider.getChildren();
-        expect(restored.map((item) => item.label)).toEqual([
-            "Ops CLI",
-            "platform",
-            "ai",
-        ]);
-        expect(restored[1].collapsibleState).toBe(1); // Collapsed
-        provider.dispose();
-    });
-
-    it("scopes item ids by the query so expansion state is not reused", async () => {
-        const provider = new CLILauncherTreeProvider();
-        const unfiltered = await provider.getChildren();
-        provider.setFilter("ai");
-        const filtered = await provider.getChildren();
-
-        expect(unfiltered.map((item) => item.id)).not.toEqual(
-            filtered.map((item) => item.id)
-        );
-        expect(filtered.some((item) => item.id?.includes("scan:ai:"))).toBe(
-            true
-        );
         provider.dispose();
     });
 
@@ -505,15 +446,6 @@ describe("CLILauncherTreeProvider filtering", () => {
             "w-cli-git(+4,-0)",
             "",
         ]);
-        provider.dispose();
-    });
-
-    it("filters pinned entries by their custom label too", async () => {
-        const provider = new CLILauncherTreeProvider();
-        provider.setFilter("opscli");
-
-        const items = await provider.getChildren();
-        expect(items.map((item) => item.label)).toEqual(["Ops CLI"]);
         provider.dispose();
     });
 

@@ -30,8 +30,8 @@ import {
     type CLIEntry,
 } from "./entries";
 import { buildCLILauncherCatalog } from "./catalog";
-import { filterCLIEntries } from "./filter";
 import { log, setCLILauncherLog } from "./log";
+import { createNativeFindHandler } from "./nativeFind";
 import { filterRepositoryFolders } from "./repositoryDiscovery";
 import { scanRoots } from "./scan";
 import { createSubfolder, validateSubfolderName } from "./subfolder";
@@ -42,9 +42,6 @@ import {
 } from "./tree";
 
 export const VIEW_ID = "superset.cliLauncher.paths";
-
-/** 有作用中的過濾字串時才為 true;`Clear Filter` 按鈕靠它顯示／隱藏。 */
-export const FILTER_CONTEXT_KEY = "superset.cliLauncher.filtered";
 
 /** CLI View 目前至少選取一個 path item 時為 true；只有 item focus 不算。 */
 export const PATH_SELECTION_CONTEXT_KEY =
@@ -63,6 +60,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const terminalTracker = initTerminalTracking(ctx.subscriptions);
 
     const provider = new CLILauncherTreeProvider(terminalTracker);
+    const openNativeFind = createNativeFindHandler(VIEW_ID);
     // 多選:inline 按鈕仍作用在單列,但選取多列後的命令 (含 Cmd+N / Ctrl+1–4)
     // 會一次啟動全部。keybinding 觸發時沒有命令參數,只能靠 `view.selection`。
     const view = vscode.window.createTreeView<CLILauncherTreeItem>(VIEW_ID, {
@@ -107,20 +105,12 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }),
         vscode.commands.registerCommand(
             "superset.cliLauncherFilter",
-            async () => {
-                await filterInteractively(provider, view);
-            }
-        ),
-        vscode.commands.registerCommand(
-            "superset.cliLauncherClearFilter",
-            () => {
-                applyFilter(provider, view, "");
-            }
+            openNativeFind
         ),
         vscode.commands.registerCommand(
             "superset.cliLauncherCopyAllPaths",
             async () => {
-                await copyAllPathsToClipboard(provider.filter);
+                await copyAllPathsToClipboard();
             }
         ),
         vscode.commands.registerCommand(
@@ -209,7 +199,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
         `registered: view=${VIEW_ID} commands=${[
             "superset.cliLauncherRefresh",
             "superset.cliLauncherFilter",
-            "superset.cliLauncherClearFilter",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherAddPath",
             "superset.cliLauncherCreateSubfolder",
@@ -226,21 +215,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
             for (const disposable of disposables) {
                 disposable.dispose();
             }
-            // context key 是 window 層狀態,view 消失後不得留下 stale true。
-            void setFilterContext(false);
             void setPathSelectionContext(false);
             // module-level sink 不得存活到下一輪 activation。
             setCLILauncherLog(undefined);
         },
     };
-}
-
-function setFilterContext(active: boolean): Thenable<unknown> {
-    return vscode.commands.executeCommand(
-        "setContext",
-        FILTER_CONTEXT_KEY,
-        active
-    );
 }
 
 function setPathSelectionContext(active: boolean): Thenable<unknown> {
@@ -249,46 +228,6 @@ function setPathSelectionContext(active: boolean): Thenable<unknown> {
         PATH_SELECTION_CONTEXT_KEY,
         active
     );
-}
-
-/**
- * 套用過濾字串:更新 provider、把目前條件寫進 view 的 description (面板標題右側),
- * 並同步 `Clear Filter` 的 context key。
- */
-function applyFilter(
-    provider: CLILauncherTreeProvider,
-    view: vscode.TreeView<CLILauncherTreeItem>,
-    raw: string
-): void {
-    provider.setFilter(raw);
-    const active = provider.filter !== "";
-    view.description = active ? `filter: ${provider.filter}` : undefined;
-    void setFilterContext(active);
-    log(`filter: ${active ? provider.filter : "(cleared)"}`);
-}
-
-/**
- * `Filter Paths`:輸入框接受 subsequence 查詢 (`plsup` → `platform/superset`)。
- * 送出空字串等同清除;按 Esc 取消則維持原本的條件。
- *
- * 刻意用一次性的 `showInputBox` 而不是逐鍵即時過濾:掃描結果沒有快取
- * (`Reset Caches` == 重新掃描),每個按鍵都重掃 root 會把 readdir 打成熱路徑。
- */
-async function filterInteractively(
-    provider: CLILauncherTreeProvider,
-    view: vscode.TreeView<CLILauncherTreeItem>
-): Promise<void> {
-    const input = await vscode.window.showInputBox({
-        title: "CLI: 過濾路徑",
-        prompt: "逐段比對:字元在同一段內依序出現即命中,留白清除過濾。",
-        placeHolder: "例如 tool → tools,pl/sup → ~/projects/platform/superset",
-        value: provider.filter,
-    });
-    if (input === undefined) {
-        return;
-    }
-    applyFilter(provider, view, input);
-    await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
 }
 
 interface CommandContext {
@@ -417,19 +356,16 @@ async function listAllEntries(): Promise<CLIEntry[]> {
 }
 
 /**
- * `Copy All Paths`:把面板目前顯示的每一個項目 (釘選 + 掃描兩層,與 tree view
- * 的渲染順序一致) 的絕對路徑各佔一行寫進剪貼簿。不看選取狀態 —— 這是「複製全部」,
- * 不是「複製選取」;但「全部」以面板`當下可見`為準,因此套用作用中的過濾條件。
+ * `Copy All Paths`:把完整 catalog 的每一個項目 (釘選 + 掃描兩層,與 tree view
+ * 的基礎順序一致) 的絕對路徑各佔一行寫進剪貼簿。不看選取狀態 —— 這是「複製全部」,
+ * 不是「複製選取」。native Find Control 的 query 由 VS Code 擁有,因此這裡複製
+ * catalog 的完整 path set。
  */
-async function copyAllPathsToClipboard(filter: string): Promise<void> {
+async function copyAllPathsToClipboard(): Promise<void> {
     const commandID = "superset.cliLauncherCopyAllPaths";
-    log(`${commandID}: invoked (filter=${filter === "" ? "none" : filter})`);
+    log(`${commandID}: invoked`);
     try {
-        const entries = filterCLIEntries(
-            await listAllEntries(),
-            filter,
-            os.homedir()
-        );
+        const entries = await listAllEntries();
         if (entries.length === 0) {
             log(`${commandID}: no entries to copy`);
             await vscode.window.showInformationMessage(

@@ -8,8 +8,7 @@
 // `superset.cliLauncher.entries` 的 literal Pinned Paths 與 Regex Dynamic Entries
 // 排在一般 Git repository 結果之前；兩者維持各自的移除語意。
 //
-// Provider 另外持有一個 ephemeral 的 subsequence 過濾字串 (見 `filter.ts`),
-// 只影響顯示,不進 settings。面板可見時每 30 秒自動重刷一次
+// 面板可見時每 30 秒自動重刷一次
 // (`AUTO_REFRESH_INTERVAL_MS`),讓 git 狀態跟得上外部的 commit / checkout。
 //
 // 每一列的 description 顯示該路徑的 git 分支與行數增減 (見 `gitStatus.ts`),
@@ -31,11 +30,6 @@ import {
     loadRoots,
 } from "./config";
 import { isDescendantPath, type CLIEntry } from "./entries";
-import {
-    filterCLIEntries,
-    filterScannedFolders,
-    normalizeFilterQuery,
-} from "./filter";
 import {
     formatGitFolderDescription,
     formatGitFolderStatus,
@@ -107,7 +101,6 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
     private readonly gitDescription: string;
     /** tooltip 用的完整形式;只要是 repository 就一定有值。 */
     private readonly gitTooltip: string;
-    private readonly expanded: boolean;
 
     constructor(
         readonly entry: CLIEntry,
@@ -117,8 +110,6 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
             children?: readonly CLIEntry[];
             /** 該路徑的 git 分支與行數增減;不是 repository 時省略。 */
             git?: GitFolderStatus;
-            /** 有子節點時是否預設展開;過濾中才會設,讓命中的第二層直接看得到。 */
-            expanded?: boolean;
             /** 這個路徑自己的 terminal 數;決定展開後有沒有 terminal rows。 */
             terminalCount?: number;
             /** 含子孫路徑的總數;省略時等於自己的數量。 */
@@ -130,17 +121,14 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
         const hasChildren = children.length > 0 || terminalCount > 0;
         super(
             entry.label,
-            !hasChildren
-                ? vscode.TreeItemCollapsibleState.None
-                : options.expanded
-                  ? vscode.TreeItemCollapsibleState.Expanded
-                  : vscode.TreeItemCollapsibleState.Collapsed
+            hasChildren
+                ? vscode.TreeItemCollapsibleState.Collapsed
+                : vscode.TreeItemCollapsibleState.None
         );
 
         this.children = children;
         this.gitDescription = formatGitFolderDescription(options.git);
         this.gitTooltip = formatGitFolderStatus(options.git);
-        this.expanded = options.expanded ?? false;
         this.id = options.id;
         this.iconPath = FOLDER_ICON;
         this.updateTerminalCount({
@@ -160,9 +148,7 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
         const hasChildren = this.children.length > 0 || counts.own > 0;
         this.collapsibleState = !hasChildren
             ? vscode.TreeItemCollapsibleState.None
-            : this.expanded
-              ? vscode.TreeItemCollapsibleState.Expanded
-              : vscode.TreeItemCollapsibleState.Collapsed;
+            : vscode.TreeItemCollapsibleState.Collapsed;
         this.description = formatPathDescription(this.gitDescription, counts);
         // tooltip 只回答兩件事:這個路徑現在的 git 狀態,以及開了幾個 CLI terminal。
         // git 用完整形式,description 隱藏掉的靜止狀態在這裡仍看得到。
@@ -223,12 +209,6 @@ export class CLILauncherTreeProvider
 
     readonly onDidChangeTreeData = this.changed.event;
 
-    /**
-     * 目前的 subsequence 過濾字串 (已正規化)。刻意只放在記憶體:過濾是
-     * ephemeral UI state,不是路徑清單的一部分,不寫 settings 也不寫 `globalState`。
-     */
-    private query = "";
-
     /** View 目前可見與否;自動重刷是 UI-only work,只在可見時進行。 */
     private visible = false;
     private refreshTimer?: ReturnType<typeof setInterval>;
@@ -269,21 +249,6 @@ export class CLILauncherTreeProvider
         (this.refreshTimer as { unref?: () => void }).unref?.();
     }
 
-    get filter(): string {
-        return this.query;
-    }
-
-    /** 設定過濾字串;真的改變才刷新,回傳是否有變更。 */
-    setFilter(raw: string): boolean {
-        const next = normalizeFilterQuery(raw);
-        if (next === this.query) {
-            return false;
-        }
-        this.query = next;
-        this.refresh();
-        return true;
-    }
-
     refresh(): void {
         this.pathItems.clear();
         this.terminalItems.clear();
@@ -298,7 +263,7 @@ export class CLILauncherTreeProvider
         item?: CLILauncherTreeItem
     ): Promise<CLILauncherTreeItem[]> {
         if (!item) {
-            return await this.topLevelItems(this.query);
+            return await this.topLevelItems();
         }
         if (item instanceof CLITerminalTreeItem) {
             return [];
@@ -353,7 +318,7 @@ export class CLILauncherTreeProvider
         });
     }
 
-    private async topLevelItems(query: string): Promise<CLIEntryTreeItem[]> {
+    private async topLevelItems(): Promise<CLIEntryTreeItem[]> {
         this.pathItems.clear();
         const home = os.homedir();
         const catalog = buildCLILauncherCatalog(
@@ -363,38 +328,19 @@ export class CLILauncherTreeProvider
             home
         );
         const defaultFolders = await filterRepositoryFolders(catalog.folders);
-        // id 帶上查詢字串:VS Code 以 id 記住每一列的展開狀態,沿用同一組 id 會讓
-        // 過濾後想預設展開的節點維持在上一次的摺疊狀態。
-        const scope = query === "" ? "" : `${query}:`;
-
-        const visibleEntryPaths = new Set(
-            filterCLIEntries(
-                catalog.entries.map(({ entry }) => entry),
-                query,
-                home
-            ).map((entry) => entry.path)
-        );
-        const visibleEntries = catalog.entries.filter(({ entry }) =>
-            visibleEntryPaths.has(entry.path)
-        );
-        const scanned = filterScannedFolders(
-            defaultFolders,
-            query,
-            home
-        );
 
         // 一次把這一層要顯示的路徑全部問完,再分配給各列;逐列 await 會把數十次
         // git 呼叫串成序列,面板要等最後一個才畫得出來。
         const status = await readGitFolderStatusMap([
-            ...visibleEntries.map(({ entry }) => entry.path),
-            ...scanned.map((folder) => folder.entry.path),
+            ...catalog.entries.map(({ entry }) => entry.path),
+            ...defaultFolders.map((folder) => folder.entry.path),
         ]);
 
-        const items = visibleEntries.map(({ entry, source }) => {
+        const items = catalog.entries.map(({ entry, source }) => {
             const counts = this.terminalCounts(entry.path);
             return this.registerPathItem(
                 new CLIEntryTreeItem(entry, {
-                    id: `${source}:${scope}${entry.path}`,
+                    id: `${source}:${entry.path}`,
                     contextValue:
                         source === "literal"
                             ? ENTRY_CONTEXT_VALUE
@@ -406,15 +352,14 @@ export class CLILauncherTreeProvider
             );
         });
 
-        for (const folder of scanned) {
+        for (const folder of defaultFolders) {
             const counts = this.terminalCounts(folder.entry.path);
             items.push(
                 this.registerPathItem(
                     new CLIEntryTreeItem(folder.entry, {
-                        id: `scan:${scope}${folder.entry.path}`,
+                        id: `scan:${folder.entry.path}`,
                         contextValue: FOLDER_CONTEXT_VALUE,
                         children: folder.children,
-                        expanded: query !== "",
                         git: status.get(folder.entry.path),
                         terminalCount: counts.own,
                         totalTerminalCount: counts.total,

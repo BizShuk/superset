@@ -537,10 +537,10 @@ terminals。每列 description 顯示
    建立同名子資料夾。
 8. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
    (見下一節)。
-9. 標題列按鈕:`Filter Paths`(過濾路徑;CLI 面板取得焦點時可按 `Cmd+F`)、
+9. 標題列按鈕:`Filter Paths`(開啟 VS Code native Find Control;CLI 面板取得焦點時
+   可按 `Cmd+F`)、
    `Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`(把面板所有路徑
-   逐行複製到剪貼簿)、`Refresh`(重新掃描)。過濾生效時才多出一顆
-   `Clear Filter`。
+   逐行複製到剪貼簿)、`Refresh`(重新掃描)。
 
 點擊 path row`不會`啟動任何東西 —— 只做選取與展開；點擊展開後的 terminal row
 則會聚焦既有 terminal,不會另外 launch。
@@ -553,7 +553,7 @@ terminals。每列 description 顯示
 
 多選時只詢問一次名稱，並在每個選取 path 建立同名子資料夾。成功後 CLI View 立即
 刷新；新 folder 只有在成為 Git repository 或被 `entries` 明確加入後才會顯示，且仍受
-固定兩層 scan depth 與目前 filter 影響。這個動作不會修改
+固定兩層 scan depth 與目前 native Find query 影響。這個動作不會修改
 `superset.cliLauncher.*` settings、不會自動 pin，也不會建立 terminal。
 
 #### 從面板移除路徑
@@ -571,30 +571,20 @@ terminals。每列 description 顯示
 移除只影響面板,`不會`動到磁碟上的資料夾。要放回來:標題列 `...` →
 `Restore Hidden Paths`(可多選),或直接編輯 `superset.cliLauncher.hidden`。
 
-#### 專案過濾 (subsequence match)
+#### Native Find Control
 
-`Filter Paths` 會跳出輸入框；CLI 面板取得焦點時可按 `Cmd+F` 啟動同一個 Filter。
-查詢以 `/` 切段,每段的字元只要`依序`出現在`同一個
-資料夾名`裡就算命中 —— 不必連續,也不必記得完整名稱,但`不會跨過 /`:
+`Filter Paths` 或 CLI 面板內的 `Cmd+F` 會直接開啟 VS Code Tree/List 的原生搜尋框，
+不再跳出獨立 input box。每次 Extension Host 啟動後第一次開啟時，預設啟用：
 
-| 輸入      | 命中                                                     |
-| --------- | -------------------------------------------------------- |
-| `tool`    | `~/projects/tools` 及其下所有專案                        |
-| `sup`     | 任何名字含 s…u…p 的資料夾(`superset`、`surfer_profile`) |
-| `pl/sup`  | `~/projects/platform/superset`(先對上第一層再對第二層)  |
-| `superset`| `~/projects/platform/superset`(連續字串同樣適用)         |
+- `Filter`：隱藏未命中的 rows；可切換成 `Highlight`。
+- `Fuzzy Match`：允許模糊比對；可切換成 `Contiguous Match`。
 
-- 段與段之間只能`往後`推進,可以跳過中間層級:`pj/sup` 命中
-  `~/projects/platform/superset`,但 `sup/pl` 不會。
-- 比對對象是面板顯示的縮寫路徑(`~/projects/...`)的`各段`;單段查詢額外比對顯示
-  名稱,讓自訂 label 的釘選項目也找得到。大小寫不分,查詢中的空白會被忽略
-  (`pl sup` 等同 `plsup`)。
-- 第一層命中時整包子資料夾一起留下;只有第二層命中時,第一層仍會保留當作掛載點,
-  並自動展開讓命中的項目直接可見。
-- 過濾中面板標題右側顯示 `filter: <查詢>`,`Copy All Paths` 也只複製過濾後的路徑。
-- 按 `Enter` 送出後 focus 回到 CLI 專案清單；送出空字串或按 `Clear Filter` 即清除,
-  按 `Esc` 取消則維持原條件。
-- 過濾條件`只存在記憶體`,不寫進 settings,關掉視窗即消失。
+搜尋內容即時套用在 CLI Tree；清空 query 會顯示全部，`Esc` 關閉搜尋框。第一次套用
+預設後，Filter 與 Match toggles 交由 VS Code 保留本次 runtime 內的使用者選擇。
+Superset 不另存 query，也不修改全域 `workbench.list.*` settings。
+
+Native Find Control 的 query 由 VS Code 擁有，`Copy All Paths` 因此固定複製完整 CLI
+catalog，不受目前畫面上的搜尋結果影響。
 
 #### 設定
 
@@ -709,8 +699,8 @@ code --install-extension superset-*.vsix
 | `CLI: Open in New Window`                       | `Cmd+N`(CLI 面板且已選 path) | 以獨立 VS Code window 開啟選取路徑                                      |
 | `CLI: Create Subfolder`                         | —                   | 在每個選取路徑建立同名 direct subfolder                                       |
 | `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
-| `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿(套用作用中的過濾)                              |
-| `CLI: Filter Paths` / `Clear Filter`            | `Cmd+F`(CLI 面板)   | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
+| `CLI: Copy All Paths`                           | —                   | 逐行複製完整 CLI catalog 的所有路徑到剪貼簿                                  |
+| `CLI: Filter Paths`                             | `Cmd+F`(CLI 面板)   | 開啟 VS Code native Find Control；預設 `Filter` + `Fuzzy Match`               |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 

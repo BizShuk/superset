@@ -293,18 +293,32 @@ describe("extension activation via PluginManager", () => {
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherRefresh",
             "superset.cliLauncherFilter",
-            "superset.cliLauncherClearFilter",
         ]) {
             expect(cmds.has(id), `missing CLI Launcher command: ${id}`).toBe(
                 true
             );
         }
+        expect(cmds.has("superset.cliLauncherClearFilter")).toBe(false);
     });
 
-    it("returns focus to the CLI panel after accepting a filter", async () => {
-        const input = vi
-            .spyOn(vscode.window, "showInputBox")
-            .mockResolvedValueOnce("platform");
+    it("opens native CLI find with filter and fuzzy defaults", async () => {
+        const configuration = vi
+            .spyOn(vscode.workspace, "getConfiguration")
+            .mockImplementation((section?: string) => {
+                if (section !== "workbench.list") {
+                    return {
+                        get: () => undefined,
+                    } as unknown as vscode.WorkspaceConfiguration;
+                }
+                return {
+                    get: (key: string) =>
+                        key === "defaultFindMode"
+                            ? "highlight"
+                            : key === "defaultFindMatchType"
+                              ? "contiguous"
+                              : undefined,
+                } as unknown as vscode.WorkspaceConfiguration;
+            });
 
         try {
             await activate(fakeExtCtx());
@@ -312,14 +326,25 @@ describe("extension activation via PluginManager", () => {
                 __commands: Map<string, () => unknown>;
                 __executedCommands: Array<[string, ...unknown[]]>;
             };
+            testApi.__executedCommands.length = 0;
 
             await testApi.__commands.get("superset.cliLauncherFilter")?.();
 
-            expect(testApi.__executedCommands).toContainEqual([
-                "superset.cliLauncher.paths.focus",
+            expect(testApi.__executedCommands).toEqual([
+                ["superset.cliLauncher.paths.focus"],
+                ["list.toggleFindMode"],
+                ["list.toggleFindMatchType"],
+                ["list.find"],
+            ]);
+
+            testApi.__executedCommands.length = 0;
+            await testApi.__commands.get("superset.cliLauncherFilter")?.();
+            expect(testApi.__executedCommands).toEqual([
+                ["superset.cliLauncher.paths.focus"],
+                ["list.find"],
             ]);
         } finally {
-            input.mockRestore();
+            configuration.mockRestore();
         }
     });
 
