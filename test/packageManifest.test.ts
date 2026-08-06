@@ -309,7 +309,7 @@ describe("CLI Launcher manifest contributions", () => {
         }
     });
 
-    it("binds ctrl+f to filtering only while the CLI panel itself has focus", () => {
+    it("binds cmd+f to filtering only while the CLI panel itself has focus", () => {
         interface ManifestKeybinding {
             readonly command: string;
             readonly key: string;
@@ -321,7 +321,7 @@ describe("CLI Launcher manifest contributions", () => {
             (item) => item.command === "superset.cliLauncherFilter"
         );
 
-        expect(binding?.key).toBe("ctrl+f");
+        expect(binding?.key).toBe("cmd+f");
         expect(binding?.when).toBe(
             `focusedView == ${VIEW_ID} && !inputFocus`
         );

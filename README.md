@@ -535,7 +535,7 @@ terminals。每列 description 顯示
    建立同名子資料夾。
 8. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
    (見下一節)。
-9. 標題列按鈕:`Filter Paths`(過濾路徑;CLI 面板取得焦點時可按 `Ctrl+F`)、
+9. 標題列按鈕:`Filter Paths`(過濾路徑;CLI 面板取得焦點時可按 `Cmd+F`)、
    `Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`(把面板所有路徑
    逐行複製到剪貼簿)、`Refresh`(重新掃描)。過濾生效時才多出一顆
    `Clear Filter`。
@@ -571,7 +571,7 @@ terminals。每列 description 顯示
 
 #### 專案過濾 (subsequence match)
 
-`Filter Paths` 會跳出輸入框；CLI 面板取得焦點時可按 `Ctrl+F` 啟動同一個 Filter。
+`Filter Paths` 會跳出輸入框；CLI 面板取得焦點時可按 `Cmd+F` 啟動同一個 Filter。
 查詢以 `/` 切段,每段的字元只要`依序`出現在`同一個
 資料夾名`裡就算命中 —— 不必連續,也不必記得完整名稱,但`不會跨過 /`:
 
@@ -708,7 +708,7 @@ code --install-extension superset-*.vsix
 | `CLI: Create Subfolder`                         | —                   | 在每個選取路徑建立同名 direct subfolder                                       |
 | `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
 | `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿(套用作用中的過濾)                              |
-| `CLI: Filter Paths` / `Clear Filter`            | `Ctrl+F`(CLI 面板)  | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
+| `CLI: Filter Paths` / `Clear Filter`            | `Cmd+F`(CLI 面板)   | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 
