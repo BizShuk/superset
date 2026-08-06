@@ -10,8 +10,9 @@
 // see SAMPLES for the per-entry `covers` note. Adding a rendering branch
 // without a sample that reaches it is how this file goes stale.
 //
-// It writes ONLY files named `sample-*.jsonl`, and the cleanup path removes
-// only that prefix — real ingested sessions are never touched.
+// It writes ONLY files named `sample-*.jsonl`, and its bulk cleanup path
+// removes only that prefix — real ingested sessions are never touched by
+// sample cleanup.
 
 import * as fs from "fs";
 import * as path from "path";

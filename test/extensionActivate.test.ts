@@ -28,6 +28,11 @@ vi.mock("vscode", () => {
         Uri: {
             file: (p: string) => ({ fsPath: p, scheme: "file", path: p }),
             parse: (s: string) => ({ fsPath: s, scheme: "url", path: s }),
+            from: (parts: { scheme: string; path: string; query?: string }) => ({
+                ...parts,
+                fsPath: parts.path,
+                query: parts.query ?? "",
+            }),
         },
         TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
         // `cliLauncher/tree.ts` subclasses TreeItem at module scope, so this
@@ -90,6 +95,7 @@ vi.mock("vscode", () => {
                     dispose: noop,
                 };
             }),
+            registerWebviewViewProvider: vi.fn(() => noopDisposable),
             showInformationMessage: async () => undefined,
             showWarningMessage: async () => "Reset", // auto-confirm reset
             showErrorMessage: async () => undefined,
@@ -113,6 +119,7 @@ vi.mock("vscode", () => {
                 dispose: noop,
             }),
             openTextDocument: async () => ({}),
+            registerTextDocumentContentProvider: vi.fn(() => noopDisposable),
             getConfiguration: () => ({ get: () => undefined }),
         },
         env: {
@@ -272,12 +279,18 @@ describe("extension activation via PluginManager", () => {
     it("registers the CLI Launcher view and its agent commands", async () => {
         const ext = fakeExtCtx();
         const createTreeView = vi.mocked(vscode.window.createTreeView);
+        const registerWebviewViewProvider = vi.mocked(
+            vscode.window.registerWebviewViewProvider
+        );
         createTreeView.mockClear();
+        registerWebviewViewProvider.mockClear();
 
         await activate(ext);
 
         const viewIds = createTreeView.mock.calls.map((call) => call[0]);
         expect(viewIds).toContain("superset.cliLauncher.paths");
+        expect(viewIds).toContain("superset.cliLauncher.changes");
+        expect(registerWebviewViewProvider).not.toHaveBeenCalled();
         const cmds = (vscode as unknown as { __commands: Map<string, unknown> })
             .__commands;
         for (const id of [
@@ -293,6 +306,12 @@ describe("extension activation via PluginManager", () => {
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherRefresh",
             "superset.cliLauncherFilter",
+            "superset.cliLauncherOpenChange",
+            "superset.cliLauncherStageChanges",
+            "superset.cliLauncherUnstageChanges",
+            "superset.cliLauncherDiscardChanges",
+            "superset.cliLauncherCommitStaged",
+            "superset.cliLauncherGenerateCommitMessage",
         ]) {
             expect(cmds.has(id), `missing CLI Launcher command: ${id}`).toBe(
                 true
@@ -385,6 +404,52 @@ describe("extension activation via PluginManager", () => {
 
         cliView?.__fireSelection([]);
         expect(contextValues()).toEqual([false, true, false, false]);
+    });
+
+    it("forwards Repo Path selection and Refresh to the Change provider", async () => {
+        const createTreeView = vi.mocked(vscode.window.createTreeView);
+        createTreeView.mockClear();
+        await activate(fakeExtCtx());
+
+        const cliCall = createTreeView.mock.calls.find(
+            ([viewID]) => viewID === "superset.cliLauncher.paths"
+        );
+        const cliCallIndex = cliCall
+            ? createTreeView.mock.calls.indexOf(cliCall)
+            : -1;
+        const cliView = createTreeView.mock.results[cliCallIndex]?.value as
+            | { __fireSelection(selection: readonly unknown[]): void }
+            | undefined;
+        const changeCall = createTreeView.mock.calls.find(
+            ([viewID]) => viewID === "superset.cliLauncher.changes"
+        );
+        const changeProvider = changeCall?.[1].treeDataProvider as
+            | {
+                  setSelection(entries: readonly unknown[]): Promise<void>;
+                  refresh(): Promise<void>;
+              }
+            | undefined;
+        expect(changeProvider).toBeDefined();
+        const selection = vi.spyOn(changeProvider!, "setSelection");
+        const refresh = vi.spyOn(changeProvider!, "refresh");
+
+        cliView?.__fireSelection([
+            { path: "/projects/one", label: "one" },
+            { path: "/projects/one", label: "duplicate" },
+        ]);
+        expect(selection).toHaveBeenCalledWith([
+            {
+                id: "/projects/one",
+                label: "one",
+                path: "/projects/one",
+            },
+        ]);
+
+        const commands = (vscode as unknown as {
+            __commands: Map<string, () => unknown>;
+        }).__commands;
+        await commands.get("superset.cliLauncherRefresh")?.();
+        expect(refresh).toHaveBeenCalledTimes(1);
     });
 
     it("opens every selected CLI path in a new VS Code window", async () => {

@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.35.3",
+    "version": "0.39.3",
     "scripts": {
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -702,6 +702,38 @@
                 "icon": "$(filter)"
             },
             {
+                "command": "superset.cliLauncherStageChanges",
+                "title": "Stage Changes",
+                "category": "CLI",
+                "icon": "$(add)"
+            },
+            {
+                "command": "superset.cliLauncherUnstageChanges",
+                "title": "Unstage Changes",
+                "category": "CLI",
+                "icon": "$(remove)"
+            },
+            {
+                "command": "superset.cliLauncherDiscardChanges",
+                "title": "Discard Changes",
+                "category": "CLI",
+                "icon": "$(discard)"
+            },
+            {
+                "command": "superset.cliLauncherCommitStaged",
+                "title": "Commit Staged Changes",
+                "category": "CLI",
+                "icon": "$(check)",
+                "enablement": "superset.cliLauncher.hasStagedChanges"
+            },
+            {
+                "command": "superset.cliLauncherGenerateCommitMessage",
+                "title": "Generate Commit Message",
+                "category": "CLI",
+                "icon": "$(sparkle)",
+                "enablement": "superset.cliLauncher.hasStagedChanges"
+            },
+            {
                 "command": "superset.cliLauncherOpen",
                 "title": "Open Terminal at Path",
                 "category": "CLI",
@@ -793,7 +825,12 @@
             "cli": [
                 {
                     "id": "superset.cliLauncher.paths",
-                    "name": "Paths",
+                    "name": "Repo Path",
+                    "contextualTitle": "CLI"
+                },
+                {
+                    "id": "superset.cliLauncher.changes",
+                    "name": "Change",
                     "contextualTitle": "CLI"
                 }
             ]
@@ -925,6 +962,21 @@
                     "command": "superset.cliLauncherRefresh",
                     "when": "view == superset.cliLauncher.paths",
                     "group": "navigation@5"
+                },
+                {
+                    "command": "superset.cliLauncherGenerateCommitMessage",
+                    "when": "view == superset.cliLauncher.changes",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "superset.cliLauncherCommitStaged",
+                    "when": "view == superset.cliLauncher.changes",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "superset.cliLauncherRefresh",
+                    "when": "view == superset.cliLauncher.changes",
+                    "group": "navigation@3"
                 },
                 {
                     "command": "superset.cliLauncherRestoreHidden",
@@ -1142,6 +1194,36 @@
                     "command": "superset.cliLauncherRemovePath",
                     "when": "view == superset.cliLauncher.paths && (viewItem == superset.cliLauncher.entry || viewItem == superset.cliLauncher.folder)",
                     "group": "2_modify@2"
+                },
+                {
+                    "command": "superset.cliLauncherDiscardChanges",
+                    "when": "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.staged",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "superset.cliLauncherUnstageChanges",
+                    "when": "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.staged",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "superset.cliLauncherDiscardChanges",
+                    "when": "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.unstaged",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "superset.cliLauncherStageChanges",
+                    "when": "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.unstaged",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "superset.cliLauncherDiscardChanges",
+                    "when": "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.untracked",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "superset.cliLauncherStageChanges",
+                    "when": "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.untracked",
+                    "group": "inline@2"
                 },
                 {
                     "command": "superset.openProject",

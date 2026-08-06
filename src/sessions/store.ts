@@ -1,9 +1,10 @@
 // Sessions store — locate, parse and watch the `sessiond` JSONL output.
 //
-// The extension is a pure consumer (plan §7): it never writes session
-// content and never parses a raw agent transcript. Everything here is
-// filesystem + JSONL; the rendering lives in `markdown.ts` / `treeSpec.ts`
-// as pure functions so they stay vitest-able without a `vscode` import.
+// The extension never writes session content and never parses a raw agent
+// transcript. It may remove a user-selected backing file through the Sessions
+// View. Everything here is filesystem + JSONL; the rendering lives in
+// `markdown.ts` / `treeSpec.ts` as pure functions so they stay vitest-able
+// without a `vscode` import.
 
 import * as fs from "fs";
 import * as os from "os";
@@ -226,17 +227,22 @@ export class SessionStore {
         }
     }
 
-    /**
-     * Remove a generated sample fixture. Ingested session files are read-only
-     * even if a caller bypasses the UI's context filtering.
-     */
+    /** Remove a JSONL session file without crossing the configured store. */
     deleteSession(filePath: string): boolean {
-        if (!/^sample-.*\.jsonl$/.test(path.basename(filePath))) {
+        const root = path.resolve(this.root());
+        const target = path.resolve(filePath);
+        const relative = path.relative(root, target);
+        if (
+            path.extname(target) !== ".jsonl" ||
+            relative === "" ||
+            relative.startsWith(`..${path.sep}`) ||
+            path.isAbsolute(relative)
+        ) {
             return false;
         }
         try {
-            fs.rmSync(filePath);
-            this.forget(filePath);
+            fs.rmSync(target);
+            this.forget(target);
             return true;
         } catch {
             return false;
@@ -351,7 +357,7 @@ export function readSession(filePath: string): SessionRecord | undefined {
     return new SessionStore().readSession(filePath);
 }
 
-/** Delete sample data only; ingested session records are always read-only. */
+/** Delete one JSONL session file within the default sessions store. */
 export function deleteSession(filePath: string): boolean {
     return new SessionStore().deleteSession(filePath);
 }

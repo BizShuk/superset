@@ -25,7 +25,7 @@ a
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
-| `CLI` 面板                | 列出 `~/projects` 兩層 Git repositories、Git summary 與 path terminals；可明確加入其他路徑、過濾、啟動 agent CLI、展開並聚焦既有 terminal | 常在多個專案間切換跑 agent CLI 的人 |
+| `CLI` 面板                | 以 `Repo Path` 選 repository、啟動 agent CLI，並在 `Change` View 分組管理、commit 與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -103,13 +103,13 @@ a
 
 ### `Sessions` — Agent session 專案分組
 
-**功能**:唯讀載入 `sessiond` JSONL store，將 current workspace root 與其所有 descendant workspace paths 視為 project，並以 `project → session` 兩層 TreeView 顯示。只有實際含 session 的 store bucket 會出現；同名巢狀 project 以 workspace-relative path 區分。
+**功能**:載入 `sessiond` JSONL store，將 current workspace root 與其所有 descendant workspace paths 視為 project，並以 `project → session` 兩層 TreeView 顯示。只有實際含 session 的 store bucket 會出現；同名巢狀 project 以 workspace-relative path 區分。
 
 **逐步使用**:
 
 1. 主側欄 `Superset` icon → 點開 `Sessions` 面板。
 2. 展開 project row，查看依最近活動時間排序的 sessions。
-3. 點 session 開啟 Markdown summary；右鍵可開 raw JSONL、複製 session id 或刪除。
+3. 點 session 開啟 Markdown summary；右鍵可開 raw JSONL、複製 session id，或直接刪除 backing JSONL（不顯示 confirmation）。
 4. 面板會監看 shared sessions root，子 project 新增 session 或 append turn 後自動刷新。
 5. `Seed/Clear Sample Sessions` 只影響 current workspace root 的 `sample-*.jsonl`，不會修改 descendant projects 或 ingest 產生的 sessions。
 
@@ -456,8 +456,8 @@ mode = { horizontal: even | max } × { vertical: even | max }
 
 ### 15. `CLI` — 路徑啟動器
 
-Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects` 底下的 Git
-repositories:
+Activity Bar 上獨立的 `CLI` 圖示，container 內有 `Repo Path` 與 `Change` 兩個 View。
+`Repo Path` 以`兩層`樹狀列出 `~/projects` 底下的 Git repositories：
 
 ```text
 CLI
@@ -479,6 +479,35 @@ parent 是 repository 就誤收一般子資料夾。第一層 category 本身不
 只在底下至少有一個第二層 repository 時保留為容器；其餘非 repository 不顯示。
 需要一般資料夾作為 cwd 時，請透過 `superset.cliLauncher.entries` 的 literal path 或
 Regex 明確加入。
+
+#### Change View
+
+在 `Repo Path` 單選一個 Git repository，`Change` View 會以 `Staged Changes`、
+`Unstaged Changes`、`Untracked Changes` 三個非空 top-level Tree Items 顯示變更，下一層
+使用 compact folder/file hierarchy，整體沿用 VS Code native Tree View 與 File Icon Theme。
+多選時不會猜測 commit target，必須保留單一選取；explicit non-repository path 也會明確
+顯示不是 Git repository。
+
+每個 category 與每個 Change Item 都有兩個 actions：`Staged Changes` 提供 `Discard` 與
+`Unstage`，其餘兩組提供 `Discard` 與 `Stage`。`Discard` 一律先確認；untracked 與 newly
+staged files 會移到作業系統 Trash。Actions 採用 VS Code SCM-style 的 `discard`、`add`、
+`remove` Codicons，全部由 native `view/item/context` 呈現。View title 的 `Commit Staged
+Changes` 以 native Input Box 收集訊息，只提交 staged changes，不會隱式 stage 其他變更。
+`Generate Commit Message` 會將目前選取的 repository 設為 Git generation target，再執行
+Antigravity command，並以預填的 native Input Box 讓使用者 review 後確認 commit；generation、
+commit、hook 或 action 失敗時會顯示原因。
+
+每個 Change Item 的 marker 固定為：
+
+- `U`：updated。
+- `A`：newly added。
+- `!`：conflict。
+- `D`：deleted。
+
+點擊 Change Item 會在 Editor 區域開啟 VS Code Diff Editor：staged change 比較
+`HEAD → index`，unstaged change 比較 `index → working tree`，untracked change 比較
+`empty → working tree`；刪除與 rename 仍保留正確的空白 side 或 original path。
+`Refresh` 可同時重讀 `Repo Path` Git summary 與目前 `Change` list。
 
 #### git 分支與行數增減
 
@@ -522,28 +551,33 @@ terminals。每列 description 顯示
 #### 逐步操作
 
 1. 點 Activity Bar 的 `CLI` 圖示打開面板。
-2. Hover 任一列,右側出現三顆按鈕:`Open with Claude`、`Open with Codex`、
+2. 在 `Repo Path` 單選 repository，於 `Change` View 檢查三個 categories 與 marker；
+   點任一 Change Item 會開啟對應狀態的 Diff Editor。
+3. 透過 group、folder 或 file actions 執行 `Stage` / `Unstage` / `Discard`；從 View title
+   開啟 native Input Box 輸入 commit message，或由 Antigravity 產生並 review；只會提交
+   `Staged Changes`。
+4. Hover 任一列,右側出現三顆按鈕:`Open with Claude`、`Open with Codex`、
    `Open with Grok`。點下去會在`編輯區`開一個 terminal 分頁,cwd 設在該路徑並執行
    對應的 CLI。
-3. 先選取 path row 並讓面板保持焦點:`Cmd+N` 以新視窗開啟；`Ctrl+1` 開純 terminal；
+5. 先選取 path row 並讓面板保持焦點:`Cmd+N` 以新視窗開啟；`Ctrl+1` 開純 terminal；
    `Ctrl+2` / `Ctrl+3` / `Ctrl+4` 分別執行 Claude / Codex / Grok。只有 item focus、沒有
    selection 時不會觸發。
-4. 按住 `Cmd` / `Ctrl` 多選數列再按快捷鍵,每個路徑各開一個 terminal,只有最後一個
+6. 按住 `Cmd` / `Ctrl` 多選數列再按快捷鍵,每個路徑各開一個 terminal,只有最後一個
    會搶焦點。
-5. 右鍵 → `Open Terminal at Path` 只開 terminal 不跑任何 CLI。
-6. 右鍵 → `Open in New Window` 會以獨立 VS Code window 開啟該路徑;多選時每個路徑
+7. 右鍵 → `Open Terminal at Path` 只開 terminal 不跑任何 CLI。
+8. 右鍵 → `Open in New Window` 會以獨立 VS Code window 開啟該路徑;多選時每個路徑
    各開一個 window。
-7. 右鍵 → `Create Subfolder` 在所選 path 下建立一層子資料夾;多選時會在每個 path
+9. 右鍵 → `Create Subfolder` 在所選 path 下建立一層子資料夾;多選時會在每個 path
    建立同名子資料夾。
-8. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
+10. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
    (見下一節)。
-9. 標題列按鈕:`Filter Paths`(開啟 VS Code native Find Control;CLI 面板取得焦點時
+11. 標題列按鈕:`Filter Paths`(開啟 VS Code native Find Control;CLI 面板取得焦點時
    可按 `Cmd+F`)、
    `Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`(把面板所有路徑
    逐行複製到剪貼簿)、`Refresh`(重新掃描)。
 
-點擊 path row`不會`啟動任何東西 —— 只做選取與展開；點擊展開後的 terminal row
-則會聚焦既有 terminal,不會另外 launch。
+點擊 path row`不會`啟動 terminal —— 只做選取、展開並更新 `Change` View；點擊展開
+後的 terminal row 則會聚焦既有 terminal，不會另外 launch。
 
 #### 建立子資料夾
 

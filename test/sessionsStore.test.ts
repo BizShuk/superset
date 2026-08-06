@@ -197,23 +197,63 @@ describe("SessionStore cache and deletion boundary", () => {
         }
     });
 
-    it("deletes sample fixtures without deleting ingested sessions", () => {
+    it("deletes ingested sessions inside the configured store", () => {
         const root = mkdtempSync(path.join(tmpdir(), "superset-delete-"));
         const workspace = "/workspace/delete";
         const dir = workspaceSessionsDir(workspace, root);
-        const ingestedFile = path.join(dir, "ingested.jsonl");
-        const sampleFile = path.join(dir, "sample-fixture.jsonl");
+        const ingestedFile = path.join(
+            dir,
+            "019f8d13-bb33-7862-ab7b-2d5ddb26f4b4.jsonl"
+        );
 
         try {
             mkdirSync(dir, { recursive: true });
             writeFileSync(ingestedFile, jsonl(META));
-            writeFileSync(sampleFile, jsonl(META));
             const store = new SessionStore(() => root);
 
-            expect(store.deleteSession(ingestedFile)).toBe(false);
-            expect(existsSync(ingestedFile)).toBe(true);
-            expect(store.deleteSession(sampleFile)).toBe(true);
-            expect(existsSync(sampleFile)).toBe(false);
+            expect(store.readSession(ingestedFile)).toBeDefined();
+            expect(store.deleteSession(ingestedFile)).toBe(true);
+            expect(existsSync(ingestedFile)).toBe(false);
+            expect(store.readSession(ingestedFile)).toBeUndefined();
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it("rejects JSONL files outside the configured sessions store", () => {
+        const container = mkdtempSync(
+            path.join(tmpdir(), "superset-delete-boundary-")
+        );
+        const root = path.join(container, "sessions");
+        const outsideFile = path.join(container, "outside.jsonl");
+
+        try {
+            mkdirSync(root, { recursive: true });
+            writeFileSync(outsideFile, jsonl(META));
+            const store = new SessionStore(() => root);
+
+            expect(store.deleteSession(outsideFile)).toBe(false);
+            expect(existsSync(outsideFile)).toBe(true);
+        } finally {
+            rmSync(container, { recursive: true, force: true });
+        }
+    });
+
+    it("rejects non-JSONL files inside the configured sessions store", () => {
+        const root = mkdtempSync(
+            path.join(tmpdir(), "superset-delete-extension-")
+        );
+        const workspace = "/workspace/delete-extension";
+        const directory = workspaceSessionsDir(workspace, root);
+        const textFile = path.join(directory, "notes.txt");
+
+        try {
+            mkdirSync(directory, { recursive: true });
+            writeFileSync(textFile, "keep me");
+            const store = new SessionStore(() => root);
+
+            expect(store.deleteSession(textFile)).toBe(false);
+            expect(existsSync(textFile)).toBe(true);
         } finally {
             rmSync(root, { recursive: true, force: true });
         }

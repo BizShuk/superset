@@ -106,6 +106,9 @@ Tree Item 可依功能包含以下元素：
 | `superset.topology`      | `Topology`       | Tree View                          | `SuperSet` View Container |
 | `superset.sessions`      | `Sessions`       | Tree View                          | `SuperSet` View Container |
 | `superset.todo`          | `TODO`           | Tree View                          | `SuperSet` View Container |
+| `cli`                    | `CLI`            | View Container / Activity Bar Item | Primary Side Bar          |
+| `superset.cliLauncher.paths` | `Repo Path`  | Tree View                          | `CLI` View Container      |
+| `superset.cliLauncher.changes` | `Change`   | Tree View                          | `CLI` View Container      |
 
 `src/projects/` 具有 `projectsPlugin` adapter，但目前未列入 composition root，也沒有對應的
 manifest View。文件應稱為 `inactive Projects module`，不得描述成目前可見的 `Projects View`。
@@ -170,8 +173,8 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 
 | 術語                           | 定義                                                                                                                        |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `Sessions View`                | `superset.sessions` read-only Tree View，以 `project → session` 兩層顯示 sessiond records。                                 |
-| `sessiond`                     | 產生並維護 agent session JSONL store 的外部系統；Superset 只讀取其資料。                                                    |
+| `Sessions View`                | `superset.sessions` Tree View，以 `project → session` 兩層顯示 sessiond records，並提供單筆 session 刪除。                  |
+| `sessiond`                     | 產生並維護 agent session JSONL store 的外部系統；Superset 讀取其資料，並可依使用者明確操作刪除單筆 backing file。           |
 | `Session Store Root`           | 預設 `~/.config/superset/data/sessions`；`superset.sessions.dataDir` 只供開發 scratch store override。                      |
 | `Workspace Bucket`             | Store Root 下以 percent-encoded workspace path 命名的目錄。project identity 來自 decoded bucket path。                      |
 | `Session`                      | 一個 agent 工作階段；on-disk 形式是一個 append-only JSONL file。                                                            |
@@ -190,7 +193,8 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Session Source File`          | backing raw `.jsonl` file，由 `Open Session Source File` 開啟。                                                             |
 | `Sample Session`               | 檔名以 `sample-` 開頭、由 Superset seed command 產生的測試資料。                                                            |
 | `Ingest Session`               | 由 sessiond ingest path 產生、不是 `sample-` prefix 的正式 session file。                                                   |
-| `Sample Prefix Gate`           | clear/delete path 只允許處理 `sample-*.jsonl` 的內部安全檢查；不得只依賴 UI 呼叫端過濾。                                    |
+| `Sample Cleanup Gate`          | `Clear Sample Sessions` 只允許批次清除 `sample-*.jsonl`，不得影響 ingest sessions。                                        |
+| `Session Delete Boundary`      | `Delete Session` 不顯示 confirmation，可刪除所選 sample 或 ingest session；只接受 configured Sessions store 內的 `.jsonl`。 |
 | `Malformed Line`               | 無法解析的 JSONL line；parser 略過並在 tooltip/summary 顯示 warning，不中止整個 session。                                   |
 | `Schema Version`               | Session JSONL contract version；未知 future version 必須 graceful degradation。                                             |
 | `Last Active`                  | last turn timestamp；只有 session 沒有 timestamped turn 時才 fallback 到 file mtime，用於排序及 relative age。              |
@@ -322,7 +326,14 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | 術語                   | 定義                                                                                                                    |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `CLI View Container`   | Activity Bar 上獨立的 `cli` container，標題為 `CLI`；不屬於 `superset` 或 `superset-overall`。                          |
-| `CLI View`             | `superset.cliLauncher.paths` Tree View，container 內唯一的 View，名稱為 `Paths`。                                       |
+| `Repo Path View`       | `superset.cliLauncher.paths` Tree View；列出 path、Git summary 與 CLI-owned terminals。                                 |
+| `Change View`          | `superset.cliLauncher.changes` native Tree View；跟隨 Repo Path View 的單一 selection 顯示 repository changes。       |
+| `Change Group`         | Change View 的非空 top-level Tree Item：`Staged Changes`、`Unstaged Changes`、`Untracked Changes`。                    |
+| `Change Item`          | Change Group 內 compact folder hierarchy 的 file Tree Item；同一 path 可同時出現在 staged 與 unstaged，點擊後開啟對應狀態的 VS Code Diff Editor。 |
+| `Change Marker`        | Change Item 的單字元狀態：`U` updated、`A` newly added、`!` conflict、`D` deleted。                                      |
+| `Change Action`        | Group/folder/file 的 native inline `Discard` 與 `Stage` / `Unstage`；使用 SCM-style `discard` / `add` / `remove` Codicons，`Discard` 必須確認，untracked / newly staged files 移到 Trash。 |
+| `Commit Staged`        | Change View title action；以 native Input Box review message，只 commit selected repository 的 staged changes。        |
+| `Generate Commit Message` | Change View title action；將 selected repository 設為 Git generation target 後委派 Antigravity，並在 native Input Box 預填 non-empty result 供 review。 |
 | `Scan Root`            | `superset.cliLauncher.roots` 中的一個根目錄。root 本身不是節點，只列出其下的 Layer 1／Layer 2。                         |
 | `Layer 1` / `Layer 2`  | `<root>/<layer1>` 為 top-level item，`<root>/<layer1>/<layer2>` 為其 leaf child。掃描深度固定兩層。                     |
 | `Scan Candidate`       | Raw two-layer scan 找到的可列出 directory；供 explicit Regex selection 與 default repository discovery 使用，本身不保證顯示。 |

@@ -35,6 +35,11 @@ import { createNativeFindHandler } from "./nativeFind";
 import { filterRepositoryFolders } from "./repositoryDiscovery";
 import { scanRoots } from "./scan";
 import { createSubfolder, validateSubfolderName } from "./subfolder";
+import { SCMActionService } from "./scmActions";
+import { SCMDiffProvider, SCM_DIFF_SCHEME } from "./scmDiff";
+import { gitSCMRepository } from "./scmRepository";
+import { trashSCMFile } from "./scmTrash";
+import { CHANGE_VIEW_ID, CLIChangesTreeProvider } from "./scmTree";
 import { initTerminalTracking, launchAll } from "./terminal";
 import {
     CLILauncherTreeProvider,
@@ -60,6 +65,20 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const terminalTracker = initTerminalTracking(ctx.subscriptions);
 
     const provider = new CLILauncherTreeProvider(terminalTracker);
+    const diffProvider = new SCMDiffProvider(gitSCMRepository);
+    const scmActions = new SCMActionService(gitSCMRepository, trashSCMFile);
+    const changesProvider = new CLIChangesTreeProvider(
+        gitSCMRepository,
+        scmActions,
+        diffProvider,
+        () => provider.refresh(),
+        ctx.shared.log
+    );
+    const diffRegistration =
+        vscode.workspace.registerTextDocumentContentProvider(
+            SCM_DIFF_SCHEME,
+            diffProvider
+        );
     const openNativeFind = createNativeFindHandler(VIEW_ID);
     // 多選:inline 按鈕仍作用在單列,但選取多列後的命令 (含 Cmd+N / Ctrl+1–4)
     // 會一次啟動全部。keybinding 觸發時沒有命令參數,只能靠 `view.selection`。
@@ -68,6 +87,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
         showCollapseAll: true,
         canSelectMany: true,
     });
+    const changesView = vscode.window.createTreeView(CHANGE_VIEW_ID, {
+        treeDataProvider: changesProvider,
+        showCollapseAll: true,
+    });
+    changesView.message = changesProvider.message;
     void setPathSelectionContext(false);
 
     // 面板可見時才每 30 秒重掃一次;git 狀態沒有事件來源,只能定期重讀。
@@ -80,19 +104,38 @@ export function register(ctx: FeatureContext): FeatureHandle {
         provider as unknown as vscode.TreeDataProvider<unknown>,
         ctx.shared.log
     );
+    const changesTreeViewEntry = getTreeViewRegistry()?.register(
+        CHANGE_VIEW_ID,
+        changesView as unknown as vscode.TreeView<unknown>,
+        changesProvider as unknown as vscode.TreeDataProvider<unknown>,
+        ctx.shared.log
+    );
 
     // 掃描結果沒有額外快取,`Reset Caches` 就等同重新掃描一次。
-    ctx.resetHandlers.push(() => provider.refresh());
+    ctx.resetHandlers.push(() => {
+        provider.refresh();
+        void changesProvider.refresh();
+    });
 
     const disposables: vscode.Disposable[] = [
         provider,
+        changesProvider,
+        diffProvider,
+        diffRegistration,
         view,
+        changesView,
         visibilitySub,
         treeViewEntry ?? { dispose: () => undefined },
+        changesTreeViewEntry ?? { dispose: () => undefined },
+        changesProvider.onDidChangeMessage((message) => {
+            changesView.message = message;
+        }),
         view.onDidChangeSelection(({ selection }) => {
+            const selectedEntries = dedupe([...selection]);
             void setPathSelectionContext(
-                selection.some((item) => toCLIEntry(item) !== undefined)
+                selectedEntries.length > 0
             );
+            void changesProvider.setSelection(selectedEntries);
         }),
         // settings 是唯一的資料來源,外部改設定 (或我們自己寫入) 都靠這個事件刷新。
         vscode.workspace.onDidChangeConfiguration((event) => {
@@ -102,10 +145,47 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }),
         vscode.commands.registerCommand("superset.cliLauncherRefresh", () => {
             provider.refresh();
+            void changesProvider.refresh();
         }),
         vscode.commands.registerCommand(
             "superset.cliLauncherFilter",
             openNativeFind
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherOpenChange",
+            async (target: unknown) => {
+                await changesProvider.openChange(target);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherStageChanges",
+            async (target: unknown) => {
+                await changesProvider.runAction("stage", target);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherUnstageChanges",
+            async (target: unknown) => {
+                await changesProvider.runAction("unstage", target);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherDiscardChanges",
+            async (target: unknown) => {
+                await changesProvider.runAction("discard", target);
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherCommitStaged",
+            async () => {
+                await changesProvider.commitStaged();
+            }
+        ),
+        vscode.commands.registerCommand(
+            "superset.cliLauncherGenerateCommitMessage",
+            async () => {
+                await changesProvider.generateCommitMessage();
+            }
         ),
         vscode.commands.registerCommand(
             "superset.cliLauncherCopyAllPaths",
@@ -196,9 +276,15 @@ export function register(ctx: FeatureContext): FeatureHandle {
     ctx.subscriptions.push(...disposables);
 
     log(
-        `registered: view=${VIEW_ID} commands=${[
+        `registered: views=${VIEW_ID},${CHANGE_VIEW_ID} commands=${[
             "superset.cliLauncherRefresh",
             "superset.cliLauncherFilter",
+            "superset.cliLauncherOpenChange",
+            "superset.cliLauncherStageChanges",
+            "superset.cliLauncherUnstageChanges",
+            "superset.cliLauncherDiscardChanges",
+            "superset.cliLauncherCommitStaged",
+            "superset.cliLauncherGenerateCommitMessage",
             "superset.cliLauncherCopyAllPaths",
             "superset.cliLauncherAddPath",
             "superset.cliLauncherCreateSubfolder",

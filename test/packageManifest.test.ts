@@ -20,6 +20,7 @@ interface ManifestView {
     readonly contextualTitle?: string;
     readonly visibility?: string;
     readonly initialSize?: number;
+    readonly type?: string;
 }
 
 interface SupersetManifest {
@@ -228,7 +229,12 @@ describe("CLI Launcher manifest contributions", () => {
             icon: "pkg/resources/cli.png",
         });
         expect(manifest.contributes.views.cli).toEqual([
-            { id: VIEW_ID, name: "Paths", contextualTitle: "CLI" },
+            { id: VIEW_ID, name: "Repo Path", contextualTitle: "CLI" },
+            {
+                id: "superset.cliLauncher.changes",
+                name: "Change",
+                contextualTitle: "CLI",
+            },
         ]);
     });
 
@@ -261,6 +267,21 @@ describe("CLI Launcher manifest contributions", () => {
         );
         expect(titles.get("superset.cliLauncherRefresh")).toBe("Refresh");
         expect(titles.get("superset.cliLauncherFilter")).toBe("Filter Paths");
+        expect(titles.get("superset.cliLauncherStageChanges")).toBe(
+            "Stage Changes"
+        );
+        expect(titles.get("superset.cliLauncherUnstageChanges")).toBe(
+            "Unstage Changes"
+        );
+        expect(titles.get("superset.cliLauncherDiscardChanges")).toBe(
+            "Discard Changes"
+        );
+        expect(titles.get("superset.cliLauncherCommitStaged")).toBe(
+            "Commit Staged Changes"
+        );
+        expect(titles.get("superset.cliLauncherGenerateCommitMessage")).toBe(
+            "Generate Commit Message"
+        );
         expect(titles.has("superset.cliLauncherClearFilter")).toBe(false);
     });
 
@@ -277,6 +298,86 @@ describe("CLI Launcher manifest contributions", () => {
             (m) => m.command === "superset.cliLauncherClearFilter"
         );
         expect(clear).toBeUndefined();
+    });
+
+    it("offers Refresh from both Repo Path and Change views", () => {
+        const refreshEntries = manifest.contributes.menus["view/title"].filter(
+            (item) => item.command === "superset.cliLauncherRefresh"
+        );
+        expect(refreshEntries).toEqual([
+            {
+                command: "superset.cliLauncherRefresh",
+                when: `view == ${VIEW_ID}`,
+                group: "navigation@5",
+            },
+            {
+                command: "superset.cliLauncherRefresh",
+                when: "view == superset.cliLauncher.changes",
+                group: "navigation@3",
+            },
+        ]);
+    });
+
+    it("uses native Change title and inline actions", () => {
+        const titleMenu = manifest.contributes.menus["view/title"].filter(
+            (item) => item.when === "view == superset.cliLauncher.changes"
+        );
+        expect(titleMenu).toEqual([
+            {
+                command: "superset.cliLauncherGenerateCommitMessage",
+                when: "view == superset.cliLauncher.changes",
+                group: "navigation@1",
+            },
+            {
+                command: "superset.cliLauncherCommitStaged",
+                when: "view == superset.cliLauncher.changes",
+                group: "navigation@2",
+            },
+            {
+                command: "superset.cliLauncherRefresh",
+                when: "view == superset.cliLauncher.changes",
+                group: "navigation@3",
+            },
+        ]);
+
+        const inline = manifest.contributes.menus["view/item/context"].filter(
+            (item) =>
+                item.when?.startsWith(
+                    "view == superset.cliLauncher.changes &&"
+                )
+        );
+        expect(inline).toEqual([
+            {
+                command: "superset.cliLauncherDiscardChanges",
+                when: "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.staged",
+                group: "inline@1",
+            },
+            {
+                command: "superset.cliLauncherUnstageChanges",
+                when: "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.staged",
+                group: "inline@2",
+            },
+            {
+                command: "superset.cliLauncherDiscardChanges",
+                when: "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.unstaged",
+                group: "inline@1",
+            },
+            {
+                command: "superset.cliLauncherStageChanges",
+                when: "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.unstaged",
+                group: "inline@2",
+            },
+            {
+                command: "superset.cliLauncherDiscardChanges",
+                when: "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.untracked",
+                group: "inline@1",
+            },
+            {
+                command: "superset.cliLauncherStageChanges",
+                when: "view == superset.cliLauncher.changes && viewItem == superset.cliLauncher.scm.untracked",
+                group: "inline@2",
+            },
+        ]);
     });
 
     it("keeps no command under the pre-move cliLauncher.* namespace", () => {

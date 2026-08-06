@@ -1,13 +1,12 @@
-// Sessions feature — read-only consumer of the `sessiond` JSONL store
+// Sessions feature — consumer of the `sessiond` JSONL store
 // (plan `plans/2026-07-19-multi-agent-session-summary.md` §7).
 //
 // Layer 1: a TreeView grouping sessions by the current workspace root and
 //          descendant workspace paths recorded by sessiond.
 // Layer 2: clicking a session opens it rendered as Markdown in the editor.
 //
-// The extension never writes session content — the only writer here is the
-// sample-data command, which exists because the Go side's LLM summary path
-// is still unverified.
+// The extension never edits session content. The sample-data command writes
+// fixtures, while the explicit Delete command removes a selected backing file.
 
 import * as vscode from "vscode";
 import type { FeatureContext, FeatureHandle } from "../shared";
@@ -182,12 +181,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
             async (element?: SessionsElement) => {
                 const record = asSession(element);
                 if (!record) return;
-                const answer = await vscode.window.showWarningMessage(
-                    `刪除 session「${record.meta.title || record.meta.session_id}」?`,
-                    { modal: true, detail: record.filePath },
-                    "Delete"
-                );
-                if (answer !== "Delete") return;
                 if (!sessionStore.deleteSession(record.filePath)) {
                     void vscode.window.showErrorMessage(
                         `刪除失敗: ${record.filePath}`
