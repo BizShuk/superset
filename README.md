@@ -25,7 +25,7 @@ a
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
-| `CLI` 面板                | 列出 `~/projects` 兩層資料夾、Git summary 與 path terminals；可過濾、啟動 agent CLI、展開並聚焦既有 terminal | 常在多個專案間切換跑 agent CLI 的人 |
+| `CLI` 面板                | 列出 `~/projects` 兩層 Git repositories、Git summary 與 path terminals；可明確加入其他路徑、過濾、啟動 agent CLI、展開並聚焦既有 terminal | 常在多個專案間切換跑 agent CLI 的人 |
 
 ---
 
@@ -456,7 +456,8 @@ mode = { horizontal: even | max } × { vertical: even | max }
 
 ### 15. `CLI` — 路徑啟動器
 
-Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects` 底下的資料夾:
+Activity Bar 上獨立的 `CLI` 圖示,面板以`兩層`樹狀列出 `~/projects` 底下的 Git
+repositories:
 
 ```text
 CLI
@@ -473,8 +474,11 @@ CLI
 root(預設 `~/projects`)本身不是節點,深度固定兩層 —— 這個形狀對齊
 `<category>/<project>` 的目錄慣例。以 `.` 開頭的目錄與 `node_modules` 不列出。
 
-除此之外`不`按內容篩選 —— 沒有 `.git` 的資料夾一樣會列出。要挑的 cwd 不限於
-git repository,不想看到的列請用 `Remove from Panel` 手動移除(見下)。
+預設結果只包含`資料夾自己`帶有 `.git` directory 或 file 的 Git repository，不會因為
+parent 是 repository 就誤收一般子資料夾。第一層 category 本身不是 repository 時，
+只在底下至少有一個第二層 repository 時保留為容器；其餘非 repository 不顯示。
+需要一般資料夾作為 cwd 時，請透過 `superset.cliLauncher.entries` 的 literal path 或
+Regex 明確加入。
 
 #### git 分支與行數增減
 
@@ -531,7 +535,7 @@ terminals。每列 description 顯示
    建立同名子資料夾。
 8. 右鍵 → `Remove from Panel` 把不想看到的列從面板拿掉;多選時會一次移除整份選取
    (見下一節)。
-9. 標題列按鈕:`Filter Paths`(過濾路徑;CLI 面板取得焦點時可按 `Ctrl+T`)、
+9. 標題列按鈕:`Filter Paths`(過濾路徑;CLI 面板取得焦點時可按 `Ctrl+F`)、
    `Pin Path`(釘一個 root 以外的路徑到最上面)、`Copy All Paths`(把面板所有路徑
    逐行複製到剪貼簿)、`Refresh`(重新掃描)。過濾生效時才多出一顆
    `Clear Filter`。
@@ -546,17 +550,18 @@ terminals。每列 description 顯示
 `.`、`..`、nested path 與 absolute path 都不會送進 filesystem。
 
 多選時只詢問一次名稱，並在每個選取 path 建立同名子資料夾。成功後 CLI View 立即
-刷新；新 folder 是否顯示仍受固定兩層 scan depth 與目前 filter 影響。這個動作不會
-修改 `superset.cliLauncher.*` settings、不會自動 pin，也不會建立 terminal。
+刷新；新 folder 只有在成為 Git repository 或被 `entries` 明確加入後才會顯示，且仍受
+固定兩層 scan depth 與目前 filter 影響。這個動作不會修改
+`superset.cliLauncher.*` settings、不會自動 pin，也不會建立 terminal。
 
 #### 從面板移除路徑
 
-固定掃兩層一定會撈到不想在清單裡看到的資料夾。右鍵任一列 → `Remove from Panel`
-即可把它拿掉,兩種來源的處理方式不同,但操作是同一個:
+不想在清單裡看到的 repository 或 explicit entry，可右鍵任一列 →
+`Remove from Panel` 拿掉；兩種來源的處理方式不同,但操作是同一個:
 
 - 釘選的路徑 → 從 `superset.cliLauncher.entries` 移除。
-- 掃描出來的資料夾 → 寫進 `superset.cliLauncher.hidden`,連同`其下的子路徑`一起
-  不再列出。
+- 掃描出來的資料夾或 Regex 產生的 Dynamic Entry → 寫進
+  `superset.cliLauncher.hidden`,連同`其下的子路徑`一起不再列出。
 
 按住 `Cmd` / `Ctrl` 多選數列再右鍵,`Remove from Panel` 會套用到`整份選取`,確認
 對話只跳一次;釘選列與掃描列可以混在同一次選取裡,各自走各自的設定。
@@ -566,7 +571,7 @@ terminals。每列 description 顯示
 
 #### 專案過濾 (subsequence match)
 
-`Filter Paths` 會跳出輸入框；CLI 面板取得焦點時可按 `Ctrl+T` 啟動同一個 Filter。
+`Filter Paths` 會跳出輸入框；CLI 面板取得焦點時可按 `Ctrl+F` 啟動同一個 Filter。
 查詢以 `/` 切段,每段的字元只要`依序`出現在`同一個
 資料夾名`裡就算命中 —— 不必連續,也不必記得完整名稱,但`不會跨過 /`:
 
@@ -593,14 +598,38 @@ terminals。每列 description 顯示
 
 | 設定 | 預設 | 用途 |
 | --- | --- | --- |
-| `superset.cliLauncher.roots` | `["~/projects"]` | 要掃描的根目錄;設成 `[]` 即關閉掃描 |
-| `superset.cliLauncher.entries` | `[]` | 手動釘選的路徑,排在掃描結果之前 |
-| `superset.cliLauncher.hidden` | `[]` | 從面板移除的掃描路徑,連同其子路徑隱藏 |
+| `superset.cliLauncher.roots` | `["~/projects"]` | 要掃描的根目錄；兩層內預設只顯示 Git repositories，設成 `[]` 即關閉掃描 |
+| `superset.cliLauncher.entries` | `[]` | 明確加入的 literal Pinned Paths 與從兩層 scan candidates 動態選取的 Regex rules，可包含 non-repository，排在預設結果之前 |
+| `superset.cliLauncher.hidden` | `[]` | literal paths 或 Regex rules;符合的掃描路徑連同其子路徑隱藏 |
 | `superset.cliLauncher.agentCommands` | `{}` | 覆寫三顆按鈕的命令,可含旗標 |
 
 四個設定都是 `application` scope,寫入 User settings,不隨 workspace 切換而變。
 按鈕沒反應時,`Superset: Show Diagnostic Logs` 會列出解析到的項目與實際送進
 terminal 的字串。
+
+`entries` 與 `hidden` 保留原本的 literal path 格式，也可使用明確的
+`{ "regex": "...", "flags": "..." }` object：
+
+```jsonc
+"superset.cliLauncher.entries": [
+    "~/projects/web",
+    { "regex": "(?:^|/)(agentSDK|proxy)$", "flags": "i" }
+],
+"superset.cliLauncher.hidden": [
+    "~/projects/web/tmp",
+    { "regex": "(?:^|/)(assets|cmd|docs|plans|tmp)$" }
+]
+```
+
+- Regex 採 JavaScript syntax，同時比對 normalized absolute path 與 `~/...` path；
+  `flags` 選填，例如 `i` 代表 case-insensitive。
+- `entries` Regex 只從 `roots` 已限定的兩層 scan candidates 產生 Dynamic Entries，
+  不會掃描任意深度；其選取在 Git-only default filtering 前完成，因此可加入
+  non-repository。`roots` 為 `[]` 時只有 literal entries 仍可顯示。
+- `hidden` 優先於 Dynamic Entry；literal Pinned Path 仍保持獨立，可明確覆蓋相同
+  Regex。無效 Regex 或 flags 會被忽略，不影響 CLI View。
+- `Restore Hidden Paths` 同時列出 literal 與 Regex hidden rules；Regex 顯示為
+  `/pattern/flags`。
 
 ---
 
@@ -679,7 +708,7 @@ code --install-extension superset-*.vsix
 | `CLI: Create Subfolder`                         | —                   | 在每個選取路徑建立同名 direct subfolder                                       |
 | `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
 | `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿(套用作用中的過濾)                              |
-| `CLI: Filter Paths` / `Clear Filter`            | `Ctrl+T`(CLI 面板)  | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
+| `CLI: Filter Paths` / `Clear Filter`            | `Ctrl+F`(CLI 面板)  | 逐段 subsequence 過濾路徑(`tool` → `tools`,`pl/sup` → `platform/superset`)/ 清除過濾 |
 
 完整命令清單見 [`package.json`](package.json) `contributes.commands`。
 

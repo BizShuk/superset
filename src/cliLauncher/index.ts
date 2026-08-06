@@ -15,20 +15,24 @@ import {
     CONFIG_SECTION,
     hidePath,
     loadAgentCommands,
+    loadEntrySelectors,
     loadEntries,
-    loadHiddenPaths,
+    loadHiddenRules,
     loadRoots,
     removeEntry,
-    unhidePath,
+    unhideRule,
 } from "./config";
 import {
     collapseHome,
+    formatHiddenRule,
     formatPathList,
     toCLIEntry,
     type CLIEntry,
 } from "./entries";
+import { buildCLILauncherCatalog } from "./catalog";
 import { filterCLIEntries } from "./filter";
 import { log, setCLILauncherLog } from "./log";
+import { filterRepositoryFolders } from "./repositoryDiscovery";
 import { scanRoots } from "./scan";
 import { createSubfolder, validateSubfolderName } from "./subfolder";
 import { initTerminalTracking, launchAll } from "./terminal";
@@ -370,21 +374,23 @@ function dedupe(values: readonly unknown[]): CLIEntry[] {
 }
 
 /**
- * quick pick 的候選 = 手動釘選的路徑 + 掃描出的兩層資料夾,順序與面板一致。
+ * quick pick 的候選 = literal / Regex entries + 預設 Git repository tree，順序與面板一致。
  * 從 Command Palette 呼叫時才會走到這裡。
  */
 async function listAllEntries(): Promise<CLIEntry[]> {
     const home = os.homedir();
-    const pinned = loadEntries();
-    const seen = new Set(pinned.map((entry) => entry.path));
-    const entries = [...pinned];
+    const catalog = buildCLILauncherCatalog(
+        loadEntrySelectors(),
+        await scanRoots(loadRoots(), home),
+        loadHiddenRules(),
+        home
+    );
+    const entries = catalog.entries.map(({ entry }) => entry);
+    const defaultFolders = await filterRepositoryFolders(catalog.folders);
 
-    for (const folder of await scanRoots(loadRoots(), home, loadHiddenPaths())) {
+    for (const folder of defaultFolders) {
         for (const candidate of [folder.entry, ...folder.children]) {
-            if (!seen.has(candidate.path)) {
-                seen.add(candidate.path);
-                entries.push(candidate);
-            }
+            entries.push(candidate);
         }
     }
 
@@ -613,7 +619,7 @@ async function pickRemovableEntry(): Promise<CLIEntry | undefined> {
  * 只能手動編輯 settings 才救得回來。
  */
 async function restoreHiddenInteractively(): Promise<void> {
-    const hidden = loadHiddenPaths();
+    const hidden = loadHiddenRules();
     if (hidden.length === 0) {
         await vscode.window.showInformationMessage(
             "CLI: 沒有被移除的路徑。"
@@ -623,9 +629,9 @@ async function restoreHiddenInteractively(): Promise<void> {
 
     const home = os.homedir();
     const picked = await vscode.window.showQuickPick(
-        hidden.map((target) => ({
-            label: collapseHome(target, home),
-            target,
+        hidden.map((rule) => ({
+            label: formatHiddenRule(rule, home),
+            rule,
         })),
         { placeHolder: "選擇要放回面板的路徑", canPickMany: true }
     );
@@ -634,7 +640,7 @@ async function restoreHiddenInteractively(): Promise<void> {
     }
 
     for (const item of picked) {
-        await unhidePath(item.target);
+        await unhideRule(item.rule);
     }
     log(`superset.cliLauncherRestoreHidden: restored ${picked.length} paths`);
 }

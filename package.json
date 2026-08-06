@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.33.6",
+    "version": "0.35.0",
     "scripts": {
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -120,41 +120,88 @@
                         "items": {
                             "type": "string"
                         },
-                        "markdownDescription": "要掃描的根目錄。CLI 面板列出其下`兩層`資料夾,root 本身不出現;以 `.` 開頭的目錄與 `node_modules` 略過。設成 `[]` 即關閉掃描,只顯示 `#superset.cliLauncher.entries#` 釘選的路徑。"
+                        "markdownDescription": "要掃描的根目錄。CLI 面板從其下`兩層`候選中預設只顯示 Git repositories;第一層非 repository 若含第二層 repository,會保留為 category container。root 本身不出現,以 `.` 開頭的目錄與 `node_modules` 略過。設成 `[]` 即關閉掃描,只顯示 `#superset.cliLauncher.entries#` 的 literal paths;Regex entries 因沒有 scan candidates 而不會產生路徑。"
                     },
                     "superset.cliLauncher.entries": {
                         "type": "array",
                         "scope": "application",
                         "default": [],
                         "items": {
-                            "type": [
-                                "string",
-                                "object"
-                            ],
-                            "properties": {
-                                "path": {
-                                    "type": "string",
-                                    "description": "絕對路徑,或以 ~ 開頭的家目錄相對路徑。"
+                            "oneOf": [
+                                {
+                                    "type": "string"
                                 },
-                                "label": {
-                                    "type": "string",
-                                    "description": "顯示名稱,省略時取路徑 basename。"
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "path": {
+                                            "type": "string",
+                                            "description": "絕對路徑,或以 ~ 開頭的家目錄相對路徑。"
+                                        },
+                                        "label": {
+                                            "type": "string",
+                                            "description": "顯示名稱,省略時取路徑 basename。"
+                                        }
+                                    },
+                                    "required": [
+                                        "path"
+                                    ],
+                                    "additionalProperties": false
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "regex": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "description": "JavaScript Regex source;從 roots 的兩層 scan candidates 動態選取符合的路徑。"
+                                        },
+                                        "flags": {
+                                            "type": "string",
+                                            "pattern": "^[dgimsuvy]*$",
+                                            "description": "選用的 JavaScript Regex flags,例如 i。"
+                                        }
+                                    },
+                                    "required": [
+                                        "regex"
+                                    ],
+                                    "additionalProperties": false
                                 }
-                            },
-                            "required": [
-                                "path"
                             ]
                         },
-                        "markdownDescription": "手動釘選的路徑,排在掃描結果之前。字串簡寫等同 `{ \"path\": \"...\" }`;重複路徑只保留第一筆,格式錯誤的項目直接忽略。"
+                        "markdownDescription": "排在預設 Git repository 結果之前的 explicit paths,也可明確加入 non-repository。literal 字串簡寫等同 `{ \"path\": \"...\" }`;`{ \"regex\": \"...\", \"flags\": \"i\" }` 會從 `#superset.cliLauncher.roots#` 的兩層 scan candidates 動態選取。Regex 比對 absolute 與 `~/...` path,`hidden` 可排除 Dynamic Entry;格式錯誤的項目直接忽略。"
                     },
                     "superset.cliLauncher.hidden": {
                         "type": "array",
                         "scope": "application",
                         "default": [],
                         "items": {
-                            "type": "string"
+                            "oneOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "regex": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "description": "JavaScript Regex source;符合的 path 與其 descendants 會隱藏。"
+                                        },
+                                        "flags": {
+                                            "type": "string",
+                                            "pattern": "^[dgimsuvy]*$",
+                                            "description": "選用的 JavaScript Regex flags,例如 i。"
+                                        }
+                                    },
+                                    "required": [
+                                        "regex"
+                                    ],
+                                    "additionalProperties": false
+                                }
+                            ]
                         },
-                        "markdownDescription": "從面板移除的掃描路徑 (右鍵 `Remove from Panel` 會寫進這裡)。命中的路徑連同其子路徑都不再列出;資料夾本身不受影響,`CLI: Restore Hidden Paths` 可還原。只作用於 `#superset.cliLauncher.roots#` 掃描結果,釘選的路徑請直接從 `#superset.cliLauncher.entries#` 移除。"
+                        "markdownDescription": "從面板排除的 scan paths。literal path 或 `{ \"regex\": \"...\", \"flags\": \"i\" }` 命中的路徑連同 descendants 都不再列出;Regex 比對 absolute 與 `~/...` path。資料夾本身不受影響,`CLI: Restore Hidden Paths` 可還原;literal Pinned Path 請直接從 `#superset.cliLauncher.entries#` 移除。"
                     },
                     "superset.cliLauncher.agentCommands": {
                         "type": "object",
@@ -760,7 +807,7 @@
         "viewsWelcome": [
             {
                 "view": "superset.cliLauncher.paths",
-                "contents": "找不到可列出的資料夾。預設會掃描 `~/projects` 底下的兩層資料夾,可用 `superset.cliLauncher.roots` 換成其他根目錄。\n[釘選路徑](command:superset.cliLauncherAddPath)"
+                "contents": "找不到可列出的 Git repository。預設會掃描 `~/projects` 底下兩層,非 repository 請用 `superset.cliLauncher.entries` 明確加入。\n[釘選路徑](command:superset.cliLauncherAddPath)"
             }
         ],
         "menus": {
@@ -1169,7 +1216,7 @@
             },
             {
                 "command": "superset.cliLauncherFilter",
-                "key": "ctrl+t",
+                "key": "ctrl+f",
                 "when": "focusedView == superset.cliLauncher.paths && !inputFocus"
             },
             {

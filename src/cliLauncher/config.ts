@@ -9,12 +9,16 @@ import {
     appendEntryPath,
     appendHiddenPath,
     normalizeEntries,
-    normalizeHiddenPaths,
+    normalizeEntrySelectors,
+    normalizeHiddenRules,
     normalizeRootPaths,
     removeEntryPath,
-    removeHiddenPath,
+    removeHiddenRule as removeHiddenRuleFromRaw,
     type CLIEntry,
-    type RawCLIEntry,
+    type EntrySelector,
+    type HiddenRule,
+    type RawEntrySetting,
+    type RawHiddenRule,
 } from "./entries";
 import { resolveAgentCommands, type AgentCommands } from "./command";
 
@@ -42,6 +46,11 @@ export function loadEntries(): CLIEntry[] {
     return normalizeEntries(rawEntries(), homeDir());
 }
 
+/** 讀取 literal entries 與兩層 scan candidates 使用的 Regex selectors。 */
+export function loadEntrySelectors(): EntrySelector[] {
+    return normalizeEntrySelectors(rawEntries(), homeDir());
+}
+
 /** 讀取要掃描兩層資料夾的根目錄清單。 */
 export function loadRoots(): string[] {
     const raw = vscode.workspace
@@ -56,12 +65,12 @@ function rawHidden(): unknown {
         .get<unknown>(HIDDEN_KEY, []);
 }
 
-/** 讀取被使用者從面板移除的掃描路徑。 */
-export function loadHiddenPaths(): string[] {
-    return normalizeHiddenPaths(rawHidden(), homeDir());
+/** 讀取 literal ancestor paths 與 Regex hidden rules。 */
+export function loadHiddenRules(): HiddenRule[] {
+    return normalizeHiddenRules(rawHidden(), homeDir());
 }
 
-async function writeHidden(next: string[]): Promise<void> {
+async function writeHidden(next: RawHiddenRule[]): Promise<void> {
     await vscode.workspace
         .getConfiguration(CONFIG_SECTION)
         .update(HIDDEN_KEY, next, vscode.ConfigurationTarget.Global);
@@ -77,9 +86,9 @@ export async function hidePath(targetPath: string): Promise<boolean> {
     return true;
 }
 
-/** 還原被移除的路徑;不在清單裡時回傳 `false`,不動設定。 */
-export async function unhidePath(targetPath: string): Promise<boolean> {
-    const next = removeHiddenPath(rawHidden(), targetPath, homeDir());
+/** 還原 literal 或 Regex hidden rule；找不到時不寫入設定。 */
+export async function unhideRule(target: HiddenRule): Promise<boolean> {
+    const next = removeHiddenRuleFromRaw(rawHidden(), target, homeDir());
     if (!next) {
         return false;
     }
@@ -95,7 +104,7 @@ export function loadAgentCommands(): AgentCommands {
     return resolveAgentCommands(raw);
 }
 
-async function writeEntries(next: RawCLIEntry[]): Promise<void> {
+async function writeEntries(next: RawEntrySetting[]): Promise<void> {
     await vscode.workspace
         .getConfiguration(CONFIG_SECTION)
         .update(ENTRIES_KEY, next, vscode.ConfigurationTarget.Global);

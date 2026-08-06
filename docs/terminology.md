@@ -325,8 +325,13 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `CLI View`             | `superset.cliLauncher.paths` Tree View，container 內唯一的 View，名稱為 `Paths`。                                       |
 | `Scan Root`            | `superset.cliLauncher.roots` 中的一個根目錄。root 本身不是節點，只列出其下的 Layer 1／Layer 2。                         |
 | `Layer 1` / `Layer 2`  | `<root>/<layer1>` 為 top-level item，`<root>/<layer1>/<layer2>` 為其 leaf child。掃描深度固定兩層。                     |
-| `Pinned Path`          | `superset.cliLauncher.entries` 手動釘選的路徑，排在掃描結果之前，contextValue 為 `superset.cliLauncher.entry`，可 Unpin。 |
-| `Scanned Folder`       | 由 Scan Root 掃描而來的資料夾，contextValue 為 `superset.cliLauncher.folder`；移除方式是 Hidden Path，不是改 roots。      |
+| `Scan Candidate`       | Raw two-layer scan 找到的可列出 directory；供 explicit Regex selection 與 default repository discovery 使用，本身不保證顯示。 |
+| `Repository Row`       | 預設顯示的 path row；資料夾自己帶有 `.git` directory 或 file，不沿 parent repository 推定。                         |
+| `Category Container`   | 本身不是 repository、但含有可見 Layer 2 Repository Row 的 Layer 1 row；保留既有兩層 tree shape。                     |
+| `Pinned Path`          | `superset.cliLauncher.entries` 的 literal path，排在掃描結果之前，contextValue 為 `superset.cliLauncher.entry`，可 Unpin。 |
+| `Dynamic Entry`        | `entries` Regex 從兩層 scan candidates 選出的 path，排在一般掃描結果之前，但仍是 scan-derived row，受 Hidden Rule 控制。 |
+| `Regex Path Rule`      | `{regex, flags?}` 設定 object；以 JavaScript Regex 同時比對 normalized absolute path 與 `~/...` path。                    |
+| `Scanned Folder`       | 經 default repository discovery 保留的 Repository Row 或 Category Container，contextValue 為 `superset.cliLauncher.folder`。 |
 | `Agent Button`         | 每列固定三顆 inline button（`claude` / `codex` / `grok`），命令內容由 `agentCommands` 決定，數量與順序不可動態調整。     |
 | `Agent Command`        | 送進 terminal 的實際命令字串，預設為同名 CLI，可含旗標。                                                                |
 | `Launch`               | 建立或重用 terminal → 送出 `cd '<path>' && <agent command>` 的一次操作；不是 spawn 一個 child process。                 |
@@ -336,8 +341,8 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `CLI-owned Terminal`   | 目前 Extension Host runtime 由 CLI Launcher 建立並追蹤的 terminal；不包含 reload 前既有或其他來源的 terminal。          |
 | `Path Terminal Indicator` | Path description 最前面的 `🟡 <count>`；只在 count 大於零時顯示，後方才接 git summary。                              |
 | `CLI Terminal State`   | Terminal child row 的二態 description：內部 `pending` / `running` 顯示 `running`，內部 `idle` 顯示 `idle`。              |
-| `Hidden Path`          | `superset.cliLauncher.hidden` 中的一個路徑；該路徑`與其所有子路徑`都不再列出。只影響面板，不動磁碟上的資料夾。          |
-| `Remove from Panel`    | `superset.cliLauncherRemovePath` 的顯示名稱。作用在 Pinned Path 是移出 `entries`，作用在 Scanned Folder 是寫入 `hidden`。 |
+| `Hidden Rule`          | `superset.cliLauncher.hidden` 中的一個 literal path 或 Regex Path Rule；命中 path 與 descendants 都不列出，只影響面板。 |
+| `Remove from Panel`    | `superset.cliLauncherRemovePath` 的顯示名稱。Pinned Path 會移出 `entries`；Scanned Folder / Dynamic Entry 會寫入 `hidden`。 |
 | `Open in New Window`   | `superset.cliLauncherOpenNewWindow` 的顯示名稱。以獨立 VS Code window 開啟所選 path，不建立 terminal。                 |
 | `Direct Subfolder`     | 所選 path 正下方的一層 child directory；名稱不含 path separator，不代表 nested relative path。                        |
 | `Create Subfolder`     | `superset.cliLauncherCreateSubfolder` 的顯示名稱。在每個所選 path 建立同名 Direct Subfolder，不改 CLI settings。      |

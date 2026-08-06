@@ -1,16 +1,40 @@
 // CLI Launcher 路徑清單的純資料層 (pure data layer)。
 //
 // 這一層不依賴 `vscode`,只負責把使用者在 settings 裡填的
-// `superset.cliLauncher.entries` 正規化成 tree view 可直接消費的
-// `CLIEntry[]`:展開 `~`、補預設 label、去重、丟掉格式錯誤的項目。
+// `superset.cliLauncher.entries` / `.hidden` 正規化成 tree view 與 catalog
+// 可直接消費的 literal path / Regex rules：展開 `~`、補預設 label、去重，
+// 並丟掉格式錯誤的項目。
 
 import * as path from "node:path";
+import {
+    formatPathRegex,
+    isPathRegex,
+    matchesPathRegex,
+    normalizePathRegex,
+    pathRegexKey,
+    type PathRegex,
+    type RawPathRegex,
+} from "./pathPattern";
 
 /** settings 內單一項目的物件寫法;字串簡寫 (只有路徑) 也允許。 */
 export interface RawCLIEntry {
     label?: unknown;
     path?: unknown;
 }
+
+export type RawEntrySetting = string | RawCLIEntry | RawPathRegex;
+export type RawHiddenRule = string | RawPathRegex;
+
+export interface LiteralEntrySelector {
+    readonly kind: "literal";
+    readonly entry: CLIEntry;
+}
+
+/** 設定順序中的一個 concrete path 或 Dynamic Entry Regex。 */
+export type EntrySelector = LiteralEntrySelector | PathRegex;
+
+/** Hidden Path 可以是既有 literal ancestor rule 或 Regex rule。 */
+export type HiddenRule = string | PathRegex;
 
 /** 正規化後的項目,tree view 與 terminal 啟動都只認這個型別。 */
 export interface CLIEntry {
@@ -135,11 +159,43 @@ export function normalizeRootPaths(raw: unknown, homeDir: string): string[] {
 }
 
 /**
- * 正規化「從面板移除」的路徑清單 (`superset.cliLauncher.hidden`)。形狀與
- * `roots` 相同:只收字串,展開 `~` 後去重。
+ * 相容舊呼叫端的 literal-only projection。Regex rules 由
+ * `normalizeHiddenRules()` 保留。
  */
 export function normalizeHiddenPaths(raw: unknown, homeDir: string): string[] {
-    return normalizeRootPaths(raw, homeDir);
+    return normalizeHiddenRules(raw, homeDir).filter(
+        (rule): rule is string => typeof rule === "string"
+    );
+}
+
+/** 正規化 literal 與 Regex hidden rules，維持設定順序並去重。 */
+export function normalizeHiddenRules(
+    raw: unknown,
+    homeDir: string
+): HiddenRule[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+
+    const seen = new Set<string>();
+    const rules: HiddenRule[] = [];
+    for (const item of raw) {
+        const rule =
+            typeof item === "string"
+                ? expandHome(item, homeDir)
+                : normalizePathRegex(item);
+        if (!rule) {
+            continue;
+        }
+        const key =
+            typeof rule === "string" ? `path:${rule}` : pathRegexKey(rule);
+        if (seen.has(key)) {
+            continue;
+        }
+        seen.add(key);
+        rules.push(rule);
+    }
+    return rules;
 }
 
 /**
@@ -157,11 +213,28 @@ export function isDescendantPath(parent: string, target: string): boolean {
  */
 export function isHiddenPath(
     target: string,
-    hidden: readonly string[]
+    hidden: readonly HiddenRule[],
+    homeDir = ""
 ): boolean {
-    return hidden.some(
-        (value) => target === value || isDescendantPath(value, target)
-    );
+    for (let candidate = target; ; candidate = path.dirname(candidate)) {
+        if (
+            hidden.some((rule) =>
+                typeof rule === "string"
+                    ? candidate === rule
+                    : matchesPathRegex(rule, [
+                          candidate,
+                          collapseHome(candidate, homeDir),
+                      ])
+            )
+        ) {
+            return true;
+        }
+
+        const parent = path.dirname(candidate);
+        if (parent === candidate) {
+            return false;
+        }
+    }
 }
 
 /**
@@ -172,7 +245,7 @@ export function appendHiddenPath(
     raw: unknown,
     newPath: string,
     homeDir: string
-): string[] | undefined {
+): RawHiddenRule[] | undefined {
     const resolved = expandHome(newPath, homeDir);
     if (resolved === "") {
         return undefined;
@@ -182,7 +255,11 @@ export function appendHiddenPath(
     }
 
     const kept = Array.isArray(raw)
-        ? raw.filter((item): item is string => typeof item === "string")
+        ? raw.filter((item): item is RawHiddenRule =>
+              typeof item === "string"
+                  ? true
+                  : normalizePathRegex(item) !== undefined
+          )
         : [];
     return [...kept, collapseHome(resolved, homeDir)];
 }
@@ -195,7 +272,7 @@ export function removeHiddenPath(
     raw: unknown,
     targetPath: string,
     homeDir: string
-): string[] | undefined {
+): RawHiddenRule[] | undefined {
     if (!Array.isArray(raw)) {
         return undefined;
     }
@@ -205,9 +282,49 @@ export function removeHiddenPath(
         return undefined;
     }
     return raw.filter(
-        (item): item is string =>
-            typeof item === "string" && expandHome(item, homeDir) !== resolved
+        (item): item is RawHiddenRule =>
+            typeof item === "string"
+                ? expandHome(item, homeDir) !== resolved
+                : normalizePathRegex(item) !== undefined
     );
+}
+
+/** 以 normalized identity 移除 literal 或 Regex hidden rule。 */
+export function removeHiddenRule(
+    raw: unknown,
+    target: HiddenRule,
+    homeDir: string
+): RawHiddenRule[] | undefined {
+    if (typeof target === "string") {
+        return removeHiddenPath(raw, target, homeDir);
+    }
+    if (!Array.isArray(raw)) {
+        return undefined;
+    }
+
+    const targetKey = pathRegexKey(target);
+    const hasTarget = raw.some((item) => {
+        const rule = normalizePathRegex(item);
+        return rule !== undefined && pathRegexKey(rule) === targetKey;
+    });
+    if (!hasTarget) {
+        return undefined;
+    }
+
+    return raw.filter((item): item is RawHiddenRule => {
+        if (typeof item === "string") {
+            return true;
+        }
+        const rule = normalizePathRegex(item);
+        return rule !== undefined && pathRegexKey(rule) !== targetKey;
+    });
+}
+
+/** Restore Quick Pick 使用的 literal / Regex rule label。 */
+export function formatHiddenRule(rule: HiddenRule, homeDir: string): string {
+    return typeof rule === "string"
+        ? collapseHome(rule, homeDir)
+        : formatPathRegex(rule);
 }
 
 /**
@@ -215,23 +332,52 @@ export function removeHiddenPath(
  * 相同路徑只保留第一筆,順序維持使用者設定的順序。
  */
 export function normalizeEntries(raw: unknown, homeDir: string): CLIEntry[] {
+    return normalizeEntrySelectors(raw, homeDir)
+        .filter(
+            (selector): selector is LiteralEntrySelector =>
+                selector.kind === "literal"
+        )
+        .map((selector) => selector.entry);
+}
+
+/**
+ * 正規化 settings 陣列中的 literal entries 與 Regex selectors。兩種 rule 各自
+ * 去重；object 同時帶 `path` 與 `regex` 時維持既有 path contract，視為 literal。
+ */
+export function normalizeEntrySelectors(
+    raw: unknown,
+    homeDir: string
+): EntrySelector[] {
     if (!Array.isArray(raw)) {
         return [];
     }
 
     const seen = new Set<string>();
-    const entries: CLIEntry[] = [];
+    const selectors: EntrySelector[] = [];
 
     for (const item of raw) {
         const entry = normalizeEntry(item, homeDir);
-        if (!entry || seen.has(entry.id)) {
+        if (entry) {
+            const key = `path:${entry.id}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                selectors.push({ kind: "literal", entry });
+            }
             continue;
         }
-        seen.add(entry.id);
-        entries.push(entry);
+
+        const rule = normalizePathRegex(item);
+        if (!rule) {
+            continue;
+        }
+        const key = pathRegexKey(rule);
+        if (!seen.has(key)) {
+            seen.add(key);
+            selectors.push(rule);
+        }
     }
 
-    return entries;
+    return selectors;
 }
 
 function normalizeEntry(item: unknown, homeDir: string): CLIEntry | undefined {
@@ -267,7 +413,7 @@ export function appendEntryPath(
     raw: unknown,
     newPath: string,
     homeDir: string
-): RawCLIEntry[] | undefined {
+): RawEntrySetting[] | undefined {
     const resolved = expandHome(newPath, homeDir);
     if (resolved === "") {
         return undefined;
@@ -278,9 +424,19 @@ export function appendEntryPath(
         return undefined;
     }
 
-    const kept = Array.isArray(raw) ? raw : [];
+    const kept = Array.isArray(raw)
+        ? raw.filter((item): item is RawEntrySetting => {
+              if (typeof item === "string") {
+                  return true;
+              }
+              return (
+                  normalizeEntry(item, homeDir) !== undefined ||
+                  normalizePathRegex(item) !== undefined
+              );
+          })
+        : [];
     return [
-        ...(kept as RawCLIEntry[]),
+        ...kept,
         { path: collapseHome(resolved, homeDir) },
     ];
 }
@@ -293,7 +449,7 @@ export function removeEntryPath(
     raw: unknown,
     targetPath: string,
     homeDir: string
-): RawCLIEntry[] | undefined {
+): RawEntrySetting[] | undefined {
     if (!Array.isArray(raw)) {
         return undefined;
     }
@@ -304,5 +460,5 @@ export function removeEntryPath(
         return entry?.id !== resolved;
     });
 
-    return kept.length === raw.length ? undefined : (kept as RawCLIEntry[]);
+    return kept.length === raw.length ? undefined : (kept as RawEntrySetting[]);
 }

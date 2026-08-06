@@ -12,9 +12,8 @@
 // 這一層不依賴 `vscode`;解析與格式化是純函式,可直接對字串測試。
 
 import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
-import * as path from "node:path";
 import { promisify } from "node:util";
+import { hasOwnGitMarker } from "./repositoryDiscovery";
 
 const execFileAsync = promisify(execFile);
 
@@ -117,16 +116,6 @@ export function formatGitFolderDescription(
     return isQuietGitFolderStatus(status) ? "" : formatGitFolderStatus(status);
 }
 
-/** 資料夾自己是不是 repository。`.git` 可能是目錄,也可能是 submodule 的檔案。 */
-async function hasGitDirectory(dir: string): Promise<boolean> {
-    try {
-        await stat(path.join(dir, ".git"));
-        return true;
-    } catch {
-        return false;
-    }
-}
-
 /**
  * 執行單一 git 命令並回傳 stdout;任何失敗回傳 `undefined`。
  *
@@ -187,7 +176,7 @@ async function readDiffLines(dir: string): Promise<DiffLineCounts> {
 export async function readGitFolderStatus(
     dir: string
 ): Promise<GitFolderStatus | undefined> {
-    if (!(await hasGitDirectory(dir))) {
+    if (!(await hasOwnGitMarker(dir))) {
         return undefined;
     }
 

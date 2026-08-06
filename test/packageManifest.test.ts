@@ -309,7 +309,7 @@ describe("CLI Launcher manifest contributions", () => {
         }
     });
 
-    it("binds ctrl+t to filtering only while the CLI panel itself has focus", () => {
+    it("binds ctrl+f to filtering only while the CLI panel itself has focus", () => {
         interface ManifestKeybinding {
             readonly command: string;
             readonly key: string;
@@ -321,7 +321,7 @@ describe("CLI Launcher manifest contributions", () => {
             (item) => item.command === "superset.cliLauncherFilter"
         );
 
-        expect(binding?.key).toBe("ctrl+t");
+        expect(binding?.key).toBe("ctrl+f");
         expect(binding?.when).toBe(
             `focusedView == ${VIEW_ID} && !inputFocus`
         );
@@ -402,6 +402,33 @@ describe("CLI Launcher manifest contributions", () => {
         expect(block!.properties["superset.cliLauncher.roots"].default).toEqual(
             ["~/projects"]
         );
+
+        const entries = block!.properties["superset.cliLauncher.entries"] as {
+            items?: { oneOf?: Array<{ required?: string[] }> };
+            markdownDescription?: string;
+        };
+        const roots = block!.properties["superset.cliLauncher.roots"] as {
+            markdownDescription?: string;
+        };
+        const hidden = block!.properties["superset.cliLauncher.hidden"] as {
+            items?: { oneOf?: Array<{ required?: string[] }> };
+            markdownDescription?: string;
+        };
+        expect(entries.items?.oneOf).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ required: ["path"] }),
+                expect.objectContaining({ required: ["regex"] }),
+            ])
+        );
+        expect(hidden.items?.oneOf).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ required: ["regex"] }),
+            ])
+        );
+        expect(entries.markdownDescription).toContain("Regex");
+        expect(entries.markdownDescription).toContain("non-repository");
+        expect(roots.markdownDescription).toContain("Git repositories");
+        expect(hidden.markdownDescription).toContain("Regex");
     });
 });
 

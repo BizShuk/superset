@@ -5,7 +5,8 @@
 //
 // 樹的形狀:root (預設 `~/projects`) 本身不是節點,top level 直接是
 // `<root>/<layer1>`,展開後是 `<root>/<layer1>/<layer2>`,不再往下。
-// 使用者手動釘選的 `superset.cliLauncher.entries` 排在掃描結果之前,可被移除。
+// `superset.cliLauncher.entries` 的 literal Pinned Paths 與 Regex Dynamic Entries
+// 排在一般 Git repository 結果之前；兩者維持各自的移除語意。
 //
 // Provider 另外持有一個 ephemeral 的 subsequence 過濾字串 (見 `filter.ts`),
 // 只影響顯示,不進 settings。面板可見時每 30 秒自動重刷一次
@@ -23,7 +24,12 @@
 
 import * as os from "node:os";
 import * as vscode from "vscode";
-import { loadEntries, loadHiddenPaths, loadRoots } from "./config";
+import { buildCLILauncherCatalog } from "./catalog";
+import {
+    loadEntrySelectors,
+    loadHiddenRules,
+    loadRoots,
+} from "./config";
 import { isDescendantPath, type CLIEntry } from "./entries";
 import {
     filterCLIEntries,
@@ -36,13 +42,14 @@ import {
     readGitFolderStatusMap,
     type GitFolderStatus,
 } from "./gitStatus";
+import { filterRepositoryFolders } from "./repositoryDiscovery";
 import { scanRoots } from "./scan";
 import type { TrackedCLITerminal } from "./terminalTracker";
 
 /** 手動釘選的項目;只有這種才提供 `Unpin Path`。 */
 export const ENTRY_CONTEXT_VALUE = "superset.cliLauncher.entry";
 
-/** 掃描出來的資料夾;可啟動但不能從清單移除。 */
+/** Scan-derived 資料夾；包含 Git repository 與必要的 category container。 */
 export const FOLDER_CONTEXT_VALUE = "superset.cliLauncher.folder";
 
 /** CLI Launcher 建立的 terminal child row，不提供 path 的 inline agent buttons。 */
@@ -349,35 +356,49 @@ export class CLILauncherTreeProvider
     private async topLevelItems(query: string): Promise<CLIEntryTreeItem[]> {
         this.pathItems.clear();
         const home = os.homedir();
-        const pinned = loadEntries();
-        const pinnedPaths = new Set(pinned.map((entry) => entry.path));
+        const catalog = buildCLILauncherCatalog(
+            loadEntrySelectors(),
+            await scanRoots(loadRoots(), home),
+            loadHiddenRules(),
+            home
+        );
+        const defaultFolders = await filterRepositoryFolders(catalog.folders);
         // id 帶上查詢字串:VS Code 以 id 記住每一列的展開狀態,沿用同一組 id 會讓
         // 過濾後想預設展開的節點維持在上一次的摺疊狀態。
         const scope = query === "" ? "" : `${query}:`;
 
-        const visiblePinned = filterCLIEntries(pinned, query, home);
+        const visibleEntryPaths = new Set(
+            filterCLIEntries(
+                catalog.entries.map(({ entry }) => entry),
+                query,
+                home
+            ).map((entry) => entry.path)
+        );
+        const visibleEntries = catalog.entries.filter(({ entry }) =>
+            visibleEntryPaths.has(entry.path)
+        );
         const scanned = filterScannedFolders(
-            await scanRoots(loadRoots(), home, loadHiddenPaths()),
+            defaultFolders,
             query,
             home
-        ).filter(
-            // 已釘選的資料夾不重複出現;釘選版帶著 Unpin Path,資訊量較多。
-            (folder) => !pinnedPaths.has(folder.entry.path)
         );
 
         // 一次把這一層要顯示的路徑全部問完,再分配給各列;逐列 await 會把數十次
         // git 呼叫串成序列,面板要等最後一個才畫得出來。
         const status = await readGitFolderStatusMap([
-            ...visiblePinned.map((entry) => entry.path),
+            ...visibleEntries.map(({ entry }) => entry.path),
             ...scanned.map((folder) => folder.entry.path),
         ]);
 
-        const items = visiblePinned.map((entry) => {
+        const items = visibleEntries.map(({ entry, source }) => {
             const counts = this.terminalCounts(entry.path);
             return this.registerPathItem(
                 new CLIEntryTreeItem(entry, {
-                    id: `pinned:${scope}${entry.path}`,
-                    contextValue: ENTRY_CONTEXT_VALUE,
+                    id: `${source}:${scope}${entry.path}`,
+                    contextValue:
+                        source === "literal"
+                            ? ENTRY_CONTEXT_VALUE
+                            : FOLDER_CONTEXT_VALUE,
                     git: status.get(entry.path),
                     terminalCount: counts.own,
                     totalTerminalCount: counts.total,

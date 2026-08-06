@@ -40,17 +40,25 @@ vi.mock("vscode", () => {
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as os from "node:os";
-import type { CLIEntry } from "../src/cliLauncher/entries";
+import {
+    normalizeEntrySelectors,
+    normalizeHiddenRules,
+    type CLIEntry,
+    type EntrySelector,
+    type HiddenRule,
+} from "../src/cliLauncher/entries";
 import type { GitFolderStatus } from "../src/cliLauncher/gitStatus";
 import type { ScannedFolder } from "../src/cliLauncher/scan";
 
 const HOME = os.homedir();
 
 let pinned: CLIEntry[] = [];
+let selectors: EntrySelector[] = [];
 let scanned: ScannedFolder[] = [];
-/** `superset.cliLauncher.hidden` 的內容,以及 provider 實際交給掃描的那一份。 */
-let hidden: string[] = [];
-let scanHidden: string[] = [];
+/** `superset.cliLauncher.hidden` 的 normalized literal / Regex rules。 */
+let hidden: HiddenRule[] = [];
+/** 預設 discovery 中具備自身 `.git` marker 的路徑。 */
+let repositoryPaths = new Set<string>();
 /** 路徑 → git 分支與行數增減;沒有列出的路徑代表不是 repository。 */
 let gitStatus = new Map<string, GitFolderStatus>();
 let gitReads = 0;
@@ -131,20 +139,25 @@ function tracked(
 
 vi.mock("../src/cliLauncher/config", () => ({
     loadEntries: () => pinned,
+    loadEntrySelectors: () => selectors,
     loadRoots: () => [`${HOME}/projects`],
-    loadHiddenPaths: () => hidden,
+    loadHiddenRules: () => hidden,
 }));
 
-// 真正的隱藏規則在 `scan.ts`;這裡只確認 provider 有把設定值交給掃描。
 vi.mock("../src/cliLauncher/scan", () => ({
-    scanRoots: async (
-        _roots: readonly string[],
-        _home: string,
-        hiddenArg: readonly string[] = []
-    ) => {
-        scanHidden = [...hiddenArg];
-        return scanned;
-    },
+    scanRoots: async () => scanned,
+}));
+
+vi.mock("../src/cliLauncher/repositoryDiscovery", () => ({
+    filterRepositoryFolders: async (folders: ScannedFolder[]) =>
+        folders.flatMap((folder) => {
+            const children = folder.children.filter((child) =>
+                repositoryPaths.has(child.path)
+            );
+            return repositoryPaths.has(folder.entry.path) || children.length > 0
+                ? [{ entry: folder.entry, children }]
+                : [];
+        }),
 }));
 
 // 只換掉會 spawn `git` 的那一支;格式化仍走真實實作,description 的字串格式
@@ -174,6 +187,7 @@ function entry(target: string, label?: string): CLIEntry {
 
 beforeEach(() => {
     pinned = [entry("/opt/tools/cli", "Ops CLI")];
+    selectors = normalizeEntrySelectors(pinned, HOME);
     scanned = [
         {
             entry: entry(`${HOME}/projects/platform`),
@@ -187,10 +201,15 @@ beforeEach(() => {
             children: [entry(`${HOME}/projects/ai/sessiond`)],
         },
     ];
+    repositoryPaths = new Set(
+        scanned.flatMap((folder) => [
+            folder.entry.path,
+            ...folder.children.map((child) => child.path),
+        ])
+    );
     gitStatus = new Map();
     gitReads = 0;
     hidden = [];
-    scanHidden = [];
 });
 
 describe("CLILauncherTreeProvider filtering", () => {
@@ -204,6 +223,51 @@ describe("CLILauncherTreeProvider filtering", () => {
             "platform",
             "ai",
         ]);
+        provider.dispose();
+    });
+
+    it("shows only repositories by default while explicit entries can add non-repositories", async () => {
+        const category = `${HOME}/projects/platform`;
+        const repository = `${category}/superset`;
+        const explicitRegex = `${category}/notes`;
+        const directRepository = `${HOME}/projects/direct-repo`;
+        const plainChild = `${directRepository}/plain-child`;
+        const omitted = `${HOME}/projects/archive`;
+        const explicitLiteral = `${HOME}/projects/scratch`;
+        scanned = [
+            {
+                entry: entry(category),
+                children: [entry(repository), entry(explicitRegex)],
+            },
+            {
+                entry: entry(directRepository),
+                children: [entry(plainChild)],
+            },
+            { entry: entry(omitted), children: [] },
+            { entry: entry(explicitLiteral), children: [] },
+        ];
+        repositoryPaths = new Set([repository, directRepository]);
+        selectors = normalizeEntrySelectors(
+            [
+                { path: explicitLiteral, label: "Scratch" },
+                { regex: "(?:^|/)notes$" },
+            ],
+            HOME
+        );
+
+        const provider = new CLILauncherTreeProvider();
+        const items = await provider.getChildren();
+
+        expect(items.map((item) => item.label)).toEqual([
+            "Scratch",
+            "notes",
+            "platform",
+            "direct-repo",
+        ]);
+        expect(
+            (await provider.getChildren(items[2])).map((item) => item.label)
+        ).toEqual(["superset"]);
+        expect(await provider.getChildren(items[3])).toEqual([]);
         provider.dispose();
     });
 
@@ -360,12 +424,69 @@ describe("CLILauncherTreeProvider filtering", () => {
         expect(AUTO_REFRESH_INTERVAL_MS).toBe(30_000);
     });
 
-    it("passes the hidden paths to the scan", async () => {
-        hidden = [`${HOME}/projects/collections`];
+    it("applies literal hidden rules to the resolved scan catalog", async () => {
+        hidden = normalizeHiddenRules(
+            [`${HOME}/projects/platform`],
+            HOME
+        );
         const provider = new CLILauncherTreeProvider();
-        await provider.getChildren();
+        const items = await provider.getChildren();
 
-        expect(scanHidden).toEqual([`${HOME}/projects/collections`]);
+        expect(items.map((item) => item.label)).toEqual(["Ops CLI", "ai"]);
+        provider.dispose();
+    });
+
+    it("expands Regex entries before scanned folders and renders them as scan-derived rows", async () => {
+        selectors = normalizeEntrySelectors(
+            [
+                { regex: "(?:^|/)superset$" },
+                { path: "/opt/tools/cli", label: "Ops CLI" },
+            ],
+            HOME
+        );
+        const provider = new CLILauncherTreeProvider();
+        const items = await provider.getChildren();
+
+        expect(items.map((item) => item.label)).toEqual([
+            "superset",
+            "Ops CLI",
+            "platform",
+            "ai",
+        ]);
+        expect(items[0].contextValue).toBe(
+            "superset.cliLauncher.folder"
+        );
+        const platformChildren = await provider.getChildren(items[2]);
+        expect(platformChildren.map((item) => item.label)).toEqual([
+            "gateway",
+        ]);
+        provider.dispose();
+    });
+
+    it("lets hidden Regex rules suppress Dynamic Entries but not literal entries", async () => {
+        const target = `${HOME}/projects/platform/superset`;
+        selectors = normalizeEntrySelectors(
+            [
+                { regex: "(?:^|/)superset$" },
+                { path: target, label: "Explicit Superset" },
+            ],
+            HOME
+        );
+        hidden = normalizeHiddenRules(
+            [{ regex: "(?:^|/)superset$" }],
+            HOME
+        );
+        const provider = new CLILauncherTreeProvider();
+        const items = await provider.getChildren();
+
+        expect(items.map((item) => item.label)).toEqual([
+            "Explicit Superset",
+            "platform",
+            "ai",
+        ]);
+        expect(items[0].contextValue).toBe(
+            "superset.cliLauncher.entry"
+        );
         provider.dispose();
     });
 
