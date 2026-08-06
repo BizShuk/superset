@@ -97,7 +97,13 @@ a
 
 1. 命令面板 → `Superset: Reset Caches`。
 2. 跳出二次確認彈窗 → 選 `Yes`。
-3. 所有快取清空,各面板重新載入。
+3. 所有 active plugin 的 reset handler 依序執行,各面板重新載入。
+
+#### 1.6 Settings 與 Diagnostics
+
+- `Superset: Open Settings`：直接開啟 VS Code native Settings，並過濾到 Superset extension。
+- `Superset: Show Diagnostics`：產生一次性的 live snapshot，顯示 active plugins、tracked/unseen terminals、mDNS services 與 workspace TODO tasks。
+- `Superset: Show Diagnostic Logs`：開啟持續追加的 runtime Output Channel。
 
 ---
 
@@ -268,7 +274,7 @@ subtype 與 TTL 也有固定上限，避免持續廣播造成 extension host 無
     ```tree
     src/
     ├── extension.ts
-    ├── shared.ts
+    ├── plugin/
     └── terminals/
         ├── index.ts
         └── types.ts
@@ -712,6 +718,8 @@ code --install-extension superset-*.vsix
 | `Superset: Open README.todo`                    | —                   | 開啟專案 `README.todo`                                                        |
 | `Superset: Toggle Todo`                         | —                   | 切換該列完成狀態                                                              |
 | `Superset: Focus Panel`                         | —                   | 聚焦側欄面板                                                                  |
+| `Superset: Open Settings`                       | —                   | 開啟並過濾 Superset 的 native Settings                                        |
+| `Superset: Show Diagnostics`                    | —                   | 顯示 active plugins 與各 subsystem 的 live count                              |
 | `Superset: Show Diagnostic Logs`                | —                   | 開啟 Output Channel 看診斷 log                                                |
 | `Superset: Reset Soft (this commit)`            | —                   | Graph commit 右鍵移動 HEAD,保留 index / working tree                          |
 | `Superset: Reset Hard (this commit)`            | —                   | Graph commit 右鍵重置 HEAD / index / working tree                             |
@@ -719,7 +727,7 @@ code --install-extension superset-*.vsix
 | `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                                 |
 | `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                       |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
-| `Superset: Install Default Tools`               | —                   | 安裝 `pm2`、`skills`、`dux`、`port`、`sessiond`、`autop`、`auth`、`proxy` CLI |
+| `Superset: Install Default Tools`               | —                   | 安裝九個預設 Go CLI（含 `mdserver`）                                           |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
 | `Superset: Cycle Editor Layout Mode`            | `Ctrl+Alt+V`        | 循環四個 editor group 佈局模式                                                |
 | `Superset: Pick Editor Layout Mode`             | `Ctrl+Alt+Shift+V`  | Quick Pick 直接挑一個佈局模式                                                 |
@@ -773,7 +781,7 @@ npm run build:vsix
 | 現象                                  | 可能原因                                             | 解法                                                                                              |
 | ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Terminal 高亮完全沒反應               | 終端機沒裝 shell integration(例如 Windows `cmd.exe`) | 改用 PowerShell、bash、zsh 或 fish(預設內建整合腳本)                                              |
-| TUI app 跑著沒高亮                    | TUI 閒置時不耗 CPU,process tree 判定為沒有活動       | 確認該程式真的在工作;`Superset: Show Diagnostics` 可看 activity 判定紀錄                          |
+| TUI app 跑著沒高亮                    | TUI 閒置時不耗 CPU,process tree 判定為沒有活動       | 確認該程式真的在工作;`Superset: Show Diagnostic Logs` 可看 activity lifecycle 紀錄                |
 | `mDNS` 面板空白                       | 網路環境無 mDNS 廣播,或被防火牆擋 UDP/5353           | 確認網段有 mDNS 服務(印表機、AirPlay 等);macOS 防火牆需允許 VSCode 接收 mDNS                      |
 | `Topology` 掃描逾時                   | `netstat` / `scutil` / `arp` 執行慢(尤其 VPN 環境)   | 暫時無法解決(10s 熔斷);手動跑命令驗證輸出                                                         |
 | `Git hooks not linked` 一直顯示       | local `core.hooksPath` 未設定或 Link 失敗            | 點 Status Bar 或執行 `Superset: Link Git Hooks`;用 `git config --local --get core.hooksPath` 檢查 |

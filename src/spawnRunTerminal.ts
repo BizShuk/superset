@@ -8,8 +8,7 @@
 // the chrome-commands file focused on view/log/panel orchestration.
 
 import * as os from "node:os";
-import * as vscode from "vscode";
-import { getDiagnosticChannel, getTerminalSpawner } from "./crossModuleState";
+import type { PluginContext } from "./plugin";
 import { quoteShellArg } from "./shellCommand";
 
 export { quoteShellArg } from "./shellCommand";
@@ -30,35 +29,23 @@ export interface SpawnRunTerminalOptions {
  * in it. Returns immediately; the terminal keeps running until the
  * command completes (or `closeOnSuccess: true` causes it to exit).
  *
- * If the terminals feature has not yet activated (no spawner wired),
- * shows an error message and returns without throwing — the caller is
- * typically a command-palette handler where swallowing is friendlier
- * than crashing the panel.
- *
- * Errors during `terminal.show(...)` / `sendText` are caught and
- * logged to the diagnostic channel — they never poison the caller's
- * promise chain.
+ * Errors during terminal creation, `show(...)`, or `sendText` are caught
+ * and logged through the caller's plugin context.
  */
 export async function spawnRunTerminal(
+    ctx: Pick<PluginContext, "createTerminal" | "log">,
     baseName: string,
     cmdline: string,
     options: SpawnRunTerminalOptions = {}
 ): Promise<void> {
-    const spawn = getTerminalSpawner();
-    if (!spawn) {
-        vscode.window.showErrorMessage(
-            "Superset: Terminals 模組尚未啟用,請稍候再試"
-        );
-        return;
-    }
     const stamp = new Date().toTimeString().slice(0, 8); // HH:MM:SS
     const finalCmdline = options.closeOnSuccess
         ? `${cmdline} && exit`
         : cmdline;
     const cwd = options.cwd ?? os.homedir();
     const preserveFocus = options.preserveFocus ?? true;
-    const terminal = spawn(`${baseName} (${stamp})`, cwd);
     try {
+        const terminal = ctx.createTerminal(`${baseName} (${stamp})`, cwd);
         terminal.show(preserveFocus);
         await new Promise((resolve) => setTimeout(resolve, 200));
         // `sendText` appends the platform newline itself. The explicit
@@ -67,8 +54,8 @@ export async function spawnRunTerminal(
         // read it as a second Enter and leave a stray prompt behind.
         terminal.sendText(finalCmdline);
     } catch (err) {
-        getDiagnosticChannel()?.appendLine(
-            `[superset] spawnRunTerminal failed for "${cmdline}": ${
+        ctx.log(
+            `spawnRunTerminal failed for "${cmdline}": ${
                 err instanceof Error ? err.message : String(err)
             }`
         );

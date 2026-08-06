@@ -12,7 +12,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import type { PluginContext } from "./plugin";
-import { getTerminalSpawner } from "./crossModuleState";
 import { quoteShellArg, spawnRunTerminal } from "./spawnRunTerminal";
 import {
     LICENSE_TEMPLATES,
@@ -162,18 +161,13 @@ const IGNORE_TARGETS: Record<string, string> = {
  * closes the shell on success.
  */
 async function installDefaultTools(ctx: PluginContext): Promise<void> {
-    if (!getTerminalSpawner()) {
-        vscode.window.showErrorMessage(
-            "Superset: Terminals 模組尚未啟用,請稍候再試"
-        );
-        return;
-    }
     for (const tool of DEFAULT_TOOLS) {
         // `spawnRunTerminal` adds its own `(<HH:MM:SS>)` timestamp
         // suffix; we keep the base name clean so the final terminal
         // name doesn't carry a duplicate. The helper appends
         // `&& exit` so the shell self-closes on success.
         await spawnRunTerminal(
+            ctx,
             `Superset: Install ${tool.label}`,
             tool.cmd,
             { closeOnSuccess: true }
@@ -243,6 +237,7 @@ async function skillInstall(
     }
 
     await spawnRunTerminal(
+        ctx,
         `Superset: Install Skills (${repo})`,
         `skills add ${quoteShellArg(repo)}`,
         { closeOnSuccess: true, preserveFocus: false }
@@ -268,6 +263,7 @@ async function projectsSetup(ctx: PluginContext): Promise<void> {
     const projectsRoot = path.join(homeDir, "projects");
 
     await spawnRunTerminal(
+        ctx,
         "Superset: Projects Setup",
         ["bash", scriptPath, projectsRoot].map(quoteShellArg).join(" "),
         { closeOnSuccess: true, cwd: homeDir }
@@ -334,6 +330,7 @@ async function installDefaultProject(
     if (force) argv.push("--force");
 
     await spawnRunTerminal(
+        ctx,
         "Superset: Install Default Project",
         argv.map(quoteShellArg).join(" "),
         { closeOnSuccess: true, cwd: ctx.workspaceFolder }

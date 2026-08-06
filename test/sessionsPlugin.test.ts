@@ -92,10 +92,10 @@ vi.mock("vscode", () => {
 import { register } from "../src/sessions";
 import { workspaceSessionsDir } from "../src/sessions/store";
 import type { SessionsElement } from "../src/sessions/sessionsTreeProvider";
-import type { FeatureContext, FeatureHandle } from "../src/shared";
+import type { PluginContext } from "../src/plugin";
 
 let root = "";
-let handle: FeatureHandle | undefined;
+let registeredDisposables: vscode.Disposable[] = [];
 
 beforeEach(() => {
     root = mkdtempSync(path.join(tmpdir(), "superset-sessions-command-"));
@@ -104,11 +104,13 @@ beforeEach(() => {
     vscodeMocks.showErrorMessage.mockClear();
     vscodeMocks.showInformationMessage.mockClear();
     vscodeMocks.showWarningMessage.mockClear();
+    registeredDisposables = [];
 });
 
 afterEach(() => {
-    handle?.dispose();
-    handle = undefined;
+    for (const disposable of registeredDisposables.reverse()) {
+        disposable.dispose();
+    }
     rmSync(root, { recursive: true, force: true });
 });
 
@@ -136,17 +138,16 @@ describe("Sessions Delete command", () => {
 
         const log = vi.fn();
         const context = {
-            context: {} as vscode.ExtensionContext,
-            subscriptions: [],
+            extensionUri: { fsPath: "/extension" } as vscode.Uri,
             workspaceFolder: workspace,
-            shared: {
-                statusBar: {} as vscode.StatusBarItem,
-                diag: {} as vscode.OutputChannel,
-                log,
+            log,
+            registerTreeView: vi.fn(),
+            registerResetHandler: vi.fn(),
+            registerDisposable: (disposable: vscode.Disposable) => {
+                registeredDisposables.push(disposable);
             },
-            resetHandlers: [],
-        } satisfies FeatureContext;
-        handle = register(context);
+        } as unknown as PluginContext;
+        register(context);
 
         const record = {
             meta: {

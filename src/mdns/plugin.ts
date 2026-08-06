@@ -1,15 +1,12 @@
-// mdnsPlugin — adapter for the mDNS feature (legacy `register` shape).
-// Heavy lifting lives in `./index.ts`; the plugin shim is a one-line
-// `legacyPlugin(...)` call. Stage 6 will replace `registerMdnsModule`
-// with a direct `PluginContext` consumer and drop this shim entirely.
+// mDNS plugin declaration. Runtime wiring lives in `./index.ts`.
 
-import { legacyPlugin } from "../plugin";
+import type { ExtensionPlugin } from "../plugin";
 import { register as registerMdnsModule } from "./index";
 
 export const MDNS_PLUGIN_ID = "mdns";
 
-export const mdnsPlugin = legacyPlugin({
+export const mdnsPlugin: ExtensionPlugin = {
     id: MDNS_PLUGIN_ID,
     name: "mDNS",
-    register: registerMdnsModule,
-});
+    activate: registerMdnsModule,
+};

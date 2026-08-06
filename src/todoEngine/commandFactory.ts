@@ -3,7 +3,7 @@
 // same code path produces every `superset.todo*` command.
 //
 // Each panel calls `createTodoCommands(ctx)` once during register() and
-// adds the returned disposables to its FeatureHandle.dispose() list.
+// registers the returned disposables in its plugin-owned lifecycle pool.
 // Per-panel differences (which store method, which path) flow through
 // the `TodoCommandContext` — the factory itself is pure command
 // assembly with zero behavior.

@@ -1,7 +1,7 @@
 // Plugin system core types — the contract every feature module fulfils
 // to participate in the unified `PluginManager` lifecycle. This file is
 // deliberately `vscode`-free apart from the type imports, so plugin
-// adapters can be unit-tested without spinning up the extension host.
+// declarations can be unit-tested without spinning up the extension host.
 
 import type * as vscode from "vscode";
 
@@ -27,8 +27,20 @@ export interface PluginContext {
     /** Diagnostic log — also surfaced via `Superset: Show Logs`. */
     log(message: string): void;
 
-    /** Update the shared status-bar item text/tooltip. */
-    showStatus(text: string, tooltip?: string): void;
+    /** Reveal the root-owned diagnostic output channel. */
+    showLogs(): void;
+
+    /**
+     * Open a native VS Code terminal through the composition root's
+     * single terminal-creation boundary.
+     */
+    createTerminal(
+        name: string,
+        cwd: string,
+        options?: {
+            readonly location?: vscode.TerminalEditorLocationOptions;
+        }
+    ): vscode.Terminal;
 
     /**
      * Register a disposable that the manager will release when the
@@ -45,18 +57,45 @@ export interface PluginContext {
      */
     registerResetHandler(handler: () => void | Promise<void>): void;
 
+    /** Run every active plugin's reset handlers. */
+    resetAll(): Promise<void>;
+
+    /**
+     * Publish live, read-only diagnostic metrics for this plugin.
+     * Providers are evaluated only when a snapshot is requested.
+     */
+    registerDiagnosticsProvider(
+        provider: RuntimeDiagnosticsProvider
+    ): void;
+
+    /** Read one fail-soft snapshot of all active plugins. */
+    getRuntimeDiagnostics(): RuntimeDiagnostics;
+
     /**
      * Register a `vscode.TreeView` + `TreeDataProvider` with the
-     * shared `TreeViewRegistry` so the `superset.revealInTree`
-     * command can walk this panel's tree. Returns a disposable
-     * the caller is expected to push through `registerDisposable`
-     * so deactivation clears the entry.
+     * shared `TreeViewRegistry` so cross-panel commands can walk this
+     * panel's tree. Registration lifecycle is manager-owned.
      */
-    registerTreeView(
+    registerTreeView<T>(
         viewId: string,
-        treeView: vscode.TreeView<unknown>,
-        treeDataProvider: vscode.TreeDataProvider<unknown>
-    ): vscode.Disposable;
+        treeView: vscode.TreeView<T>,
+        treeDataProvider: vscode.TreeDataProvider<T>
+    ): void;
+
+    /** Find and reveal one row in a registered Tree View. */
+    revealInTree(
+        viewId: string,
+        predicate: (item: unknown) => boolean
+    ): Promise<boolean>;
+}
+
+export type RuntimeDiagnosticsProvider = () => Readonly<
+    Record<string, number>
+>;
+
+export interface RuntimeDiagnostics {
+    readonly activePluginIds: string[];
+    readonly metrics: Readonly<Record<string, number>>;
 }
 
 /**
@@ -66,7 +105,7 @@ export interface PluginContext {
  * per-instance state omit `deactivate`.
  */
 export interface ExtensionPlugin {
-    /** Stable id used as Map key and for failure markers in workspaceState. */
+    /** Stable id used as the manager's lifecycle key. */
     readonly id: string;
 
     /** Human-readable name, surfaced in diagnostics / future UI. */

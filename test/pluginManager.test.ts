@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { PluginManager, type ExtensionPlugin, type PluginContext } from "../src/plugin";
+import { TreeViewRegistry } from "../src/plugin/treeViewRegistry";
 import type * as vscode from "vscode";
 
 /** Minimal stand-in for `vscode.ExtensionContext` — only the members
@@ -34,13 +35,15 @@ describe("PluginManager", () => {
             extensionContext: fakeExtCtx(),
             workspaceFolder: "/ws",
             log,
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
 
         const a = makePlugin({ id: "a", activate: vi.fn() });
         const b = makePlugin({ id: "b", activate: vi.fn() });
 
-        await mgr.activateAll([a, b], fakeExtCtx());
+        await mgr.activateAll([a, b]);
 
         expect(a.activate).toHaveBeenCalledOnce();
         expect(b.activate).toHaveBeenCalledOnce();
@@ -56,7 +59,9 @@ describe("PluginManager", () => {
             extensionContext: fakeExtCtx(),
             workspaceFolder: "/ws",
             log,
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
 
         const boom = makePlugin({
@@ -67,7 +72,7 @@ describe("PluginManager", () => {
         });
         const ok = makePlugin({ id: "ok", activate: vi.fn() });
 
-        await mgr.activateAll([boom, ok], fakeExtCtx());
+        await mgr.activateAll([boom, ok]);
 
         expect(mgr.has("boom")).toBe(false);
         expect(mgr.has("ok")).toBe(true);
@@ -82,7 +87,9 @@ describe("PluginManager", () => {
             extensionContext: fakeExtCtx(),
             workspaceFolder: "/ws",
             log,
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
         const disposable = { dispose: vi.fn() };
         const deactivate = vi.fn();
@@ -95,7 +102,7 @@ describe("PluginManager", () => {
             deactivate,
         });
 
-        await mgr.activateAll([broken], fakeExtCtx());
+        await mgr.activateAll([broken]);
 
         expect(deactivate).toHaveBeenCalledOnce();
         expect(disposable.dispose).toHaveBeenCalledOnce();
@@ -106,21 +113,22 @@ describe("PluginManager", () => {
         expect(disposable.dispose).toHaveBeenCalledOnce();
     });
 
-    it("marks failed plugins in workspaceState", async () => {
+    it("does not persist transient activation failures", async () => {
         const ext = fakeExtCtx();
         const mgr = new PluginManager({
             extensionContext: ext,
             workspaceFolder: "/ws",
             log: () => {},
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
 
         await mgr.activateAll(
-            [makePlugin({ id: "broken", activate: () => { throw new Error("nope"); } })],
-            ext
+            [makePlugin({ id: "broken", activate: () => { throw new Error("nope"); } })]
         );
 
-        expect(ext.workspaceState.get("plugin.failed.broken")).toBe(true);
+        expect(ext.workspaceState.get("plugin.failed.broken")).toBeUndefined();
     });
 
     it("collects disposables and disposes them on deactivate", async () => {
@@ -129,7 +137,9 @@ describe("PluginManager", () => {
             extensionContext: ext,
             workspaceFolder: "/ws",
             log: () => {},
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
 
         const d1 = { dispose: vi.fn() };
@@ -142,7 +152,7 @@ describe("PluginManager", () => {
             },
         });
 
-        await mgr.activateAll([plugin], ext);
+        await mgr.activateAll([plugin]);
         expect(mgr.getDisposables("d")).toEqual([d1, d2]);
 
         await mgr.deactivateAll();
@@ -155,13 +165,39 @@ describe("PluginManager", () => {
         expect(d2.dispose).toHaveBeenCalledOnce();
     });
 
+    it("disposes plugin resources in reverse registration order", async () => {
+        const mgr = new PluginManager({
+            extensionContext: fakeExtCtx(),
+            workspaceFolder: "/ws",
+            log: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
+        });
+        const order: string[] = [];
+        const plugin = makePlugin({
+            id: "ordered",
+            activate: (ctx) => {
+                ctx.registerDisposable({ dispose: () => order.push("first") });
+                ctx.registerDisposable({ dispose: () => order.push("second") });
+            },
+        });
+
+        await mgr.activateAll([plugin]);
+        await mgr.deactivateAll();
+
+        expect(order).toEqual(["second", "first"]);
+    });
+
     it("runs reset handlers and isolates per-handler failures", async () => {
         const log = vi.fn();
         const mgr = new PluginManager({
             extensionContext: fakeExtCtx(),
             workspaceFolder: "/ws",
             log,
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
 
         const h1 = vi.fn().mockRejectedValue(new Error("reset fail"));
@@ -174,7 +210,7 @@ describe("PluginManager", () => {
             },
         });
 
-        await mgr.activateAll([plugin], fakeExtCtx());
+        await mgr.activateAll([plugin]);
         await mgr.resetAll();
 
         expect(h1).toHaveBeenCalledOnce();
@@ -184,12 +220,80 @@ describe("PluginManager", () => {
         );
     });
 
+    it("aggregates live diagnostics from active plugins", async () => {
+        const mgr = new PluginManager({
+            extensionContext: fakeExtCtx(),
+            workspaceFolder: "/ws",
+            log: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
+        });
+        const plugin = makePlugin({
+            id: "runtime",
+            activate: (ctx: PluginContext) => {
+                ctx.registerDiagnosticsProvider(() => ({
+                    terminalCount: 3,
+                    todoItemCount: 7,
+                }));
+            },
+        });
+
+        await mgr.activateAll([plugin]);
+
+        const snapshot = mgr.getRuntimeDiagnostics();
+        expect(snapshot).toEqual({
+            activePluginIds: ["runtime"],
+            metrics: { terminalCount: 3, todoItemCount: 7 },
+        });
+    });
+
+    it("isolates a diagnostics provider failure from healthy providers", async () => {
+        const log = vi.fn();
+        const mgr = new PluginManager({
+            extensionContext: fakeExtCtx(),
+            workspaceFolder: "/ws",
+            log,
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
+        });
+        const diagnosticPlugin = (
+            id: string,
+            provider: () => Readonly<Record<string, number>>
+        ) =>
+            makePlugin({
+                id,
+                activate: (ctx: PluginContext) => {
+                    ctx.registerDiagnosticsProvider(provider);
+                },
+            });
+
+        await mgr.activateAll(
+            [
+                diagnosticPlugin("broken", () => {
+                    throw new Error("snapshot failed");
+                }),
+                diagnosticPlugin("healthy", () => ({ mDNSServiceCount: 4 })),
+            ]
+        );
+
+        const snapshot = mgr.getRuntimeDiagnostics();
+        expect(snapshot.metrics).toEqual({ mDNSServiceCount: 4 });
+        expect(snapshot.activePluginIds).toEqual(["broken", "healthy"]);
+        expect(log).toHaveBeenCalledWith(
+            expect.stringContaining("diagnostics provider from broken threw")
+        );
+    });
+
     it("composes contributeMarkdownIt across plugins in order", async () => {
         const mgr = new PluginManager({
             extensionContext: fakeExtCtx(),
             workspaceFolder: "/ws",
             log: () => {},
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
 
         const order: string[] = [];
@@ -214,7 +318,7 @@ describe("PluginManager", () => {
             },
         };
 
-        await mgr.activateAll([p1, p2], fakeExtCtx());
+        await mgr.activateAll([p1, p2]);
 
         const ext = mgr.getMarkdownExtension();
         expect(ext).toBeDefined();
@@ -230,9 +334,11 @@ describe("PluginManager", () => {
             extensionContext: fakeExtCtx(),
             workspaceFolder: "/ws",
             log: () => {},
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
-        await mgr.activateAll([makePlugin({ id: "plain" })], fakeExtCtx());
+        await mgr.activateAll([makePlugin({ id: "plain" })]);
         expect(mgr.getMarkdownExtension()).toBeUndefined();
     });
 });

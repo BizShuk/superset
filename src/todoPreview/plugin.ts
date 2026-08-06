@@ -1,7 +1,7 @@
-// todoPreviewPlugin — `ExtensionPlugin` adapter for the
+// todoPreviewPlugin — `ExtensionPlugin` declaration for the
 // `README.todo` markdown preview. The actual hook logic still lives
 // in `./index.ts` as a plain `createTodoPreviewExtension()` factory
-// (unchanged). This adapter exposes the same hook via
+// (unchanged). This declaration exposes the same hook via
 // `contributeMarkdownIt` so the `PluginManager` collects it
 // alongside the `treePreview` plugin's hook and `activate()` returns
 // the merged chain.
@@ -24,7 +24,7 @@ export const todoPreviewPlugin: ExtensionPlugin = {
         _ctx.log("todoPreview: registered (markdown-it hook only)");
     },
     contributeMarkdownIt: ((md: Parameters<ReturnType<typeof createTodoPreviewExtension>["extendMarkdownIt"]>[0]) => {
-        // Delegate to the legacy factory so the behaviour stays in
+        // Delegate to the existing factory so the behaviour stays in
         // one place; the manager composes our return with other
         // plugins' contributions in activation order.
         return createTodoPreviewExtension().extendMarkdownIt(md);

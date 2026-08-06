@@ -3,14 +3,32 @@
 // hides the global disposable array behind `registerDisposable()`.
 
 import type * as vscode from "vscode";
-import type { PluginContext } from "./types";
-import { getTreeViewRegistry } from "./treeViewRegistry";
+import type {
+    PluginContext,
+    RuntimeDiagnostics,
+    RuntimeDiagnosticsProvider,
+} from "./types";
+import type { TreeViewRegistry } from "./treeViewRegistry";
 
 export interface BaseContext {
     readonly extensionContext: vscode.ExtensionContext;
     readonly workspaceFolder: string;
     readonly log: (msg: string) => void;
-    readonly showStatus: (text: string, tooltip?: string) => void;
+    readonly showLogs: () => void;
+    readonly createTerminal: PluginContext["createTerminal"];
+    readonly treeViewRegistry: TreeViewRegistry;
+}
+
+export interface PluginContextBindings {
+    readonly registerDisposable: (disposable: vscode.Disposable) => void;
+    readonly registerResetHandler: (
+        handler: () => void | Promise<void>
+    ) => void;
+    readonly registerDiagnosticsProvider: (
+        provider: RuntimeDiagnosticsProvider
+    ) => void;
+    readonly resetAll: () => Promise<void>;
+    readonly getRuntimeDiagnostics: () => RuntimeDiagnostics;
 }
 
 /**
@@ -27,8 +45,7 @@ export interface BaseContext {
  */
 export function createPluginContext(
     base: BaseContext,
-    resetHandlers: (() => void | Promise<void>)[],
-    disposables: vscode.Disposable[]
+    bindings: PluginContextBindings
 ): PluginContext {
     return {
         workspaceFolder: base.workspaceFolder,
@@ -36,27 +53,24 @@ export function createPluginContext(
         globalState: base.extensionContext.globalState,
         workspaceState: base.extensionContext.workspaceState,
         log: base.log,
-        showStatus: base.showStatus,
-        registerDisposable: (d) => {
-            disposables.push(d);
-        },
-        registerResetHandler: (h) => {
-            resetHandlers.push(h);
-        },
+        showLogs: base.showLogs,
+        createTerminal: base.createTerminal,
+        registerDisposable: bindings.registerDisposable,
+        registerResetHandler: bindings.registerResetHandler,
+        resetAll: bindings.resetAll,
+        registerDiagnosticsProvider: bindings.registerDiagnosticsProvider,
+        getRuntimeDiagnostics: bindings.getRuntimeDiagnostics,
         registerTreeView: (viewId, treeView, treeDataProvider) => {
-            const registry = getTreeViewRegistry();
-            if (!registry) {
-                base.log(
-                    `registerTreeView(${viewId}): registry not initialized`
-                );
-                return { dispose: () => undefined };
-            }
-            return registry.register(
-                viewId,
-                treeView,
-                treeDataProvider,
-                base.log
+            bindings.registerDisposable(
+                base.treeViewRegistry.register(
+                    viewId,
+                    treeView,
+                    treeDataProvider,
+                    base.log
+                )
             );
         },
+        revealInTree: (viewId, predicate) =>
+            base.treeViewRegistry.reveal(viewId, predicate, base.log),
     };
 }

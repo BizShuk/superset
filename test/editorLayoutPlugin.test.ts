@@ -128,11 +128,16 @@ function makeContext(stored: Record<string, unknown> = {}) {
             log(message: string) {
                 this.logs?.push(message);
             },
-            showStatus: () => undefined,
+            showLogs: () => undefined,
+            createTerminal: () => ({}) as never,
             registerDisposable: (d: { dispose(): void }) => disposables.push(d),
             registerResetHandler: (h: () => void | Promise<void>) =>
                 resetHandlers.push(h),
-            registerTreeView: () => ({ dispose: () => undefined }),
+            resetAll: async () => undefined,
+            registerDiagnosticsProvider: () => undefined,
+            getRuntimeDiagnostics: () => ({ activePluginIds: [], metrics: {} }),
+            registerTreeView: () => undefined,
+            revealInTree: async () => false,
         },
     };
 }

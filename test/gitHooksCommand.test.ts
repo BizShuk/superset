@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FeatureContext } from "../src/shared";
+import type { PluginContext } from "../src/plugin";
 
 const mocks = vi.hoisted(() => ({
     commands: new Map<string, (...args: unknown[]) => unknown>(),
@@ -64,20 +64,13 @@ vi.mock("vscode", () => ({
 
 const { register } = await import("../src/git/index");
 
-function featureContext(): FeatureContext {
+function pluginContext(): PluginContext {
     return {
-        context: {
-            extensionUri: { fsPath: "/extension" },
-        } as FeatureContext["context"],
-        subscriptions: [],
-        workspaceFolder: "/legacy-workspace",
-        shared: {
-            statusBar: {} as FeatureContext["shared"]["statusBar"],
-            diag: {} as FeatureContext["shared"]["diag"],
-            log: vi.fn(),
-        },
-        resetHandlers: [],
-    };
+        extensionUri: { fsPath: "/extension" },
+        workspaceFolder: "/workspace",
+        log: vi.fn(),
+        registerDisposable: vi.fn(),
+    } as unknown as PluginContext;
 }
 
 async function settle(): Promise<void> {
@@ -111,7 +104,7 @@ describe("Git hooks commands and status bar", () => {
     });
 
     it("registers separate install and link commands", () => {
-        register(featureContext());
+        register(pluginContext());
 
         expect(mocks.commands.has("superset.installGitHooks")).toBe(true);
         expect(mocks.commands.has("superset.linkGitHooks")).toBe(true);
@@ -124,7 +117,7 @@ describe("Git hooks commands and status bar", () => {
             uri: { scheme: "file", fsPath: "/second" },
         });
         mocks.existsSync.mockReturnValue(true);
-        register(featureContext());
+        register(pluginContext());
         await settle();
 
         expect(mocks.isGitRepository).toHaveBeenCalledWith("/first");
@@ -133,7 +126,7 @@ describe("Git hooks commands and status bar", () => {
 
     it("shows when .githooks exists and local hooksPath is empty", async () => {
         mocks.existsSync.mockReturnValue(true);
-        register(featureContext());
+        register(pluginContext());
         await settle();
 
         expect(mocks.statusBar.show).toHaveBeenCalled();
@@ -142,7 +135,7 @@ describe("Git hooks commands and status bar", () => {
     it("hides for any non-empty local hooksPath", async () => {
         mocks.existsSync.mockReturnValue(true);
         mocks.readLocalHooksPath.mockResolvedValue("  .githooks  ");
-        register(featureContext());
+        register(pluginContext());
         await settle();
 
         expect(mocks.statusBar.hide).toHaveBeenCalled();
@@ -170,7 +163,7 @@ describe("Git hooks commands and status bar", () => {
         mocks.workspaceFolders.splice(0, mocks.workspaceFolders.length, ...folders);
         mocks.existsSync.mockReturnValue(exists);
         mocks.isGitRepository.mockResolvedValue(isRepo);
-        register(featureContext());
+        register(pluginContext());
         await settle();
 
         expect(mocks.statusBar.hide).toHaveBeenCalled();
@@ -178,7 +171,7 @@ describe("Git hooks commands and status bar", () => {
     });
 
     it("links without installing", async () => {
-        register(featureContext());
+        register(pluginContext());
         await mocks.commands.get("superset.linkGitHooks")!();
 
         expect(mocks.linkGitHooks).toHaveBeenCalledWith("/first");
@@ -186,7 +179,7 @@ describe("Git hooks commands and status bar", () => {
     });
 
     it("installs missing templates before linking", async () => {
-        register(featureContext());
+        register(pluginContext());
         await mocks.commands.get("superset.installGitHooks")!();
 
         expect(mocks.copyMissingTree).toHaveBeenCalledWith(
@@ -201,7 +194,7 @@ describe("Git hooks commands and status bar", () => {
 
     it("does not link after a copy failure", async () => {
         mocks.copyMissingTree.mockRejectedValue(new Error("copy failed"));
-        register(featureContext());
+        register(pluginContext());
         await mocks.commands.get("superset.installGitHooks")!();
 
         expect(mocks.linkGitHooks).not.toHaveBeenCalled();

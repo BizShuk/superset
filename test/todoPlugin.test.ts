@@ -1,10 +1,10 @@
 import { describe, it, vi } from "vitest";
 import { assertPluginContract } from "./pluginContract.shared";
 
-// Minimal vscode mock — needed because the todo plugin adapter
+// Minimal vscode mock — needed because the todo plugin declaration
 // statically imports `./index.ts` which itself imports `vscode`. The
 // test only checks interface-level invariants (id / name / hooks),
-// not the legacy `register()` body; full activation is exercised
+// not the `register()` body; full activation is exercised
 // inside the VSCode extension host and will be revisited at Stage 6.
 vi.mock("vscode", () => ({}));
 
@@ -19,7 +19,7 @@ describe("todoPlugin", () => {
             id: TODO_PLUGIN_ID,
             name: "TODO",
             markdownHook: "absent",
-            deactivate: "present",
+            deactivate: "absent",
         });
     });
 });

@@ -6,8 +6,7 @@
 
 import * as os from "node:os";
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../shared";
-import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import type { PluginContext } from "../plugin";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import { AGENT_IDS, type AgentId } from "./command";
 import {
@@ -59,10 +58,19 @@ export const AGENT_COMMAND_IDS: Record<AgentId, string> = {
     grok: "superset.cliLauncherRunGrok",
 };
 
-export function register(ctx: FeatureContext): FeatureHandle {
+export function register(ctx: PluginContext): void {
     // feature 不自建 Output Channel;診斷全部進共用的 "Superset" channel。
-    setCLILauncherLog(ctx.shared.log);
-    const terminalTracker = initTerminalTracking(ctx.subscriptions);
+    setCLILauncherLog(ctx.log);
+    ctx.registerDisposable({
+        dispose: () => {
+            void setPathSelectionContext(false);
+            setCLILauncherLog(undefined);
+        },
+    });
+    const terminalTracker = initTerminalTracking(
+        ctx.registerDisposable,
+        ctx.createTerminal
+    );
 
     const provider = new CLILauncherTreeProvider(terminalTracker);
     const diffProvider = new SCMDiffProvider(gitSCMRepository);
@@ -72,7 +80,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         scmActions,
         diffProvider,
         () => provider.refresh(),
-        ctx.shared.log
+        ctx.log
     );
     const diffRegistration =
         vscode.workspace.registerTextDocumentContentProvider(
@@ -98,21 +106,19 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const visibilitySub = registerViewVisibility(view, VIEW_ID, (visible) =>
         provider.setVisible(visible)
     );
-    const treeViewEntry = getTreeViewRegistry()?.register(
+    ctx.registerTreeView(
         VIEW_ID,
-        view as unknown as vscode.TreeView<unknown>,
-        provider as unknown as vscode.TreeDataProvider<unknown>,
-        ctx.shared.log
+        view,
+        provider
     );
-    const changesTreeViewEntry = getTreeViewRegistry()?.register(
+    ctx.registerTreeView(
         CHANGE_VIEW_ID,
-        changesView as unknown as vscode.TreeView<unknown>,
-        changesProvider as unknown as vscode.TreeDataProvider<unknown>,
-        ctx.shared.log
+        changesView,
+        changesProvider
     );
 
     // 掃描結果沒有額外快取,`Reset Caches` 就等同重新掃描一次。
-    ctx.resetHandlers.push(() => {
+    ctx.registerResetHandler(() => {
         provider.refresh();
         void changesProvider.refresh();
     });
@@ -125,8 +131,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
         view,
         changesView,
         visibilitySub,
-        treeViewEntry ?? { dispose: () => undefined },
-        changesTreeViewEntry ?? { dispose: () => undefined },
         changesProvider.onDidChangeMessage((message) => {
             changesView.message = message;
         }),
@@ -273,7 +277,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
         ),
     ];
 
-    ctx.subscriptions.push(...disposables);
+    for (const disposable of disposables) {
+        ctx.registerDisposable(disposable);
+    }
 
     log(
         `registered: views=${VIEW_ID},${CHANGE_VIEW_ID} commands=${[
@@ -296,16 +302,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
         ].join(", ")}`
     );
 
-    return {
-        dispose() {
-            for (const disposable of disposables) {
-                disposable.dispose();
-            }
-            void setPathSelectionContext(false);
-            // module-level sink 不得存活到下一輪 activation。
-            setCLILauncherLog(undefined);
-        },
-    };
 }
 
 function setPathSelectionContext(active: boolean): Thenable<unknown> {

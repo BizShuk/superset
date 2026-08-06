@@ -14,21 +14,12 @@ import {
     type PluginContext,
 } from "./plugin";
 import { collectSupersetKeys } from "./resetCaches";
-import { getDiagnosticChannel, getPluginManager } from "./crossModuleState";
 import { registerInstallCommands } from "./installCommands";
-import { getTreeViewRegistry } from "./plugin/treeViewRegistry";
 import {
+    DIAGNOSTIC_METRIC,
     renderDiagnosticsMarkdown,
-    renderSettingsMarkdown,
     type DiagnosticsSnapshot,
-} from "./diagnosticsPanel";
-import type { ExtensionManifest } from "./diagnosticsPanel.types";
-// `package.json` is shipped as a real file; the build emits it to
-// `out/extension.js`'s sibling, so we can `require` it. We type the
-// return as our narrow `ExtensionManifest` so the renderer stays
-// free of `vscode` types.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const packageJson: ExtensionManifest = require("../package.json");
+} from "./diagnostics";
 
 export const GLOBAL_COMMANDS_PLUGIN_ID = "globalCommands";
 
@@ -51,10 +42,7 @@ export const globalCommandsPlugin: ExtensionPlugin = {
                     )) {
                         await ctx.workspaceState.update(key, undefined);
                     }
-                    const manager = getPluginManager();
-                    if (manager) {
-                        await manager.resetAll();
-                    }
+                    await ctx.resetAll();
                     vscode.window.showInformationMessage(
                         "Superset: 快取已重置"
                     );
@@ -78,7 +66,7 @@ export const globalCommandsPlugin: ExtensionPlugin = {
 
         ctx.registerDisposable(
             vscode.commands.registerCommand("superset.showLogs", () => {
-                getDiagnosticChannel()?.show(true);
+                ctx.showLogs();
             })
         );
 
@@ -132,68 +120,49 @@ export const globalCommandsPlugin: ExtensionPlugin = {
                         );
                         return false;
                     }
-                    const registry = getTreeViewRegistry();
-                    if (!registry) {
-                        ctx.log(
-                            "globalCommands: revealInTree — TreeViewRegistry not initialized"
-                        );
-                        return false;
-                    }
-                    return registry.reveal(
-                        args.viewId,
-                        args.predicate,
-                        ctx.log
-                    );
+                    return ctx.revealInTree(args.viewId, args.predicate);
                 }
             )
         );
 
-        // Open Settings — render the registered `superset.*` command
-        // surface as a Markdown overview, then open in the markdown
-        // preview. Minimal viable version of the original
-        // OpenSettings WebView plan (☆5) — the WebView can be
-        // layered on top later without changing this command.
+        // Open the native Settings UI filtered to this extension.
         ctx.registerDisposable(
             vscode.commands.registerCommand(
                 "superset.openSettings",
                 async () => {
-                    const md = renderSettingsMarkdown(packageJson);
-                    const doc = await vscode.workspace.openTextDocument({
-                        content: md,
-                        language: "markdown",
-                    });
                     await vscode.commands.executeCommand(
-                        "markdown.showPreview",
-                        doc.uri
+                        "workbench.action.openSettings",
+                        "@ext:shuk.superset"
                     );
                 }
             )
         );
 
-        // Show Diagnostics — one-shot snapshot of every subsystem.
-        // Pulls counts from the live PluginManager (the
-        // PluginManager doesn't currently expose per-plugin state
-        // for terminals/mDNS counts, so the snapshot is best-effort
-        // with `0` placeholders for subsystems that don't expose a
-        // counter yet). Future iterations can pipe real counts once
-        // the registries expose observers.
+        // Show Diagnostics — one live, fail-soft runtime snapshot.
         ctx.registerDisposable(
             vscode.commands.registerCommand(
                 "superset.showDiagnostics",
                 async () => {
-                    const manager = getPluginManager();
-                    const pluginIds = manager
-                        ? (manager as unknown as {
-                              listIds?: () => string[];
-                          }).listIds?.() ?? []
-                        : [];
+                    const runtime = ctx.getRuntimeDiagnostics();
                     const snapshot: DiagnosticsSnapshot = {
                         capturedAt: new Date(),
-                        terminalCount: 0,
-                        unseenTerminalCount: 0,
-                        mDNSServiceCount: 0,
-                        todoItemCount: 0,
-                        activePluginIds: pluginIds,
+                        terminalCount:
+                            runtime.metrics[
+                                DIAGNOSTIC_METRIC.terminalCount
+                            ],
+                        unseenTerminalCount:
+                            runtime.metrics[
+                                DIAGNOSTIC_METRIC.unseenTerminalCount
+                            ],
+                        mDNSServiceCount:
+                            runtime.metrics[
+                                DIAGNOSTIC_METRIC.mDNSServiceCount
+                            ],
+                        todoItemCount:
+                            runtime.metrics[
+                                DIAGNOSTIC_METRIC.todoItemCount
+                            ],
+                        activePluginIds: runtime.activePluginIds,
                     };
                     const md = renderDiagnosticsMarkdown(snapshot);
                     const doc = await vscode.workspace.openTextDocument({
@@ -209,9 +178,5 @@ export const globalCommandsPlugin: ExtensionPlugin = {
         );
 
         ctx.log("globalCommands: registered");
-    },
-    deactivate(): void {
-        // All disposables registered through `ctx.registerDisposable`
-        // are released by the manager. Nothing extra to do.
     },
 };

@@ -1,14 +1,12 @@
-// cliLauncherPlugin — adapter for the CLI Launcher feature (legacy
-// `register` shape). Heavy lifting lives in `./index.ts`; the plugin
-// shim is a one-line `legacyPlugin(...)` call.
+// CLI Launcher plugin declaration. Runtime wiring lives in `./index.ts`.
 
-import { legacyPlugin } from "../plugin";
+import type { ExtensionPlugin } from "../plugin";
 import { register as registerCLILauncherModule } from "./index";
 
 export const CLI_LAUNCHER_PLUGIN_ID = "cliLauncher";
 
-export const cliLauncherPlugin = legacyPlugin({
+export const cliLauncherPlugin: ExtensionPlugin = {
     id: CLI_LAUNCHER_PLUGIN_ID,
     name: "CLI Launcher",
-    register: registerCLILauncherModule,
-});
+    activate: registerCLILauncherModule,
+};

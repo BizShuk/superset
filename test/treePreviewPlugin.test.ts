@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { treePreviewPlugin, TREE_PREVIEW_PLUGIN_ID } from "../src/treePreview/plugin";
 import { PluginManager } from "../src/plugin";
+import { TreeViewRegistry } from "../src/plugin/treeViewRegistry";
 import type * as vscode from "vscode";
 
 function fakeExtCtx(): vscode.ExtensionContext {
@@ -25,9 +26,11 @@ describe("treePreviewPlugin", () => {
             extensionContext: fakeExtCtx(),
             workspaceFolder: "/ws",
             log: () => {},
-            showStatus: () => {},
+            showLogs: () => {},
+            createTerminal: () => ({}) as vscode.Terminal,
+            treeViewRegistry: new TreeViewRegistry(),
         });
-        await mgr.activateAll([treePreviewPlugin], fakeExtCtx());
+        await mgr.activateAll([treePreviewPlugin]);
         expect(mgr.has(TREE_PREVIEW_PLUGIN_ID)).toBe(true);
         expect(mgr.getDisposables(TREE_PREVIEW_PLUGIN_ID)).toEqual([]);
     });

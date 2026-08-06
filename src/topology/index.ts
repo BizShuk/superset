@@ -1,19 +1,18 @@
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../shared";
+import type { PluginContext } from "../plugin";
 import { TopologyStore } from "./topologyStore";
 import { NodeTopologyScanner } from "./topologyScanner";
 import { TopologyTreeProvider } from "./treeProvider";
-import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 
-export function register(ctx: FeatureContext): FeatureHandle {
+export function register(ctx: PluginContext): void {
     const store = new TopologyStore(new NodeTopologyScanner());
     store.start();
 
     const provider = new TopologyTreeProvider(store);
     provider.start();
 
-    ctx.resetHandlers.push(() => {
+    ctx.registerResetHandler(() => {
         store.reset();
         provider.refresh();
     });
@@ -27,11 +26,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const visibilitySub = registerViewVisibility(view, "superset.topology");
 
     // Cross-panel reveal-in-tree wiring.
-    const treeViewEntry = getTreeViewRegistry()?.register(
+    ctx.registerTreeView(
         "superset.topology",
-        view as unknown as vscode.TreeView<unknown>,
-        provider as unknown as vscode.TreeDataProvider<unknown>,
-        ctx.shared.log
+        view,
+        provider
     );
 
     const scanCmd = vscode.commands.registerCommand(
@@ -44,22 +42,13 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
-    ctx.subscriptions.push(
+    for (const disposable of [
         scanCmd,
         view,
         visibilitySub,
-        // TreeViewRegistry entry — see TODO/mDNS wiring notes.
-        treeViewEntry ?? { dispose: () => undefined },
         { dispose: () => provider.stop() },
-        { dispose: () => store.stop() }
-    );
-
-    return {
-        dispose() {
-            provider.stop();
-            store.stop();
-            scanCmd.dispose();
-            view.dispose();
-        },
-    };
+        { dispose: () => store.stop() },
+    ]) {
+        ctx.registerDisposable(disposable);
+    }
 }

@@ -1,18 +1,27 @@
 // PluginManager — orchestrates plugin lifecycle with error isolation.
 // Each plugin's `activate()` runs inside its own try-catch; a failure
-// is logged and tagged in workspaceState but never blocks siblings.
+// is logged and cleaned up but never blocks siblings.
 
 import type * as vscode from "vscode";
 import { createPluginContext, type BaseContext } from "./context";
-import type { ExtensionPlugin, MarkdownIt, PluginContext } from "./types";
+import type {
+    ExtensionPlugin,
+    MarkdownIt,
+    RuntimeDiagnostics,
+    RuntimeDiagnosticsProvider,
+} from "./types";
 
 export class PluginManager {
     private activePlugins = new Map<string, ExtensionPlugin>();
-    private contexts = new Map<string, PluginContext>();
     /** Disposables registered by each plugin, keyed by plugin id. */
     private disposables = new Map<string, vscode.Disposable[]>();
     /** Reset handlers registered by each plugin, keyed by plugin id. */
     private resetHandlers = new Map<string, (() => void | Promise<void>)[]>();
+    /** Live diagnostic provider registered by each plugin. */
+    private diagnosticsProviders = new Map<
+        string,
+        RuntimeDiagnosticsProvider
+    >();
 
     constructor(private readonly base: BaseContext) {}
 
@@ -21,10 +30,7 @@ export class PluginManager {
      * plugin order remains deterministic — important for plugins that
      * contribute commands with stable menu positions.
      */
-    async activateAll(
-        plugins: ExtensionPlugin[],
-        extCtx: vscode.ExtensionContext
-    ): Promise<void> {
+    async activateAll(plugins: ExtensionPlugin[]): Promise<void> {
         for (const plugin of plugins) {
             const disposables: vscode.Disposable[] = [];
             const resetHandlers: (() => void | Promise<void>)[] = [];
@@ -32,14 +38,22 @@ export class PluginManager {
             this.resetHandlers.set(plugin.id, resetHandlers);
 
             try {
-                const ctx = createPluginContext(
-                    this.base,
-                    resetHandlers,
-                    disposables
-                );
+                const ctx = createPluginContext(this.base, {
+                    registerDisposable: (disposable) => {
+                        disposables.push(disposable);
+                    },
+                    registerResetHandler: (handler) => {
+                        resetHandlers.push(handler);
+                    },
+                    registerDiagnosticsProvider: (provider) => {
+                        this.diagnosticsProviders.set(plugin.id, provider);
+                    },
+                    resetAll: () => this.resetAll(),
+                    getRuntimeDiagnostics: () =>
+                        this.getRuntimeDiagnostics(),
+                });
                 await plugin.activate(ctx);
                 this.activePlugins.set(plugin.id, plugin);
-                this.contexts.set(plugin.id, ctx);
                 this.base.log(`plugin activated: ${plugin.id}`);
             } catch (err) {
                 this.markFailed(plugin.id, err);
@@ -48,6 +62,7 @@ export class PluginManager {
                 // added to activePlugins, so waiting until deactivateAll()
                 // would otherwise skip those partial resources forever.
                 await this.deactivatePlugin(plugin, disposables);
+                this.diagnosticsProviders.delete(plugin.id);
                 this.disposables.delete(plugin.id);
                 this.resetHandlers.delete(plugin.id);
             }
@@ -57,8 +72,7 @@ export class PluginManager {
     /**
      * Build a markdown-it extension that composes every plugin's
      * `contributeMarkdownIt` in activation order. Returns `undefined`
-     * when no plugin contributes, so the caller can fall back to the
-     * legacy `createTreePreviewExtension()` shape.
+     * when no plugin contributes.
      */
     getMarkdownExtension(): { extendMarkdownIt(md: MarkdownIt): MarkdownIt } | undefined {
         const contributors: NonNullable<ExtensionPlugin["contributeMarkdownIt"]>[] = [];
@@ -99,6 +113,25 @@ export class PluginManager {
         }
     }
 
+    /** Build one live, fail-soft snapshot of the active runtime. */
+    getRuntimeDiagnostics(): RuntimeDiagnostics {
+        const metrics: Record<string, number> = {};
+        for (const [pluginId, provider] of this.diagnosticsProviders) {
+            if (!this.activePlugins.has(pluginId)) continue;
+            try {
+                Object.assign(metrics, provider());
+            } catch (err) {
+                this.base.log(
+                    `diagnostics provider from ${pluginId} threw: ${err}`
+                );
+            }
+        }
+        return {
+            activePluginIds: [...this.activePlugins.keys()],
+            metrics,
+        };
+    }
+
     /**
      * Deactivate every plugin in reverse activation order, force-
      * disposing all collected disposables. Errors are logged but not
@@ -109,11 +142,12 @@ export class PluginManager {
         for (const plugin of plugins) {
             const disposables = this.disposables.get(plugin.id) ?? [];
             await this.deactivatePlugin(plugin, disposables);
+            this.diagnosticsProviders.delete(plugin.id);
         }
         this.activePlugins.clear();
-        this.contexts.clear();
         this.disposables.clear();
         this.resetHandlers.clear();
+        this.diagnosticsProviders.clear();
     }
 
     /** Test/diagnostic accessor — has this plugin finished activation? */
@@ -132,13 +166,6 @@ export class PluginManager {
                 err instanceof Error ? err.message : String(err)
             }`
         );
-        // Mark failure persistently so subsequent activations can avoid
-        // re-running a known-broken plugin. The key is namespaced under
-        // `plugin.failed.*` to coexist with the cache-reset sweep.
-        this.base.extensionContext?.workspaceState.update(
-            `plugin.failed.${id}`,
-            true
-        );
     }
 
     private async deactivatePlugin(
@@ -153,9 +180,9 @@ export class PluginManager {
             );
         }
 
-        // A legacy feature may register the same VS Code object through two
-        // adaptation paths. Dispose each identity once per teardown pass.
-        for (const disposable of new Set(disposables)) {
+        // Dispose each identity once in reverse registration order so
+        // dependants release before the resources they depend on.
+        for (const disposable of [...new Set(disposables)].reverse()) {
             try {
                 disposable.dispose();
             } catch (err) {

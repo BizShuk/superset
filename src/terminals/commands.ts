@@ -3,7 +3,6 @@ import { TerminalRegistry } from "./terminalRegistry";
 import { stripUnseenPrefix } from "./treeSpec";
 import { GroupStore, UNGROUPED_ID, type Group, type GroupColor } from "./groupStore";
 import { buildQuickPickItems } from "./jumpToTerminal";
-import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 
 const GROUP_COLORS: GroupColor[] = [
     "red",
@@ -23,13 +22,21 @@ export interface TerminalCommandDeps {
     readonly spawnTerminal: (name: string, cwd: string) => vscode.Terminal;
     /** Resolve the workspace cwd for newly spawned terminals. */
     readonly getCwd: () => string;
+    /** Reveal one tracked terminal in the registered Tree View. */
+    readonly revealTerminal: (terminal: vscode.Terminal) => Promise<boolean>;
 }
 
 /** Per-terminal commands: focus / delete / copy name / rename / new. */
 export function registerTerminalCommands(
     deps: TerminalCommandDeps
 ): vscode.Disposable[] {
-    const { registry, treeProvider, spawnTerminal, getCwd } = deps;
+    const {
+        registry,
+        treeProvider,
+        spawnTerminal,
+        getCwd,
+        revealTerminal,
+    } = deps;
     const guarded = (
         terminal: vscode.Terminal | undefined
     ): terminal is vscode.Terminal => !!terminal && registry.has(terminal);
@@ -82,18 +89,7 @@ export function registerTerminalCommands(
             "superset.revealTerminal",
             async (terminal: vscode.Terminal | undefined): Promise<boolean> => {
                 if (!guarded(terminal)) return false;
-                const reg = getTreeViewRegistry();
-                if (!reg) return false;
-                return reg.reveal(
-                    "superset.terminals",
-                    (item) => item === terminal,
-                    // No `log` channel wired into `TerminalCommandDeps`;
-                    // pass a no-op so the registry can still log
-                    // (BFS debug, double-register warnings) without
-                    // throwing — and without changing the command
-                    // surface area for callers.
-                    () => {}
-                );
+                return revealTerminal(terminal);
             }
         ),
         vscode.commands.registerCommand("superset.newTerminal", () => {

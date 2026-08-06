@@ -17,15 +17,8 @@ import { diskUsagePlugin } from "./diskUsage/plugin";
 import { cliLauncherPlugin } from "./cliLauncher/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
 import { panelLayoutPlugin } from "./panelLayout/plugin";
-import {
-    setDiagnosticChannel,
-    setPluginManager,
-    setTerminalSpawner,
-} from "./crossModuleState";
-import {
-    setTreeViewRegistry,
-    TreeViewRegistry,
-} from "./plugin/treeViewRegistry";
+import { TreeViewRegistry } from "./plugin/treeViewRegistry";
+import { createNativeTerminal } from "./terminals/nativeTerminal";
 
 interface ActiveRuntime {
     readonly manager: PluginManager;
@@ -75,25 +68,10 @@ export async function activate(
         extensionContext: context,
         workspaceFolder,
         log,
-        // statusBar is kept alive by the features that need it (e.g.
-        // terminal highlight presenter). Plugins don't read it
-        // directly via PluginContext yet — they push commands through
-        // their own shims.
-        showStatus: () => {},
+        showLogs: () => diag.show(true),
+        createTerminal: createNativeTerminal,
+        treeViewRegistry: new TreeViewRegistry(),
     });
-
-    // Wire the diagnostic channel + manager into the global-commands
-    // shim so `superset.showLogs` and `superset.resetCaches` can
-    // reach them. Set BEFORE the manager activates any plugin so
-    // the global commands plugin's `activate()` can see them if it
-    // looks up the manager eagerly.
-    setDiagnosticChannel(diag);
-    setPluginManager(manager);
-    // The shared TreeViewRegistry backs the cross-panel
-    // `superset.revealInTree` command. Set BEFORE any plugin
-    // activates so the panel's `registerTreeView()` calls see the
-    // global instance.
-    setTreeViewRegistry(new TreeViewRegistry());
 
     // Plugin activation order is significant. `treePreview` and
     // `todoPreview` contribute markdown-it hooks; the manager
@@ -125,7 +103,7 @@ export async function activate(
     // Store the in-flight activation as part of the runtime. If shutdown
     // races activation, deactivate() waits for the batch before walking the
     // completed plugin set in reverse order.
-    const activation = manager.activateAll(plugins, context);
+    const activation = manager.activateAll(plugins);
     const runtime: ActiveRuntime = { manager, diag, log, activation };
     activeRuntime = runtime;
 
@@ -168,12 +146,6 @@ export function deactivate(): Promise<void> {
             await runtime.manager.deactivateAll();
             runtime.log("deactivate complete");
         } finally {
-            // Drop module-level roots after feature teardown so no stale
-            // manager/view/provider/spawner can survive a window reload.
-            setTerminalSpawner(undefined);
-            setTreeViewRegistry(undefined);
-            setPluginManager(undefined);
-            setDiagnosticChannel(undefined);
             runtime.diag.dispose();
         }
     })().finally(() => {

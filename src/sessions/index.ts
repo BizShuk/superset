@@ -9,8 +9,7 @@
 // fixtures, while the explicit Delete command removes a selected backing file.
 
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../shared";
-import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
+import type { PluginContext } from "../plugin";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import { renderSessionMarkdown } from "./markdown";
 import { ensureMarkdownDocument } from "./openSummary";
@@ -30,7 +29,7 @@ import {
 
 const VIEW_ID = "superset.sessions";
 
-export function register(ctx: FeatureContext): FeatureHandle {
+export function register(ctx: PluginContext): void {
     const dataDirOverride = () =>
         vscode.workspace
             .getConfiguration("superset")
@@ -54,11 +53,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
         (visible) => provider.setVisible(visible)
     );
 
-    const treeViewEntry = getTreeViewRegistry()?.register(
+    ctx.registerTreeView(
         VIEW_ID,
-        view as unknown as vscode.TreeView<unknown>,
-        provider as unknown as vscode.TreeDataProvider<unknown>,
-        ctx.shared.log
+        view,
+        provider
     );
 
     // ── Layer 2: virtual markdown document (preview) ─────────────────
@@ -131,7 +129,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
                         markdownDocument.uri
                     );
                 } catch (err) {
-                    ctx.shared.log(`sessions: preview open failed: ${err}`);
+                    ctx.log(`sessions: preview open failed: ${err}`);
                     void vscode.window.showErrorMessage(
                         `無法開啟 session summary: ${err}`
                     );
@@ -187,7 +185,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
                     );
                     return;
                 }
-                ctx.shared.log(`sessions: deleted ${record.filePath}`);
+                ctx.log(`sessions: deleted ${record.filePath}`);
                 refreshAll();
             }
         ),
@@ -198,7 +196,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
                 Date.now(),
                 dataDirOverride()
             );
-            ctx.shared.log(
+            ctx.log(
                 `sessions: seeded ${written.length} sample session(s) into ${workspaceSessionsDir(
                     ctx.workspaceFolder,
                     dataDirOverride()
@@ -207,7 +205,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             // The samples are a fixture matrix — log what each one proves so
             // "does the panel handle X?" is answerable from the output channel.
             for (const line of sampleCoverage()) {
-                ctx.shared.log(`sessions:   ${line}`);
+                ctx.log(`sessions:   ${line}`);
             }
             refreshAll();
             void vscode.window.showInformationMessage(
@@ -227,27 +225,22 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }),
     ];
 
-    ctx.resetHandlers.push(() => {
+    ctx.registerResetHandler(() => {
         sessionStore.clearCache();
         refreshAll();
     });
 
-    const handle: FeatureHandle = {
+    const handle: vscode.Disposable = {
         dispose() {
             for (const c of commands) c.dispose();
             docRegistration.dispose();
             docChange.dispose();
-            treeViewEntry?.dispose();
             visibilitySub.dispose();
             view.dispose();
             provider.dispose();
         },
     };
-    // Unlike the older feature modules, Sessions owns its watcher and
-    // commands only through this aggregate handle. Bridge it into the
-    // manager-owned pool so root deactivation actually reaches them.
-    ctx.subscriptions.push(handle);
-    return handle;
+    ctx.registerDisposable(handle);
 }
 
 function asSession(element?: SessionsElement) {

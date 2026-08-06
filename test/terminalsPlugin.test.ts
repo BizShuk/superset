@@ -16,7 +16,7 @@ describe("terminalsPlugin", () => {
             id: TERMINALS_PLUGIN_ID,
             name: "Terminals",
             markdownHook: "absent",
-            deactivate: "present",
+            deactivate: "absent",
         });
     });
 });

@@ -1,4 +1,4 @@
-// TreePreview plugin adapter — exposes a fence-rule hook that highlights
+// TreePreview plugin declaration — exposes a fence-rule hook that highlights
 // `tree` code blocks in the Markdown preview. Registered through the
 // `ExtensionPlugin` contract so it can flow through `PluginManager`
 // alongside future feature plugins. Behaviour is unchanged: the manager

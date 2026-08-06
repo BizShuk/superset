@@ -30,17 +30,15 @@ export interface PluginContractExpectations {
      */
     readonly markdownHook: "absent" | "function";
     /**
-     * Whether the plugin defines a `deactivate` lifecycle method. The
-     * five panel shims do (a no-op body, but present so the manager
-     * has a teardown hint); the markdown-preview-only plugins
-     * (`treePreview`, `todoPreview`) omit it entirely since their only
-     * contribution is a markdown-it hook with no long-lived state.
+     * Whether the plugin defines a custom `deactivate` lifecycle method.
+     * Plugins whose resources all live in the manager-owned disposable
+     * pool omit it.
      */
     readonly deactivate: "present" | "absent";
 }
 
 /**
- * Assert the stable interface invariants every `ExtensionPlugin` shim
+ * Assert the stable interface invariants every `ExtensionPlugin` declaration
  * must satisfy. Shared across the six per-plugin contract tests.
  */
 export function assertPluginContract(

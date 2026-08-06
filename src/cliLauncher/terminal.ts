@@ -9,7 +9,7 @@
 // 唯一的 `createTerminal` call site,這裡只在外部觀察它的生命週期。
 
 import * as vscode from "vscode";
-import { createNativeTerminal } from "../terminals/nativeTerminal";
+import type { PluginContext } from "../plugin";
 import { buildShellCommand, terminalNameFor, type AgentId } from "./command";
 import type { CLIEntry } from "./entries";
 import { log } from "./log";
@@ -17,7 +17,12 @@ import { CLITerminalTracker } from "./terminalTracker";
 
 const SHELL_INTEGRATION_WAIT_MS = 3_000;
 
-let activeTracker: CLITerminalTracker | undefined;
+interface ActiveTerminalRuntime {
+    readonly tracker: CLITerminalTracker;
+    readonly createTerminal: PluginContext["createTerminal"];
+}
+
+let activeRuntime: ActiveTerminalRuntime | undefined;
 
 /**
  * 註冊 terminal 生命週期監聽:關閉時移出追蹤、shell execution start/end 驅動
@@ -29,27 +34,29 @@ let activeTracker: CLITerminalTracker | undefined;
  * 追蹤表也在此清空,避免上一輪 runtime 的 terminal 被誤判為可重用。
  */
 export function initTerminalTracking(
-    subscriptions: vscode.Disposable[]
+    registerDisposable: (disposable: vscode.Disposable) => void,
+    createTerminal: PluginContext["createTerminal"]
 ): CLITerminalTracker {
-    activeTracker?.dispose();
+    activeRuntime?.tracker.dispose();
     const tracker = new CLITerminalTracker();
-    activeTracker = tracker;
-    subscriptions.push({
+    const runtime = { tracker, createTerminal };
+    activeRuntime = runtime;
+    registerDisposable({
         dispose: () => {
             tracker.dispose();
-            if (activeTracker === tracker) {
-                activeTracker = undefined;
+            if (activeRuntime === runtime) {
+                activeRuntime = undefined;
             }
         },
     });
     return tracker;
 }
 
-function getActiveTracker(): CLITerminalTracker {
-    if (!activeTracker) {
+function getActiveRuntime(): ActiveTerminalRuntime {
+    if (!activeRuntime) {
         throw new Error("CLI terminal tracking is not initialized");
     }
-    return activeTracker;
+    return activeRuntime;
 }
 
 interface TerminalResolution {
@@ -61,7 +68,7 @@ function findOrCreateTerminal(
     entry: CLIEntry,
     agent?: AgentId
 ): TerminalResolution {
-    const tracker = getActiveTracker();
+    const { tracker, createTerminal } = getActiveRuntime();
     const name = terminalNameFor(entry.label, agent);
     const reusable = tracker.findReusable(entry.path, agent);
     if (reusable) {
@@ -81,7 +88,7 @@ function findOrCreateTerminal(
     // `location: {viewColumn}` 讓 terminal 開在 editor area 成為一個分頁,而不是
     // 底部 panel。CLI (claude / codex / grok) 是全螢幕 TUI,吃得下編輯區的高度;
     // 多選啟動時每個項目也各自是一個分頁,比擠在 panel 裡好切換。
-    const terminal = createNativeTerminal(name, entry.path, {
+    const terminal = createTerminal(name, entry.path, {
         location: { viewColumn: vscode.ViewColumn.Active },
     });
     tracker.track(entry.path, agent, terminal);
@@ -188,7 +195,7 @@ export async function launch(
     command: string,
     options: LaunchOptions = {}
 ): Promise<vscode.Terminal> {
-    const tracker = getActiveTracker();
+    const { tracker } = getActiveRuntime();
     const { terminal, created } = findOrCreateTerminal(entry, options.agent);
     const line = buildShellCommand(entry.path, command);
     if (options.reveal ?? true) {

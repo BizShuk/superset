@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../shared";
+import type { PluginContext } from "../plugin";
 import { TerminalRegistry } from "./terminalRegistry";
 import { OutputWatcher } from "./outputWatcher";
 import { TerminalTreeProvider } from "./treeProvider";
@@ -8,7 +8,6 @@ import { shouldTrackTerminal } from "./terminalFilter";
 import { GroupStore } from "./groupStore";
 import { WatchedTerminalTracker } from "./watchedTerminalTracker";
 import { createTerminalDragAndDropController } from "./dragAndDrop";
-import { createNativeTerminal } from "./nativeTerminal";
 import {
     createShellExecutionSource,
     createVscodeLifecycleSubscribers,
@@ -26,18 +25,24 @@ import {
     installEditorFocusBridge,
 } from "./lifecycle";
 import { registerMermaidPreviewCommand } from "../mermaid/mermaidPreviewCommand";
-import { bindTerminalSpawner } from "../crossModuleState/terminalSpawner";
-import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import {
     captureSnapshot,
     renderActivityMarkdown,
 } from "../terminalActivitySummary";
+import { DIAGNOSTIC_METRIC } from "../diagnostics/metrics";
 
-export function register(ctx: FeatureContext): FeatureHandle {
-    const log = ctx.shared.log;
+export function register(
+    ctx: PluginContext,
+    statusBar: vscode.StatusBarItem
+): void {
+    const log = ctx.log;
     const registry = new TerminalRegistry();
     const groupStore = new GroupStore();
+    ctx.registerDiagnosticsProvider(() => ({
+        [DIAGNOSTIC_METRIC.terminalCount]: registry.getAll().length,
+        [DIAGNOSTIC_METRIC.unseenTerminalCount]: registry.getUnseen().length,
+    }));
 
     // "Is the user watching this terminal?" state machine.
     const tracker = new WatchedTerminalTracker<vscode.Terminal>({
@@ -87,14 +92,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // shortcut can walk this panel's tree. The returned disposable
     // lives in the panel's `disposables` chain so deactivation evicts
     // the registry entry (see `disposables` near the end of register()).
-    // We pass `treeProvider as unknown as vscode.TreeDataProvider<unknown>`
-    // because the registry's generic type is `<unknown>` to stay
-    // panel-agnostic; the runtime contract is identical.
-    const treeViewEntry = getTreeViewRegistry()?.register(
+    ctx.registerTreeView(
         "superset.terminals",
-        treeView as unknown as vscode.TreeView<unknown>,
-        treeProvider as unknown as vscode.TreeDataProvider<unknown>,
-        ctx.shared.log
+        treeView,
+        treeProvider
     );
 
     // Report active view for panel-layout persistence (plan §3). Only
@@ -107,7 +108,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
     );
 
     // Wire HighlightPresenter against the shared status bar.
-    const statusBar = ctx.shared.statusBar;
     const presenter = new HighlightPresenter({
         registry,
         setTerminalName: (terminal, name) => {
@@ -188,12 +188,6 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const getCwd = () =>
         vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
 
-    // Publish the spawner so other features (install commands, mDNS
-    // connect, git hooks) open terminals the same way this panel does,
-    // instead of each calling `vscode.window.createTerminal` with its
-    // own options. The terminal itself is VS Code's own.
-    const terminalSpawnerLease = bindTerminalSpawner(createNativeTerminal);
-
     // ── Mermaid preview command ───────────────────────────────
     //
     // Detection (buffer + terminal-link provider) was removed; the
@@ -254,8 +248,13 @@ export function register(ctx: FeatureContext): FeatureHandle {
         ...registerTerminalCommands({
             registry,
             treeProvider,
-            spawnTerminal: createNativeTerminal,
+            spawnTerminal: ctx.createTerminal,
             getCwd,
+            revealTerminal: (terminal) =>
+                ctx.revealInTree(
+                    "superset.terminals",
+                    (item) => item === terminal
+                ),
         }),
         ...registerGroupCommands(groupStore),
         activitySummaryCmd,
@@ -263,18 +262,15 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // ── Register disposables ─────────────────────────────
     //
-    // Single source of truth: collect every disposable once, push to the
-    // composition root's subscriptions (VSCode teardown) and reuse the same
-    // list for the FeatureHandle.dispose() contract.
+    // Single source of truth: register every resource in the plugin-owned
+    // disposable pool.
 
     const disposables: vscode.Disposable[] = [
         treeView,
         { dispose: () => treeProvider.stop() },
         { dispose: () => presenter.stop() },
-        ctx.shared.statusBar,
         { dispose: () => activity.stop() },
         { dispose: () => watcher?.stop() },
-        terminalSpawnerLease,
         openSub,
         closeSub,
         activeChangeSub,
@@ -282,19 +278,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
         visibilitySub,
         offMermaidPreviewCmd,
         ...commandSubs,
-        // `treeViewEntry` is `undefined` when the registry singleton
-        // hasn't been initialised (test environment, late activation
-        // during a window reload). `?.()` makes the no-op explicit.
-        ...(treeViewEntry ? [treeViewEntry] : []),
     ];
 
-    ctx.subscriptions.push(...disposables);
-
-    return {
-        dispose() {
-            for (const d of disposables) {
-                d.dispose();
-            }
-        },
-    };
+    for (const disposable of disposables) {
+        ctx.registerDisposable(disposable);
+    }
 }

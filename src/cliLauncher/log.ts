@@ -6,7 +6,7 @@
 //
 // Superset 只有一個由 composition root 持有的 "Superset" Output Channel
 // (`Superset: Show Diagnostic Logs`),feature 不自建第二個 channel;這裡只是把
-// `ctx.shared.log` 綁成 module-level sink,讓 tree／terminal 這些深層模組不必
+// Plugin activation 將 `ctx.log` 綁成 domain-local sink,讓 tree／terminal 等深層模組不必
 // 一路把 logger 當參數傳下去。未綁定時 (單元測試) 是 no-op。
 
 let sink: ((message: string) => void) | undefined;

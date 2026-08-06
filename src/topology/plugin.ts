@@ -1,14 +1,12 @@
-// topologyPlugin — adapter for the Topology feature (legacy `register`
-// shape). Heavy lifting lives in `./index.ts`; the plugin shim is a
-// one-line `legacyPlugin(...)` call.
+// Topology plugin declaration. Runtime wiring lives in `./index.ts`.
 
-import { legacyPlugin } from "../plugin";
+import type { ExtensionPlugin } from "../plugin";
 import { register as registerTopologyModule } from "./index";
 
 export const TOPOLOGY_PLUGIN_ID = "topology";
 
-export const topologyPlugin = legacyPlugin({
+export const topologyPlugin: ExtensionPlugin = {
     id: TOPOLOGY_PLUGIN_ID,
     name: "Topology",
-    register: registerTopologyModule,
-});
+    activate: registerTopologyModule,
+};

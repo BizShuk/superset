@@ -180,7 +180,15 @@ beforeEach(() => {
     terminalCreationState.withShellIntegration = true;
     createTerminal.mockClear();
     // 換成新的 runtime tracker 並重新掛 lifecycle 監聽。
-    tracker = initTerminalTracking([]) as unknown as TrackerInspection;
+    tracker = initTerminalTracking(
+        () => {},
+        (name, cwd, options) =>
+            createTerminal({
+                name,
+                cwd,
+                ...(options?.location ? { location: options.location } : {}),
+            }) as never
+    ) as unknown as TrackerInspection;
 });
 
 describe("launch", () => {

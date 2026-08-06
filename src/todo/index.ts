@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
-import type { FeatureContext, FeatureHandle } from "../shared";
+import type { PluginContext } from "../plugin";
 import { WorkspaceTodoStore } from "./workspaceTodoStore";
 import { WorkspaceTodoTreeProvider } from "./workspaceTodoTreeProvider";
 import { invokeTodoStoreMutation } from "./storeDispatch";
@@ -13,7 +13,6 @@ import {
 } from "./planActions";
 import { formatPlanCopyText } from "./plansSource";
 import type { TodoItem, WorkspaceTodoItem } from "./types";
-import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import {
     createTodoCommands,
@@ -24,6 +23,8 @@ import {
     type TodoCommandPlanActions,
     type TodoEngineItem,
 } from "../todoEngine";
+import { DIAGNOSTIC_METRIC } from "../diagnostics/metrics";
+import { countTodoTasks } from "./diagnostics";
 
 const TODO_VIEW_TITLE = "TODO";
 // TODO 面板的空狀態文案 — scan 邊界是 maxDepth + includeRoot=true,
@@ -46,12 +47,12 @@ const SUPER_SET_EMPTY_COPY =
  * - row context menu 與 inline action 都綁在 `todo*` context values
  *   上,由同一組 `superset.todo*` 命令服務。
  */
-export function register(ctx: FeatureContext): FeatureHandle {
+export function register(ctx: PluginContext): void {
     const store = new WorkspaceTodoStore();
     const provider = new WorkspaceTodoTreeProvider(
         store,
         ctx.workspaceFolder,
-        ctx.context.extensionUri,
+        ctx.extensionUri,
         SUPER_SET_EMPTY_COPY,
     );
     provider.start();
@@ -74,11 +75,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
 
     // Wire into the cross-panel TreeViewRegistry so the
     // `superset.revealInTree` command can walk this panel's tree.
-    const treeViewEntry = getTreeViewRegistry()?.register(
+    ctx.registerTreeView(
         "superset.todo",
-        view as unknown as vscode.TreeView<unknown>,
-        provider as unknown as vscode.TreeDataProvider<unknown>,
-        ctx.shared.log
+        view,
+        provider
     );
 
     // Context key + TreeView title reflect current filter state.
@@ -138,9 +138,16 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     });
 
-    ctx.resetHandlers.push(async () => {
+    ctx.registerResetHandler(async () => {
         await store.reset();
         refreshTodoFilterBadge();
+    });
+    ctx.registerDiagnosticsProvider(() => {
+        let todoItemCount = 0;
+        for (const todoStore of store.getWorkspaceStores().values()) {
+            todoItemCount += countTodoTasks(todoStore.getItems());
+        }
+        return { [DIAGNOSTIC_METRIC.todoItemCount]: todoItemCount };
     });
 
     // Watch every `README.todo` under the workspace root recursively so
@@ -388,7 +395,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     };
     const todoFactorySet = createTodoCommands({
         prefix: "todo",
-        log: ctx.shared.log,
+        log: ctx.log,
         showInfo: (m) => vscode.window.showInformationMessage(m),
         showError: (m) => vscode.window.showErrorMessage(m),
         refreshTree: () => refreshTodoFilterBadge(),
@@ -452,7 +459,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // consistent on activate.
     todoFactorySet.syncPriorityContext();
 
-    ctx.subscriptions.push(
+    for (const disposable of [
         view,
         openProjectCmd,
         visibilitySub,
@@ -469,22 +476,8 @@ export function register(ctx: FeatureContext): FeatureHandle {
         // the factory's disposables are added to the panel's pool so
         // deactivate tears them down.
         ...todoFactorySet.disposables,
-        // TreeViewRegistry entry — disposed alongside the view so the
-        // `superset.revealInTree` command can't walk a stale panel.
-        treeViewEntry ?? { dispose: () => undefined },
-        { dispose: () => provider.stop() }
-    );
-
-    return {
-        dispose() {
-            provider.stop();
-            // Factory disposes its own registered commands via
-            // `todoFactorySet.disposables` above.
-            openProjectCmd.dispose();
-            view.dispose();
-            workspaceTodoWatcher.dispose();
-            plansWatcher.dispose();
-            configSub.dispose();
-        },
-    };
+        { dispose: () => provider.stop() },
+    ]) {
+        ctx.registerDisposable(disposable);
+    }
 }

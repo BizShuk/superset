@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FeatureContext } from "../src/shared";
+import type { PluginContext } from "../src/plugin";
 
 const mocks = vi.hoisted(() => ({
     commands: new Map<string, (...args: unknown[]) => unknown>(),
@@ -65,18 +65,13 @@ vi.mock("vscode", () => ({
 
 const { register } = await import("../src/git/index");
 
-function featureContext(): FeatureContext {
+function pluginContext(): PluginContext {
     return {
-        context: {} as FeatureContext["context"],
-        subscriptions: [],
+        extensionUri: { fsPath: "/extension" },
         workspaceFolder: "/repo",
-        shared: {
-            statusBar: {} as FeatureContext["shared"]["statusBar"],
-            diag: {} as FeatureContext["shared"]["diag"],
-            log: vi.fn(),
-        },
-        resetHandlers: [],
-    };
+        log: vi.fn(),
+        registerDisposable: vi.fn(),
+    } as unknown as PluginContext;
 }
 
 describe("Copy GitHub URL command", () => {
@@ -89,7 +84,7 @@ describe("Copy GitHub URL command", () => {
             name: "origin",
             fetchUrl: "git@github.com:BizShuk/superset.git",
         });
-        register(featureContext());
+        register(pluginContext());
     });
 
     it("copies a fixed-master GitHub URL for the Explorer file", async () => {

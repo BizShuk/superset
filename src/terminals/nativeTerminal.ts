@@ -1,9 +1,7 @@
 // The one place Superset opens a terminal.
 //
-// Every entry point — the panel's "new terminal" command, the cross-module
-// `terminalSpawner` lease consumed by install commands / mDNS connect / git
-// hooks — goes through here, so terminal creation options stay identical no
-// matter which feature asks for one.
+// Every entry point receives this function through `PluginContext`, so terminal
+// creation options stay identical no matter which feature asks for one.
 //
 // This is VS Code's own terminal: the shell, its process tree and its
 // scrollback are owned by the workbench, and activity detection observes it

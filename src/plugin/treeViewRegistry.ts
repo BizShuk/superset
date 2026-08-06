@@ -37,10 +37,10 @@ export class TreeViewRegistry {
      * a warning is logged (this signals a plugin activation bug —
      * we don't silently overwrite the first registration).
      */
-    register(
+    register<T>(
         viewId: string,
-        treeView: vscode.TreeView<unknown>,
-        treeDataProvider: vscode.TreeDataProvider<unknown>,
+        treeView: vscode.TreeView<T>,
+        treeDataProvider: vscode.TreeDataProvider<T>,
         log: (msg: string) => void
     ): vscode.Disposable {
         if (this.entries.has(viewId)) {
@@ -48,7 +48,10 @@ export class TreeViewRegistry {
                 `TreeViewRegistry: re-registering ${viewId} (this is usually a bug)`
             );
         }
-        this.entries.set(viewId, { treeView, treeDataProvider });
+        this.entries.set(
+            viewId,
+            { treeView, treeDataProvider } as TreeViewEntry<unknown>
+        );
         return {
             dispose: () => {
                 if (this.entries.get(viewId)?.treeView === treeView) {
@@ -184,17 +187,4 @@ export class TreeViewRegistry {
     listViewIds(): string[] {
         return [...this.entries.keys()];
     }
-}
-
-/** Singleton, owned by the composition root. Set via
- *  `setTreeViewRegistry(registry)` in `extension.ts` after
- *  construction. */
-let registryRef: TreeViewRegistry | undefined;
-export function setTreeViewRegistry(
-    registry: TreeViewRegistry | undefined
-): void {
-    registryRef = registry;
-}
-export function getTreeViewRegistry(): TreeViewRegistry | undefined {
-    return registryRef;
 }

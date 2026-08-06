@@ -23,7 +23,7 @@ describe("gitPlugin", () => {
             id: GIT_PLUGIN_ID,
             name: "Git",
             markdownHook: "absent",
-            deactivate: "present",
+            deactivate: "absent",
         });
     });
 });

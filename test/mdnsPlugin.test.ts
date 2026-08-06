@@ -14,7 +14,7 @@ describe("mdnsPlugin", () => {
             id: MDNS_PLUGIN_ID,
             name: "mDNS",
             markdownHook: "absent",
-            deactivate: "present",
+            deactivate: "absent",
         });
     });
 });

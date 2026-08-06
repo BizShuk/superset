@@ -1,27 +1,29 @@
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../shared";
+import type { PluginContext } from "../plugin";
 import type { MdnsService } from "./types";
 import { MdnsRegistry } from "./mdnsRegistry";
 import { MulticastDnsTransport } from "./mdnsTransport";
 import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
 import { buildMdnsDetailFields } from "./mdnsTreeSpec";
 import { resolveConnectCommand } from "../mdnsConnect";
-import { getTerminalSpawner } from "../crossModuleState";
-import { getTreeViewRegistry } from "../plugin/treeViewRegistry";
 import { registerViewVisibility } from "../plugin/viewVisibility";
 import { joinShellCommand } from "../shellCommand";
+import { DIAGNOSTIC_METRIC } from "../diagnostics/metrics";
 
-export function register(ctx: FeatureContext): FeatureHandle {
+export function register(ctx: PluginContext): void {
     const registry = new MdnsRegistry(new MulticastDnsTransport());
     registry.start();
 
     const provider = new MdnsTreeProvider(registry);
     provider.start();
 
-    ctx.resetHandlers.push(() => {
+    ctx.registerResetHandler(() => {
         registry.reset();
         provider.refresh();
     });
+    ctx.registerDiagnosticsProvider(() => ({
+        [DIAGNOSTIC_METRIC.mDNSServiceCount]: registry.getAll().length,
+    }));
 
     const view = vscode.window.createTreeView("superset.mdns", {
         treeDataProvider: provider,
@@ -34,11 +36,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
     // Cross-panel reveal-in-tree wiring: mDNS tree is reachable
     // from `superset.revealInTree({ viewId: "superset.mdns", ... })`.
     // Dispose alongside the view in the chain below.
-    const treeViewEntry = getTreeViewRegistry()?.register(
+    ctx.registerTreeView(
         "superset.mdns",
-        view as unknown as vscode.TreeView<unknown>,
-        provider as unknown as vscode.TreeDataProvider<unknown>,
-        ctx.shared.log
+        view,
+        provider
     );
 
     const refreshCmd = vscode.commands.registerCommand(
@@ -131,17 +132,10 @@ export function register(ctx: FeatureContext): FeatureHandle {
                 }
                 return;
             }
-            const spawn = getTerminalSpawner();
-            if (!spawn) {
-                vscode.window.showErrorMessage(
-                    "Superset: Terminals 模組尚未啟用,請稍候再試"
-                );
-                return;
-            }
             const cwd =
                 vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
                 process.cwd();
-            const terminal = spawn(`Connect: ${svc.name}`, cwd);
+            const terminal = ctx.createTerminal(`Connect: ${svc.name}`, cwd);
             terminal.show(true);
             // Defer one tick so the shell prompt has time to mount
             // before we type the command — empirically 200ms is
@@ -152,7 +146,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
         }
     );
 
-    ctx.subscriptions.push(
+    for (const disposable of [
         refreshCmd,
         copyCmd,
         copyDetailCmd,
@@ -160,23 +154,9 @@ export function register(ctx: FeatureContext): FeatureHandle {
         connectCmd,
         view,
         visibilitySub,
-        // TreeViewRegistry entry — disposed alongside the view so
-        // `superset.revealInTree` can't walk a stale panel.
-        treeViewEntry ?? { dispose: () => undefined },
         { dispose: () => provider.stop() },
-        { dispose: () => registry.stop() }
-    );
-
-    return {
-        dispose() {
-            provider.stop();
-            registry.stop();
-            refreshCmd.dispose();
-            copyCmd.dispose();
-            copyDetailCmd.dispose();
-            showDetailCmd.dispose();
-            connectCmd.dispose();
-            view.dispose();
-        },
-    };
+        { dispose: () => registry.stop() },
+    ]) {
+        ctx.registerDisposable(disposable);
+    }
 }

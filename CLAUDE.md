@@ -34,11 +34,12 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 ## 架構速覽 (Architecture)
 
-`src/extension.ts` 是 declarative composition root。它建立並持有 active `PluginManager`、注入共用 context，並依序啟用 plugin；root `deactivate()` 反向停用 plugin 並清除跨模組 singleton。`PluginManager` 負責生命週期、錯誤隔離、disposable、reset handler 與 Markdown extension 組合。`panelLayoutPlugin` 必須最後啟用，確保恢復 view focus 時其他 TreeView 已完成註冊。
+`src/extension.ts` 是 declarative composition root。它建立 active `PluginManager`、Tree View registry、diagnostic channel 與 native terminal capability，透過單一 `PluginContext` 注入所有 plugin；root `deactivate()` 反向停用 plugin 並釋放 root-owned resource。`PluginManager` 負責生命週期、錯誤隔離、disposable、reset handler、runtime diagnostics 與 Markdown extension 組合。`panelLayoutPlugin` 必須最後啟用，確保恢復 view focus 時其他 TreeView 已完成註冊。
 
 | 模組 | 職責 | 主要入口 |
 | --- | --- | --- |
 | `src/plugin/` | Plugin lifecycle、context、TreeView registry、visibility boundary | `PluginManager` |
+| `src/diagnostics/` | Runtime metric keys 與 diagnostics Markdown renderer | `renderDiagnosticsMarkdown` |
 | `src/terminals/` | 終端機面板、高亮、群組、activity 偵測、原生 terminal 開啟 | `terminalsPlugin` |
 | `src/mermaid/` | Mermaid preview command（detection 已移除） | `registerMermaidPreviewCommand` |
 | `src/mdns/` | mDNS 服務發現與細節 | `mdnsPlugin` |
@@ -58,11 +59,13 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 ## 維護契約 (Invariants)
 
-- Feature 直接放在 `src/<feature>/`；domain types 留在 feature 內，共用 framework contracts 放在 `src/shared.ts` 與 `src/plugin/`。
+- Feature 直接放在 `src/<feature>/`；domain types 留在 feature 內，共用 framework contracts 放在 `src/plugin/`。
 - `treePreview`、`todoPreview` 是 Markdown contributor，不是 TreeView `register()` feature；hook 順序由 `src/extension.ts` 決定。
-- 根 `deactivate()` 必須 await `PluginManager.deactivateAll()`，再 dispose diagnostic channel 並清掉 manager、TreeView registry、terminal spawner 等 module-level reference。`PluginContext.registerDisposable()` 寫入的是 manager-owned pool，不是 VS Code 的 `ExtensionContext.subscriptions`，不得假設 host 會自動釋放；啟用失敗也必須立即清掉該 plugin 已註冊的部分資源。長週期 maintenance timer 仍須 `unref()`，但 `unref()` 只是防線，不能取代 teardown。
+- 所有 feature 一律直接接受 `PluginContext`；不得重建 `FeatureContext`、legacy adapter 或 module-level cross-feature getter/setter。Disposable、reset handler、Tree View registration 與 diagnostics provider 都由 `PluginManager` 依 plugin owner 管理。
+- 根 `deactivate()` 必須 await `PluginManager.deactivateAll()`，再 dispose diagnostic channel。`PluginContext.registerDisposable()` 寫入的是 manager-owned pool，不是 VS Code 的 `ExtensionContext.subscriptions`，不得假設 host 會自動釋放；啟用失敗也必須立即清掉該 plugin 已註冊的部分資源與 diagnostics provider。長週期 maintenance timer 仍須 `unref()`，但 `unref()` 只是防線，不能取代 teardown。
+- `Superset: Reset Caches` 清除 workspace cache 後必須 await `PluginContext.resetAll()`；feature reset 只能透過 `registerResetHandler()` 註冊。`Superset: Show Diagnostics` 只讀 live provider，不得使用 placeholder count；單一 provider 失敗必須 fail-soft 並保留其他 plugin snapshot。
 - TODO link parsing 與 copy formatting 的唯一 source of truth 是 `src/todoEngine/linkUtils.ts`，TODO 面板與 Markdown 預覽不另建副本。
-- Terminal 一律由 VS Code 擁有。Superset 不持有 pseudoterminal、不 wrap、不替換、不重建既有 terminal；唯一開 terminal 的地方是 `src/terminals/nativeTerminal.ts#createNativeTerminal`（`vscode.window.createTerminal`），面板命令、`crossModuleState/terminalSpawner` lease 與 CLI Launcher 都走它，不得在其他 call site 直接呼叫 `createTerminal`。`createNativeTerminal` 的選用 `options.location` 只服務 CLI Launcher 的 editor-area 分頁需求；不傳時產生的 creation options 必須與原本的 panel 預設完全一致。決策記錄見 [`docs/specs/2026-08-04-remove-pty-use-native-terminals.md`](docs/specs/2026-08-04-remove-pty-use-native-terminals.md)。
+- Terminal 一律由 VS Code 擁有。Superset 不持有 pseudoterminal、不 wrap、不替換、不重建既有 terminal；唯一開 terminal 的地方是 `src/terminals/nativeTerminal.ts#createNativeTerminal`（`vscode.window.createTerminal`），composition root 將它注入 `PluginContext.createTerminal`，面板命令、install/Git/mDNS actions 與 CLI Launcher 都走此 capability，不得在其他 call site 直接呼叫 `vscode.window.createTerminal`。`createNativeTerminal` 的選用 `options.location` 只服務 CLI Launcher 的 editor-area 分頁需求；不傳時產生的 creation options 必須與原本的 panel 預設完全一致。決策記錄見 [`docs/specs/2026-08-04-remove-pty-use-native-terminals.md`](docs/specs/2026-08-04-remove-pty-use-native-terminals.md)。
 - `TerminalRegistry` 是終端機狀態來源；`markUnseen` 必須保持 idempotent。`onDidOpenTerminal` 只做 `registry.add`，唯一排除條件是 `terminalFilter.ts#shouldTrackTerminal`（agent-owned 名稱），不得再依 creation options 分流。
 - Tree View visibility 一律由 `src/plugin/viewVisibility.ts#registerViewVisibility` 接線並解構 event 的 `visible` boolean。UI-only polling / watcher 必須隨 View visibility 啟停；terminal activity source `A` / `B` 與 registry subscriptions 不屬於 UI-only work，不得因面板隱藏而停止。
 - Activity 偵測的預設路徑是`零位元組`的來源 `A`（`processActivitySource`，進程樹輪詢）與 `B`（`shellIntegrationActivitySource`，execution start/end edge）。來源 `B` 不得呼叫 `execution.read()`；讀取位元組的 `OutputWatcher` 只在 `superset.terminals.legacyOutputWatcher` 開啟時建立。抑制政策（不在 registry / 正在 focus / 最近 focus / 已是 unseen）只能存在於 `ActivityCoordinator` 一處，不得再複製回各來源。
@@ -102,7 +105,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - Editor Layout 的 `activeIndex` 只能來自 `activeTabGroup.viewColumn - 1`。`tabGroups.all` 是 group `建立順序`，descriptor 的 leaf 序是 `GRID_APPEARANCE` 深度優先順序，兩者在 split / 搬移後會分歧；用 `all.indexOf` 會放大錯誤的 group。
 - Editor Layout 的 signature guard 只比對`本次寫入 vs 上次寫入`，不得改成比對即時佈局 —— VS Code 會 clamp 最小寬高，requested 與 actual 本來就不同，比對即時佈局會讓 follow-active-group 無限重套。明確命令一律 `force`，事件驅動的重套才受 guard 約束。
 - `orientation` 只在 root 生效，巢狀層自動垂直於父層；`size` 是同層相對值。方向命名與 VS Code 選單相反，見 [`docs/terminology.md`](docs/terminology.md)。
-- `PluginManager` activation 失敗時必須立即 dispose 該 plugin 已註冊的 partial disposables；root `deactivate()` 必須 await reverse teardown，並清除 manager、Tree View registry、diagnostic channel 與 terminal spawner singleton。
+- `PluginManager` activation 失敗時必須立即 dispose 該 plugin 已註冊的 partial disposables 並移除 reset/diagnostics registration；root `deactivate()` 必須 await reverse teardown，再釋放 diagnostic channel。
 - mDNS service、network-key secondary index 與 expiration cleanup 必須同步更新，避免 stale index 或錯誤合併。mDNS transport input 一律不可信：單包最多 `256` records、pending/store 各最多 `512` services、DNS name 最多 `255` UTF-8 bytes、alias/address/subtype 各最多 `32`、TXT 最多 `64` entries（key `128` bytes、value `1024` bytes），TTL 最高 `4500` 秒。
 - `Connect Action` 必須先驗證 service type、DNS/IP target、port 與 SSH user。HTTP(S)/IPP(S) 只能走 `vscode.env.openExternal`；SSH 只能以 `cmd + args` plan 經 `joinShellCommand` 引用後進 terminal。mDNS payload 不得直接串接 shell command。
 - Git hooks 只處理 `workspaceFolders[0]`；模板來源為 `pkg/resources/git/githooks/`。Install 採 copy-if-missing 後 Link，Status Bar 只做 Link；local `core.hooksPath` 只要非空即視為已連結。Repository 自用的 `.githooks/pre-push` 必須與內建模板保持一致。`pre-push` release tag 版本固定取 `max(最高 Git tag 的下一個 patch, package.json.version, .claude-plugin/plugin.json.version)`，缺少的 manifest 不納入候選。
@@ -135,6 +138,7 @@ SCM Graph reset proposed API 仍屬進行中工作，只以 [`plans/2026-07-17-s
 
 ## 規格索引 (Specification Index)
 
+- Unified Plugin Lifecycle 與 Live Diagnostics：[`docs/specs/2026-08-06-unified-plugin-lifecycle-live-diagnostics.md`](docs/specs/2026-08-06-unified-plugin-lifecycle-live-diagnostics.md)
 - Current module map：[`docs/specs/2026-07-20-architecture-current-modules.md`](docs/specs/2026-07-20-architecture-current-modules.md)
 - Disk Usage Status Bar：[`docs/specs/2026-08-02-disk-usage-status-bar.md`](docs/specs/2026-08-02-disk-usage-status-bar.md)
 - CLI Launcher（含自 `vscode-plugin-experiment` 移入的差異）：[`docs/specs/2026-08-04-cli-launcher.md`](docs/specs/2026-08-04-cli-launcher.md)

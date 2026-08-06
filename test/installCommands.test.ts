@@ -1,7 +1,6 @@
-// Tests for the global-commands install commands. Each one opens its
-// terminal through the terminals module's shared spawner
-// (`terminalSpawner.ts`) rather than calling
-// `vscode.window.createTerminal` directly, so every Superset-opened
+// Tests for the global-commands install commands. Each one opens its terminal
+// through the injected `PluginContext.createTerminal` capability rather than
+// calling `vscode.window.createTerminal` directly, so every Superset-opened
 // terminal carries the same creation options and the command can still
 // be dispatched when the terminals feature has not activated (the
 // spawner is absent and the command reports it). The install commands
@@ -137,24 +136,15 @@ import * as path from "path";
 import * as fs from "node:fs";
 import { globalCommandsPlugin } from "../src/globalCommandsPlugin";
 import { spawnRunTerminal } from "../src/spawnRunTerminal";
-import {
-    setDiagnosticChannel,
-    setPluginManager,
-    setTerminalSpawner,
-    getTerminalSpawner,
-    bindTerminalSpawner,
-} from "../src/crossModuleState";
+import type { PluginContext } from "../src/plugin";
+
+let terminalFactory: PluginContext["createTerminal"];
 
 // A minimal `PluginContext` sufficient for the global-commands plugin
 // to register its commands.
-function fakePluginContext(): {
-    extensionUri: vscode.Uri;
-    workspaceFolder: string;
-    workspaceState: vscode.Memento;
-    globalState: vscode.Memento;
-    log: (msg: string) => void;
-    registerDisposable: (d: vscode.Disposable) => void;
-} {
+function fakePluginContext(
+    overrides: Partial<PluginContext> = {}
+): PluginContext {
     return {
         extensionUri: { fsPath: "/fake" } as vscode.Uri,
         workspaceFolder: "/ws",
@@ -167,13 +157,26 @@ function fakePluginContext(): {
             update: async () => {},
         } as unknown as vscode.Memento,
         log: () => {},
+        showLogs: () => {},
+        createTerminal: (...args) => terminalFactory(...args),
         registerDisposable: () => {},
-    };
+        registerResetHandler: () => {},
+        resetAll: async () => {},
+        registerDiagnosticsProvider: () => {},
+        getRuntimeDiagnostics: () => ({
+            activePluginIds: [],
+            metrics: {},
+        }),
+        registerTreeView: () => {},
+        revealInTree: async () => false,
+        ...overrides,
+    } as PluginContext;
 }
 
-describe("terminalSpawner bridge", () => {
+describe("terminal command dispatch", () => {
     beforeEach(() => {
-        setTerminalSpawner(undefined);
+        terminalFactory = (name, cwd) =>
+            vscode.window.createTerminal({ name, cwd });
         (vscode as unknown as { __commands: Map<string, unknown> }).__commands.clear();
         asMock(vscode.window.createTerminal).mockClear();
         asMock(vscode.window.showInformationMessage).mockClear();
@@ -184,27 +187,6 @@ describe("terminalSpawner bridge", () => {
         asMock(vscode.window.showInputBox).mockResolvedValue(undefined);
         asMock(vscode.window.showQuickPick).mockReset();
         asMock(vscode.window.showQuickPick).mockResolvedValue(undefined);
-    });
-
-    it("setTerminalSpawner / getTerminalSpawner round-trip", () => {
-        const fake = vi.fn();
-        setTerminalSpawner(fake);
-        expect(getTerminalSpawner()).toBe(fake);
-        setTerminalSpawner(undefined);
-        expect(getTerminalSpawner()).toBeUndefined();
-    });
-
-    it("bindTerminalSpawner clears only the spawner lease it installed", () => {
-        const first = vi.fn();
-        const second = vi.fn();
-        const firstLease = bindTerminalSpawner(first);
-        const secondLease = bindTerminalSpawner(second);
-
-        firstLease.dispose();
-        expect(getTerminalSpawner()).toBe(second);
-
-        secondLease.dispose();
-        expect(getTerminalSpawner()).toBeUndefined();
     });
 
     it("installDefaultTools spawns nine separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
@@ -264,9 +246,7 @@ describe("terminalSpawner bridge", () => {
             .mockReturnValueOnce(terminals[6])
             .mockReturnValueOnce(terminals[7])
             .mockReturnValueOnce(terminals[8]);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         const pCtx = fakePluginContext();
         globalCommandsPlugin.activate(pCtx as never);
 
@@ -310,11 +290,14 @@ describe("terminalSpawner bridge", () => {
         ).not.toHaveBeenCalled();
     });
 
-    it("installDefaultTools shows a non-throwing error when the spawner is unset", async () => {
-        setTerminalSpawner(undefined);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
-        const pCtx = fakePluginContext();
+    it("installDefaultTools logs terminal creation failures without throwing", async () => {
+        const log = vi.fn();
+        const pCtx = fakePluginContext({
+            log,
+            createTerminal: () => {
+                throw new Error("terminal unavailable");
+            },
+        });
         globalCommandsPlugin.activate(pCtx as never);
 
         const cb = (
@@ -322,11 +305,10 @@ describe("terminalSpawner bridge", () => {
         ).__commands.get("superset.installDefaultTools")!;
         await expect(cb()).resolves.toBeUndefined();
 
-        const showError = (vscode.window as unknown as {
-            showErrorMessage: ReturnType<typeof vi.fn>;
-        }).showErrorMessage;
-        expect(showError).toHaveBeenCalledTimes(1);
-        expect(showError.mock.calls[0][0]).toMatch(/Terminals 模組尚未啟用/);
+        const failures = log.mock.calls.filter(([message]) =>
+            String(message).includes("terminal unavailable")
+        );
+        expect(failures).toHaveLength(9);
     });
 
     it("projectsSetup runs the bundled setup script against the fixed ~/projects root", async () => {
@@ -337,9 +319,7 @@ describe("terminalSpawner bridge", () => {
             dispose: vi.fn(),
         } as unknown as vscode.Terminal;
         const spawn = vi.fn().mockReturnValue(terminal);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         globalCommandsPlugin.activate(fakePluginContext() as never);
 
         const cb = (
@@ -383,9 +363,7 @@ describe("terminalSpawner bridge", () => {
             dispose: vi.fn(),
         } as unknown as vscode.Terminal;
         const spawn = vi.fn().mockReturnValue(t);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         const pCtx = fakePluginContext();
         globalCommandsPlugin.activate(pCtx as never);
 
@@ -501,9 +479,7 @@ describe("terminalSpawner bridge", () => {
             sendText: vi.fn(),
             dispose: vi.fn(),
         } as unknown as vscode.Terminal;
-        setTerminalSpawner(vi.fn().mockReturnValue(t));
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = vi.fn().mockReturnValue(t);
         globalCommandsPlugin.activate(fakePluginContext() as never);
 
         const cb = (
@@ -532,9 +508,7 @@ describe("terminalSpawner bridge", () => {
             dispose: vi.fn(),
         } as unknown as vscode.Terminal;
         const spawn = vi.fn().mockReturnValue(t);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         globalCommandsPlugin.activate(fakePluginContext() as never);
 
         const cb = (
@@ -576,9 +550,7 @@ describe("terminalSpawner bridge", () => {
         asMock(vscode.window.showInputBox).mockResolvedValueOnce(undefined);
 
         const spawn = vi.fn();
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         globalCommandsPlugin.activate(fakePluginContext() as never);
 
         const cb = (
@@ -597,9 +569,7 @@ describe("terminalSpawner bridge", () => {
             sendText: vi.fn(),
             dispose: vi.fn(),
         } as unknown as vscode.Terminal;
-        setTerminalSpawner(vi.fn().mockReturnValue(t));
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = vi.fn().mockReturnValue(t);
         globalCommandsPlugin.activate(fakePluginContext() as never);
 
         const cb = (
@@ -617,9 +587,7 @@ describe("terminalSpawner bridge", () => {
         asMock(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
 
         const spawn = vi.fn();
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         globalCommandsPlugin.activate(fakePluginContext() as never);
 
         const cb = (
@@ -649,9 +617,7 @@ describe("terminalSpawner bridge", () => {
             dispose: vi.fn(),
         } as unknown as vscode.Terminal;
         const spawn = vi.fn().mockReturnValue(t);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         const pCtx = fakePluginContext(); // workspaceFolder = "/ws"
         globalCommandsPlugin.activate(pCtx as never);
 
@@ -707,15 +673,16 @@ describe("terminalSpawner bridge", () => {
         } as unknown as vscode.Terminal;
 
         let spawnCount = 0;
-        setTerminalSpawner(vi.fn().mockImplementation(() => {
+        terminalFactory = vi.fn().mockImplementation(() => {
             spawnCount++;
             return spawnCount === 1 ? tDefault : tFocused;
-        }));
+        });
 
-        await spawnRunTerminal("Test Default", "echo default");
+        const ctx = fakePluginContext();
+        await spawnRunTerminal(ctx, "Test Default", "echo default");
         expect((tDefault as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(true);
 
-        await spawnRunTerminal("Test Focused", "echo focus", { preserveFocus: false });
+        await spawnRunTerminal(ctx, "Test Focused", "echo focus", { preserveFocus: false });
         expect((tFocused as unknown as { show: ReturnType<typeof vi.fn> }).show).toHaveBeenCalledWith(false);
     });
 
@@ -730,9 +697,7 @@ describe("terminalSpawner bridge", () => {
             dispose: vi.fn(),
         } as unknown as vscode.Terminal;
         const spawn = vi.fn().mockReturnValue(t);
-        setTerminalSpawner(spawn);
-        setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-        setPluginManager(undefined);
+        terminalFactory = spawn;
         const pCtx = fakePluginContext();
         globalCommandsPlugin.activate(pCtx as never);
 
@@ -819,8 +784,6 @@ function asMock<T>(fn: T): ReturnType<typeof vi.fn> {
 }
 
 async function activateLicensePlugin(): Promise<void> {
-    setDiagnosticChannel(vscode.window.createOutputChannel("test"));
-    setPluginManager(undefined);
     const pCtx = fakePluginContext();
     globalCommandsPlugin.activate(pCtx as never);
 }

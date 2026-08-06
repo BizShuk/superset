@@ -14,8 +14,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import type { FeatureContext, FeatureHandle } from "../shared";
-import { getTerminalSpawner } from "../crossModuleState";
+import type { PluginContext } from "../plugin";
 import { spawnRunTerminal } from "../spawnRunTerminal";
 import {
     type HistoryItemLike,
@@ -97,7 +96,7 @@ async function requireOpenedGitFolder(): Promise<vscode.WorkspaceFolder | null> 
 
 async function refreshGitHooksStatus(
     statusBar: vscode.StatusBarItem,
-    ctx: FeatureContext
+    ctx: PluginContext
 ): Promise<void> {
     const folder = firstOpenedFolder();
     if (!folder || folder.uri.scheme !== "file") {
@@ -122,7 +121,7 @@ async function refreshGitHooksStatus(
             statusBar.show();
         }
     } catch (error) {
-        ctx.shared.log(
+        ctx.log(
             `git: failed to inspect local core.hooksPath: ${error}`
         );
     }
@@ -130,7 +129,7 @@ async function refreshGitHooksStatus(
 
 async function linkOpenedFolderGitHooks(
     statusBar: vscode.StatusBarItem,
-    ctx: FeatureContext
+    ctx: PluginContext
 ): Promise<void> {
     const folder = await requireOpenedGitFolder();
     if (!folder) return;
@@ -142,7 +141,7 @@ async function linkOpenedFolderGitHooks(
             "Superset: Linked Git hooks with local core.hooksPath=.githooks"
         );
     } catch (error) {
-        ctx.shared.log(`git: link hooks failed: ${error}`);
+        ctx.log(`git: link hooks failed: ${error}`);
         await vscode.window.showErrorMessage(
             `Superset: Failed to link Git hooks: ${error}`
         );
@@ -151,13 +150,13 @@ async function linkOpenedFolderGitHooks(
 
 async function installOpenedFolderGitHooks(
     statusBar: vscode.StatusBarItem,
-    ctx: FeatureContext
+    ctx: PluginContext
 ): Promise<void> {
     const folder = await requireOpenedGitFolder();
     if (!folder) return;
 
     const templateRoot = path.join(
-        ctx.context.extensionUri.fsPath,
+        ctx.extensionUri.fsPath,
         "pkg",
         "resources",
         "git",
@@ -173,7 +172,7 @@ async function installOpenedFolderGitHooks(
             `Superset: Git hooks installed (${result.copied} added, ${result.skipped} kept) and linked`
         );
     } catch (error) {
-        ctx.shared.log(`git: install hooks failed: ${error}`);
+        ctx.log(`git: install hooks failed: ${error}`);
         await vscode.window.showErrorMessage(
             `Superset: Failed to install Git hooks: ${error}`
         );
@@ -196,9 +195,9 @@ const PALETTE_HINT_PREFIX =
 async function dispatchReset(
     mode: ResetMode,
     args: unknown[],
-    ctx: FeatureContext
+    ctx: PluginContext
 ): Promise<void> {
-    const log = ctx.shared.log;
+    const log = ctx.log;
     const parsed = parseScmArgs(args);
     if (!parsed.repository || !parsed.historyItem) {
         log(
@@ -207,16 +206,6 @@ async function dispatchReset(
         );
         await vscode.window.showInformationMessage(
             `${PALETTE_HINT_PREFIX} 右鍵執行 reset --${mode}。`
-        );
-        return;
-    }
-
-    if (!getTerminalSpawner()) {
-        vscode.window.showErrorMessage(
-            "Superset: Terminals 模組尚未啟用,請稍候再試"
-        );
-        log(
-            `git: reset --${mode} aborted — terminal spawner not wired`
         );
         return;
     }
@@ -246,6 +235,7 @@ async function dispatchReset(
     const cmdline = buildResetCmdline(sha, mode);
 
     await spawnRunTerminal(
+        ctx,
         `Superset: Reset --${mode} (${shortSha(sha)})`,
         cmdline,
         { closeOnSuccess: true, cwd }
@@ -286,7 +276,7 @@ async function getGitApi(): Promise<GitApi | null> {
 
 async function copyGitHubUrl(
     uri: vscode.Uri | undefined,
-    ctx: FeatureContext
+    ctx: PluginContext
 ): Promise<void> {
     if (!uri || uri.scheme !== "file") {
         await vscode.window.showErrorMessage(
@@ -328,10 +318,10 @@ async function copyGitHubUrl(
     await vscode.window.showInformationMessage(
         "Superset: GitHub URL copied"
     );
-    ctx.shared.log(`git: copied GitHub URL ${url}`);
+    ctx.log(`git: copied GitHub URL ${url}`);
 }
 
-export function register(ctx: FeatureContext): FeatureHandle {
+export function register(ctx: PluginContext): void {
     const hookStatusBar = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left
     );
@@ -341,7 +331,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
     hookStatusBar.command = LINK_GIT_HOOKS_COMMAND;
     hookStatusBar.hide();
 
-    ctx.subscriptions.push(
+    for (const disposable of [
         hookStatusBar,
         vscode.commands.registerCommand(
             "superset.gitResetHard",
@@ -365,26 +355,19 @@ export function register(ctx: FeatureContext): FeatureHandle {
             LINK_GIT_HOOKS_COMMAND,
             () => linkOpenedFolderGitHooks(hookStatusBar, ctx)
         )
-    );
+    ]) {
+        ctx.registerDisposable(disposable);
+    }
 
     void refreshGitHooksStatus(hookStatusBar, ctx);
 
-    ctx.shared.log("git: registered");
-
-    return {
-        dispose() {
-            // Every disposable is bridged to the plugin pool via
-            // the `subscriptions.push` interceptor in
-            // `featureContext.ts`; nothing extra to clean up here.
-        },
-    };
+    ctx.log("git: registered");
 }
 
-// Re-export the helpers so unit tests in `test/gitPlugin.test.ts`
-// can exercise behavior without importing the vscode-bound index.ts
-// directly. The two consumers are:
+// Re-export the helpers so unit tests can exercise behavior without importing
+// the vscode-bound orchestration path directly. The consumers are:
 //   - `test/gitReset.test.ts` — pure-function tests against the
 //     helpers in `./gitReset.ts`
 //   - `test/gitPlugin.test.ts` — `assertPluginContract(...)` check
-//     against the shim in `./plugin.ts`
+//     against the declaration in `./plugin.ts`
 export type { HistoryItemLike, RepositoryLike };

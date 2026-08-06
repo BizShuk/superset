@@ -86,12 +86,10 @@ vi.mock("vscode", () => {
 });
 
 const { terminalsPlugin } = await import("../src/terminals/plugin");
-const {
-    setTreeViewRegistry,
-    getTreeViewRegistry,
-    TreeViewRegistry,
-} = await import("../src/plugin/treeViewRegistry");
+const { TreeViewRegistry } = await import("../src/plugin/treeViewRegistry");
 import type { PluginContext } from "../src/plugin";
+
+let registry: InstanceType<typeof TreeViewRegistry>;
 
 function fakePluginContext(): PluginContext {
     return {
@@ -104,31 +102,31 @@ function fakePluginContext(): PluginContext {
             get: () => undefined,
             update: async () => {},
         } as unknown as PluginContext["workspaceState"],
-        workspaceFolder: undefined,
-        registerDisposable: () => ({ dispose: () => undefined }),
+        workspaceFolder: "/workspace",
+        registerDisposable: () => {},
+        registerDiagnosticsProvider: () => {},
+        registerTreeView: (viewId, treeView, provider) => {
+            registry.register(viewId, treeView, provider, () => {});
+        },
+        revealInTree: (viewId, predicate) =>
+            registry.reveal(viewId, predicate, () => {}),
+        createTerminal: () => ({}) as never,
         log: () => {},
     } as unknown as PluginContext;
 }
 
 describe("terminals plugin — reveal-in-tree wiring", () => {
     beforeEach(() => {
-        // Reset the registry singleton so the test starts clean;
-        // setTreeViewRegistry is the only legal way to seed the
-        // singleton, mirroring what `extension.ts` does before any
-        // plugin activates.
-        setTreeViewRegistry(new TreeViewRegistry());
+        registry = new TreeViewRegistry();
     });
 
     it("registers the superset.terminals viewId into the cross-panel TreeViewRegistry on activate", () => {
-        const reg = getTreeViewRegistry();
-        expect(reg).toBeDefined();
-        expect(reg?.get("superset.terminals")).toBeUndefined();
+        expect(registry.get("superset.terminals")).toBeUndefined();
 
         terminalsPlugin.activate(fakePluginContext());
 
-        const after = getTreeViewRegistry();
-        expect(after?.get("superset.terminals")).toBeDefined();
-        expect(after?.listViewIds()).toContain("superset.terminals");
+        expect(registry.get("superset.terminals")).toBeDefined();
+        expect(registry.listViewIds()).toContain("superset.terminals");
     });
 
     it("exposes the expected plugin id", () => {

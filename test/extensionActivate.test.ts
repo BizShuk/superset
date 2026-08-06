@@ -156,13 +156,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as vscode from "vscode";
-import {
-    getDiagnosticChannel,
-    getPluginManager,
-    getTerminalSpawner,
-    setTerminalSpawner,
-} from "../src/crossModuleState";
-import { getTreeViewRegistry } from "../src/plugin/treeViewRegistry";
 
 const { activate, deactivate } = await import("../src/extension");
 
@@ -590,7 +583,7 @@ describe("extension activation via PluginManager", () => {
         }
     });
 
-    it("deactivate() releases manager-owned resources and global roots", async () => {
+    it("deactivate() releases manager-owned resources", async () => {
         const ext = fakeExtCtx();
         await activate(ext);
         const testApi = vscode as unknown as {
@@ -598,21 +591,10 @@ describe("extension activation via PluginManager", () => {
             __outputDisposeCount(): number;
         };
 
-        expect(getPluginManager()).toBeDefined();
-        expect(getDiagnosticChannel()).toBeDefined();
-        expect(getTreeViewRegistry()).toBeDefined();
-        // The lightweight vscode mock cannot fully activate terminals, so
-        // seed the same cross-module root that a real activation publishes.
-        setTerminalSpawner(() => ({} as vscode.Terminal));
-        expect(getTerminalSpawner()).toBeDefined();
         expect(testApi.__commands.has("superset.mdnsRefresh")).toBe(true);
 
         await deactivate();
 
-        expect(getPluginManager()).toBeUndefined();
-        expect(getDiagnosticChannel()).toBeUndefined();
-        expect(getTreeViewRegistry()).toBeUndefined();
-        expect(getTerminalSpawner()).toBeUndefined();
         expect(testApi.__commands.has("superset.mdnsRefresh")).toBe(false);
         expect(testApi.__commands.has("superset.sessionsRefresh")).toBe(false);
         expect(testApi.__commands.has("superset.resetCaches")).toBe(false);

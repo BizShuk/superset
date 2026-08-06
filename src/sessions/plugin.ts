@@ -1,13 +1,12 @@
-// sessionsPlugin — adapter for the Sessions feature (legacy `register` shape).
-// Heavy lifting lives in `./index.ts`.
+// Sessions plugin declaration. Runtime wiring lives in `./index.ts`.
 
-import { legacyPlugin } from "../plugin";
+import type { ExtensionPlugin } from "../plugin";
 import { register as registerSessionsModule } from "./index";
 
 export const SESSIONS_PLUGIN_ID = "sessions";
 
-export const sessionsPlugin = legacyPlugin({
+export const sessionsPlugin: ExtensionPlugin = {
     id: SESSIONS_PLUGIN_ID,
     name: "Sessions",
-    register: registerSessionsModule,
-});
+    activate: registerSessionsModule,
+};

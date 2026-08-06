@@ -13,7 +13,7 @@ describe("topologyPlugin", () => {
             id: TOPOLOGY_PLUGIN_ID,
             name: "Topology",
             markdownHook: "absent",
-            deactivate: "present",
+            deactivate: "absent",
         });
     });
 });
