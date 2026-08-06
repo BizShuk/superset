@@ -64,19 +64,32 @@ vi.mock("vscode", () => {
                 hide: noop,
                 dispose: noop,
             }),
-            createTreeView: vi.fn(() => ({
-                onDidChangeCheckboxState: undefined,
-                // panelLayout feature (0.9.0) wires each panel's
-                // `onDidChangeVisibility` to `superset.reportViewVisible`;
-                // the mock returns a real disposable so subscribing
-                // never throws.
-                onDidChangeVisibility: () => ({
-                    dispose: () => undefined,
-                }),
-                selection: [],
-                title: "",
-                dispose: noop,
-            })),
+            createTreeView: vi.fn(() => {
+                const selectionEmitter = new EventEmitter<{
+                    selection: readonly unknown[];
+                }>();
+                let selection: readonly unknown[] = [];
+                return {
+                    onDidChangeCheckboxState: undefined,
+                    // panelLayout feature (0.9.0) wires each panel's
+                    // `onDidChangeVisibility` to `superset.reportViewVisible`;
+                    // the mock returns a real disposable so subscribing
+                    // never throws.
+                    onDidChangeVisibility: () => ({
+                        dispose: () => undefined,
+                    }),
+                    onDidChangeSelection: selectionEmitter.event,
+                    get selection() {
+                        return selection;
+                    },
+                    __fireSelection(next: readonly unknown[]) {
+                        selection = next;
+                        selectionEmitter.fire({ selection: next });
+                    },
+                    title: "",
+                    dispose: noop,
+                };
+            }),
             showInformationMessage: async () => undefined,
             showWarningMessage: async () => "Reset", // auto-confirm reset
             showErrorMessage: async () => undefined,
@@ -308,6 +321,45 @@ describe("extension activation via PluginManager", () => {
         } finally {
             input.mockRestore();
         }
+    });
+
+    it("tracks whether the CLI view has a selected path", async () => {
+        const createTreeView = vi.mocked(vscode.window.createTreeView);
+        createTreeView.mockClear();
+        await activate(fakeExtCtx());
+
+        const cliCall = createTreeView.mock.calls.find(
+            ([viewID]) => viewID === "superset.cliLauncher.paths"
+        );
+        const cliCallIndex = cliCall
+            ? createTreeView.mock.calls.indexOf(cliCall)
+            : -1;
+        const cliView = createTreeView.mock.results[cliCallIndex]?.value as
+            | { __fireSelection(selection: readonly unknown[]): void }
+            | undefined;
+        const testApi = vscode as unknown as {
+            __executedCommands: Array<[string, ...unknown[]]>;
+        };
+        const contextValues = () =>
+            testApi.__executedCommands
+                .filter(
+                    ([id, key]) =>
+                        id === "setContext" &&
+                        key === "superset.cliLauncher.hasPathSelection"
+                )
+                .map(([, , value]) => value);
+
+        expect(cliView).toBeDefined();
+        expect(contextValues()).toEqual([false]);
+
+        cliView?.__fireSelection([{ path: "/projects/one" }]);
+        expect(contextValues()).toEqual([false, true]);
+
+        cliView?.__fireSelection([{ tracked: { id: "terminal-1" } }]);
+        expect(contextValues()).toEqual([false, true, false]);
+
+        cliView?.__fireSelection([]);
+        expect(contextValues()).toEqual([false, true, false, false]);
     });
 
     it("opens every selected CLI path in a new VS Code window", async () => {

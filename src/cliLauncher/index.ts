@@ -46,6 +46,10 @@ export const VIEW_ID = "superset.cliLauncher.paths";
 /** 有作用中的過濾字串時才為 true;`Clear Filter` 按鈕靠它顯示／隱藏。 */
 export const FILTER_CONTEXT_KEY = "superset.cliLauncher.filtered";
 
+/** CLI View 目前至少選取一個 path item 時為 true；只有 item focus 不算。 */
+export const PATH_SELECTION_CONTEXT_KEY =
+    "superset.cliLauncher.hasPathSelection";
+
 /** 三顆 agent 按鈕對應的 command id,與 `package.json` 的宣告一致。 */
 export const AGENT_COMMAND_IDS: Record<AgentId, string> = {
     claude: "superset.cliLauncherRunClaude",
@@ -59,13 +63,14 @@ export function register(ctx: FeatureContext): FeatureHandle {
     const terminalTracker = initTerminalTracking(ctx.subscriptions);
 
     const provider = new CLILauncherTreeProvider(terminalTracker);
-    // 多選:inline 按鈕仍作用在單列,但選取多列後的命令 (含 ctrl+1/2/3)
+    // 多選:inline 按鈕仍作用在單列,但選取多列後的命令 (含 Cmd+N / Ctrl+1–4)
     // 會一次啟動全部。keybinding 觸發時沒有命令參數,只能靠 `view.selection`。
     const view = vscode.window.createTreeView<CLILauncherTreeItem>(VIEW_ID, {
         treeDataProvider: provider,
         showCollapseAll: true,
         canSelectMany: true,
     });
+    void setPathSelectionContext(false);
 
     // 面板可見時才每 30 秒重掃一次;git 狀態沒有事件來源,只能定期重讀。
     const visibilitySub = registerViewVisibility(view, VIEW_ID, (visible) =>
@@ -86,6 +91,11 @@ export function register(ctx: FeatureContext): FeatureHandle {
         view,
         visibilitySub,
         treeViewEntry ?? { dispose: () => undefined },
+        view.onDidChangeSelection(({ selection }) => {
+            void setPathSelectionContext(
+                selection.some((item) => toCLIEntry(item) !== undefined)
+            );
+        }),
         // settings 是唯一的資料來源,外部改設定 (或我們自己寫入) 都靠這個事件刷新。
         vscode.workspace.onDidChangeConfiguration((event) => {
             if (event.affectsConfiguration(CONFIG_SECTION)) {
@@ -218,6 +228,7 @@ export function register(ctx: FeatureContext): FeatureHandle {
             }
             // context key 是 window 層狀態,view 消失後不得留下 stale true。
             void setFilterContext(false);
+            void setPathSelectionContext(false);
             // module-level sink 不得存活到下一輪 activation。
             setCLILauncherLog(undefined);
         },
@@ -228,6 +239,14 @@ function setFilterContext(active: boolean): Thenable<unknown> {
     return vscode.commands.executeCommand(
         "setContext",
         FILTER_CONTEXT_KEY,
+        active
+    );
+}
+
+function setPathSelectionContext(active: boolean): Thenable<unknown> {
+    return vscode.commands.executeCommand(
+        "setContext",
+        PATH_SELECTION_CONTEXT_KEY,
         active
     );
 }
@@ -331,7 +350,7 @@ function describeError(error: unknown): string {
  * 解析命令要作用在哪些項目,優先序:
  *  1. 多選命令參數 (`targets`) —— 右鍵一份選取時 VS Code 會帶進來
  *  2. 單一命令參數 (`target`) —— inline 按鈕只作用在被點到的那一列
- *  3. tree view 目前的選取 —— ctrl+1/2/3 之類的 keybinding 沒有參數
+ *  3. tree view 目前的選取 —— Cmd+N / Ctrl+1–4 等 keybinding 沒有參數
  *  4. quick pick (`fallback`) —— 從 Command Palette 呼叫且面板沒有選取
  *
  * 啟動與移除共用同一份解析:選了幾列,動作就套用在那幾列,不會只處理游標下的

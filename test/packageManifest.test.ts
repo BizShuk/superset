@@ -289,7 +289,7 @@ describe("CLI Launcher manifest contributions", () => {
         }
     });
 
-    it("binds ctrl+1/2/3 only while the CLI panel has focus", () => {
+    it("binds CLI hotkeys only while the panel has a path selection", () => {
         interface ManifestKeybinding {
             readonly command: string;
             readonly key: string;
@@ -297,16 +297,46 @@ describe("CLI Launcher manifest contributions", () => {
         }
         const keybindings = manifest.contributes
             .keybindings as ManifestKeybinding[];
-        // Unscoped these would shadow VS Code's own "switch editor group".
-        for (const [key, command] of [
-            ["ctrl+1", "superset.cliLauncherRunClaude"],
-            ["ctrl+2", "superset.cliLauncherRunCodex"],
-            ["ctrl+3", "superset.cliLauncherRunGrok"],
-        ]) {
-            const binding = keybindings.find((k) => k.command === command);
-            expect(binding?.key).toBe(key);
-            expect(binding?.when).toBe(`focusedView == ${VIEW_ID}`);
-        }
+        const cliCommands = [
+            "superset.cliLauncherOpenNewWindow",
+            "superset.cliLauncherOpen",
+            "superset.cliLauncherRunClaude",
+            "superset.cliLauncherRunCodex",
+            "superset.cliLauncherRunGrok",
+        ];
+        const when = `focusedView == ${VIEW_ID} && superset.cliLauncher.hasPathSelection && !inputFocus`;
+
+        expect(
+            keybindings.filter((binding) =>
+                cliCommands.includes(binding.command)
+            )
+        ).toEqual([
+            {
+                command: "superset.cliLauncherOpenNewWindow",
+                key: "cmd+n",
+                when,
+            },
+            {
+                command: "superset.cliLauncherOpen",
+                key: "ctrl+1",
+                when,
+            },
+            {
+                command: "superset.cliLauncherRunClaude",
+                key: "ctrl+2",
+                when,
+            },
+            {
+                command: "superset.cliLauncherRunCodex",
+                key: "ctrl+3",
+                when,
+            },
+            {
+                command: "superset.cliLauncherRunGrok",
+                key: "ctrl+4",
+                when,
+            },
+        ]);
     });
 
     it("binds cmd+f to filtering only while the CLI panel itself has focus", () => {

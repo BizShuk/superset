@@ -525,7 +525,9 @@ terminals。每列 description 顯示
 2. Hover 任一列,右側出現三顆按鈕:`Open with Claude`、`Open with Codex`、
    `Open with Grok`。點下去會在`編輯區`開一個 terminal 分頁,cwd 設在該路徑並執行
    對應的 CLI。
-3. 面板取得焦點時,`Ctrl+1` / `Ctrl+2` / `Ctrl+3` 是同樣三顆按鈕的快捷鍵。
+3. 先選取 path row 並讓面板保持焦點:`Cmd+N` 以新視窗開啟；`Ctrl+1` 開純 terminal；
+   `Ctrl+2` / `Ctrl+3` / `Ctrl+4` 分別執行 Claude / Codex / Grok。只有 item focus、沒有
+   selection 時不會觸發。
 4. 按住 `Cmd` / `Ctrl` 多選數列再按快捷鍵,每個路徑各開一個 terminal,只有最後一個
    會搶焦點。
 5. 右鍵 → `Open Terminal at Path` 只開 terminal 不跑任何 CLI。
@@ -702,9 +704,9 @@ code --install-extension superset-*.vsix
 | `Superset: Transpose Editor Grid`               | —                   | 翻 root 方向，等同 NxM 網格轉置                                               |
 | `Superset: Pick Editor Grid Shape`              | —                   | 重塑 editor 網格形狀（唯一會改變格子數的命令）                                |
 | `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                        |
-| `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+1/2/3`(CLI 面板) | 在選取路徑開 terminal 並執行對應 agent CLI                                 |
-| `CLI: Open Terminal at Path`                    | —                   | 只在選取路徑開 terminal,不執行命令                                            |
-| `CLI: Open in New Window`                       | —                   | 以獨立 VS Code window 開啟選取路徑                                            |
+| `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+2/3/4`(CLI 面板且已選 path) | 在選取路徑開 terminal 並執行對應 agent CLI                       |
+| `CLI: Open Terminal at Path`                    | `Ctrl+1`(CLI 面板且已選 path) | 只在選取路徑開 terminal,不執行命令                                      |
+| `CLI: Open in New Window`                       | `Cmd+N`(CLI 面板且已選 path) | 以獨立 VS Code window 開啟選取路徑                                      |
 | `CLI: Create Subfolder`                         | —                   | 在每個選取路徑建立同名 direct subfolder                                       |
 | `CLI: Pin Path` / `Unpin Path`                  | —                   | 釘選/取消釘選 root 以外的路徑                                                 |
 | `CLI: Copy All Paths`                           | —                   | 逐行複製面板所有路徑到剪貼簿(套用作用中的過濾)                              |
