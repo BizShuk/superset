@@ -9,9 +9,12 @@
 // 排在一般 Git repository 結果之前；兩者維持各自的移除語意。
 //
 // 面板可見時每 30 秒自動重刷一次
-// (`AUTO_REFRESH_INTERVAL_MS`),讓 git 狀態跟得上外部的 commit / checkout。
+// (`AUTO_REFRESH_INTERVAL_MS`),讓 git 狀態跟得上外部的 commit / checkout;這一輪
+// 只讀本地,不連遠端。`Refresh` (`refreshWithFetch`) 才會對畫面上的 repository 跑
+// `git fetch`,讓未推送／未拉取的 commit 數反映遠端當下的狀態。
 //
-// 每一列的 description 顯示該路徑的 git 分支與行數增減 (見 `gitStatus.ts`),
+// 每一列的 description 顯示該路徑的 git 分支、與 upstream 的差距與行數增減
+// (見 `gitStatus.ts`),
 // 有 CLI-created terminal 時在最前面加 `🟡 <count>`;這個數字含子孫路徑,收合的
 // 第一層才看得出底下的第二層正在跑東西。自己沒開、數字全來自子資料夾時改用
 // `🔵` —— 用顏色而不是額外文字,省下 description 的橫向空間。tree item icon 固定
@@ -34,6 +37,7 @@ import {
 import { isDescendantPath, type CLIEntry } from "./entries";
 import { projectFocusedPaths } from "./focus";
 import {
+    fetchGitFolders,
     formatGitFolderDescription,
     formatGitFolderStatus,
     readGitFolderStatusMap,
@@ -223,6 +227,8 @@ export class CLILauncherTreeProvider
     /** View 目前可見與否;自動重刷是 UI-only work,只在可見時進行。 */
     private visible = false;
     private refreshTimer?: ReturnType<typeof setInterval>;
+    /** 是否已有一輪 `git fetch` 在跑;連按 `Refresh` 不該疊出併發連線。 */
+    private fetching = false;
 
     constructor(
         private readonly terminalSource: CLITerminalSource = EMPTY_TERMINAL_SOURCE,
@@ -264,6 +270,31 @@ export class CLILauncherTreeProvider
         this.pathItems.clear();
         this.terminalItems.clear();
         this.changed.fire(undefined);
+    }
+
+    /**
+     * `Refresh` 按鈕的行為:先立刻重畫一次 (路徑清單與本地 git 狀態不必等網路),
+     * 再對`目前畫面上`的路徑跑 `git fetch`,抓完後重畫第二次讓領先／落後的數字
+     * 反映遠端現在的狀態。
+     *
+     * 只 fetch 已經材料化的列 (top level 加上展開過的第二層) —— 沒展開的資料夾
+     * 使用者現在看不到,替它連遠端只是白花時間與流量。
+     *
+     * 同一時間只允許一輪 fetch;連按按鈕不該疊出好幾組併發連線。
+     */
+    async refreshWithFetch(): Promise<void> {
+        const paths = [...this.pathItems.keys()];
+        this.refresh();
+        if (this.fetching || paths.length === 0) {
+            return;
+        }
+        this.fetching = true;
+        try {
+            await fetchGitFolders(paths);
+        } finally {
+            this.fetching = false;
+        }
+        this.refresh();
     }
 
     getTreeItem(item: CLILauncherTreeItem): vscode.TreeItem {

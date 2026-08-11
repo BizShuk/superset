@@ -153,10 +153,22 @@ export function register(ctx: PluginContext): void {
                 provider.refresh();
             }
         }),
-        vscode.commands.registerCommand("superset.cliLauncherRefresh", () => {
-            provider.refresh();
-            void changesProvider.refresh();
-        }),
+        // `Refresh` 除了重掃路徑與重讀本地 git 狀態,還會對目前列出的 repository
+        // 跑一次 `git fetch`,抓完再重畫一次領先／落後的 commit 數。網路那一段
+        // 掛在 window progress 上,面板本身不等它就先更新。
+        vscode.commands.registerCommand(
+            "superset.cliLauncherRefresh",
+            async () => {
+                void changesProvider.refresh();
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Window,
+                        title: "CLI: fetching remotes",
+                    },
+                    () => provider.refreshWithFetch()
+                );
+            }
+        ),
         vscode.commands.registerCommand(
             "superset.cliLauncherFilter",
             openNativeFind

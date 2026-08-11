@@ -107,7 +107,13 @@ vi.mock("vscode", () => {
             onDidStartTerminalShellExecution: () => noopDisposable,
             onDidEndTerminalShellExecution: () => noopDisposable,
             onDidChangeTerminalShellIntegration: () => noopDisposable,
+            // `Refresh` 把 fetch 那一段掛在 window progress 上;mock 直接跑 task。
+            withProgress: async (
+                _options: unknown,
+                task: () => Thenable<unknown>
+            ) => await task(),
         },
+        ProgressLocation: { Window: 10, Notification: 15 },
         workspace: {
             workspaceFolders: [{ uri: { fsPath: "/ws" } }],
             onDidChangeWorkspaceFolders: () => noopDisposable,

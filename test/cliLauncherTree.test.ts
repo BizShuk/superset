@@ -66,6 +66,8 @@ let repositoryPaths = new Set<string>();
 /** 路徑 → git 分支與行數增減;沒有列出的路徑代表不是 repository。 */
 let gitStatus = new Map<string, GitFolderStatus>();
 let gitReads = 0;
+/** 每次 `fetchGitFolders` 收到的路徑批次;`Refresh` 才會有值。 */
+let fetched: string[][] = [];
 
 interface FakeTrackedTerminal {
     id: string;
@@ -170,6 +172,9 @@ vi.mock("../src/cliLauncher/repositoryDiscovery", () => ({
 // 才會被這裡的斷言釘住。
 vi.mock("../src/cliLauncher/gitStatus", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../src/cliLauncher/gitStatus")>()),
+    fetchGitFolders: async (dirs: readonly string[]) => {
+        fetched.push([...dirs]);
+    },
     readGitFolderStatusMap: async (dirs: readonly string[]) => {
         gitReads += 1;
         return new Map(
@@ -215,6 +220,7 @@ beforeEach(() => {
     );
     gitStatus = new Map();
     gitReads = 0;
+    fetched = [];
     hidden = [];
     focused = [];
     focusedOnly = false;
@@ -326,11 +332,15 @@ describe("CLILauncherTreeProvider", () => {
             branch: "release",
             added: 12,
             removed: 3,
+            ahead: 0,
+            behind: 0,
         });
         gitStatus.set(`${HOME}/projects/platform`, {
             branch: "master",
             added: 0,
             removed: 0,
+            ahead: 0,
+            behind: 0,
         });
 
         const provider = new CLILauncherTreeProvider();
@@ -349,6 +359,8 @@ describe("CLILauncherTreeProvider", () => {
             branch: "main",
             added: 0,
             removed: 0,
+            ahead: 0,
+            behind: 0,
         });
 
         const provider = new CLILauncherTreeProvider();
@@ -366,6 +378,8 @@ describe("CLILauncherTreeProvider", () => {
             branch: "release",
             added: 2,
             removed: 1,
+            ahead: 0,
+            behind: 0,
         });
         const source = new FakeTerminalSource();
         source.set("/opt/tools/cli", [
@@ -414,6 +428,40 @@ describe("CLILauncherTreeProvider", () => {
 
     it("defaults to a 30s auto refresh", () => {
         expect(AUTO_REFRESH_INTERVAL_MS).toBe(30_000);
+    });
+
+    it("fetches the rows already on screen and redraws twice", async () => {
+        const provider = new CLILauncherTreeProvider();
+        const items = await provider.getChildren();
+        await provider.getChildren(items[1]); // 展開第二層,它也要一起 fetch
+        let refreshes = 0;
+        provider.onDidChangeTreeData(() => {
+            refreshes += 1;
+        });
+
+        await provider.refreshWithFetch();
+
+        expect(fetched).toEqual([
+            [
+                "/opt/tools/cli",
+                `${HOME}/projects/platform`,
+                `${HOME}/projects/ai`,
+                `${HOME}/projects/platform/superset`,
+                `${HOME}/projects/platform/gateway`,
+            ],
+        ]);
+        // 先重畫一次不等網路,fetch 完再重畫一次讓領先／落後跟上。
+        expect(refreshes).toBe(2);
+        provider.dispose();
+    });
+
+    it("does not fetch when nothing has been materialised yet", async () => {
+        const provider = new CLILauncherTreeProvider();
+
+        await provider.refreshWithFetch();
+
+        expect(fetched).toEqual([]);
+        provider.dispose();
     });
 
     it("applies literal hidden rules to the resolved scan catalog", async () => {
@@ -487,6 +535,8 @@ describe("CLILauncherTreeProvider", () => {
             branch: "w-cli-git",
             added: 4,
             removed: 0,
+            ahead: 0,
+            behind: 0,
         });
 
         const provider = new CLILauncherTreeProvider();
@@ -505,6 +555,8 @@ describe("CLILauncherTreeProvider", () => {
             branch: "release",
             added: 2,
             removed: 1,
+            ahead: 0,
+            behind: 0,
         });
         const source = new FakeTerminalSource();
         source.set("/opt/tools/cli", [

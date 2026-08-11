@@ -499,22 +499,34 @@ Superset 不建立重複 workflow。Change action 失敗時會顯示原因。
 `empty → working tree`；刪除與 rename 仍保留正確的空白 side 或 original path。
 `Refresh` 可同時重讀 `Repo Path` Git summary 與目前 `Change` list。
 
-#### git 分支與行數增減
+#### git 分支、遠端落差與行數增減
 
 每一列名稱右側顯示`該資料夾自己`的 git 狀態,格式為
-`<分支>(+<新增或修改行數>,-<刪除行數>)`,例如 `w-cli-git(+180,-165)`:
+`<分支><↑未推送><↓未拉取>(+<新增或修改行數>,-<刪除行數>)`,例如
+`w-cli-git↑2↓1(+180,-165)`:
 
 - 行數是 `git diff HEAD` 的加總,`staged` 與 `unstaged` 一起算;`未追蹤`檔案不
   在 `git diff` 範圍內,因此不計入。二進位檔案略過。
+- `↑<數量>` 是本地有、upstream 沒有的 commit 數(還沒推上去的);`↓<數量>` 是
+  upstream 有、本地沒有的 commit 數(還沒拉下來的)。任一邊為 0 時該符號不顯示,
+  沒有設定 upstream 的分支兩邊都不顯示。
+- 這兩個數字比對的是`上一次 fetch 下來的` remote refs,所以平時的自動刷新不會
+  連網。按下 `Refresh` 才會對目前列出的 repository 跑一次 `git fetch`,抓完後
+  重畫,數字才反映遠端當下的狀態。
 - 只有資料夾本身是 repository(含 submodule)時才顯示;不會沿父層往上找,
   所以 `~/projects/platform` 不會顯示 `~/projects` 的狀態。
-- 停在預設分支(`master` / `main`)且`零改動`時 description 留空 —— 那是常態,
-  一整排 `master(+0,-0)` 只會把真正在動的 repo 淹掉。其他情況一律顯示,包含
-  乾淨的 `w-*` 分支(站在哪個分支本身就是資訊)。detached HEAD 時顯示短 commit hash。
+- 停在預設分支(`master` / `main`)、`零改動`且`與 upstream 同步`時 description
+  留空 —— 那是常態,一整排 `master(+0,-0)` 只會把真正在動的 repo 淹掉。其他情況
+  一律顯示,包含乾淨的 `w-*` 分支(站在哪個分支本身就是資訊)與只差幾個 commit
+  沒推的乾淨 repo。detached HEAD 時顯示短 commit hash。
 - Hover tooltip 只有兩行:完整的 git 狀態(含被 description 省略的靜止狀態)與
   `CLI terminals: <數量>`。第二層的狀態在展開時才讀取。
 - 面板`可見`時每 30 秒自動重刷一次,外部 commit / checkout / stash 的結果不必手動
-  `Refresh` 也會跟上;面板隱藏時停止,不在背景重掃。
+  `Refresh` 也會跟上;面板隱藏時停止,不在背景重掃。自動刷新`不` fetch。
+- `Refresh` 會做三件事:重掃路徑清單、重讀本地 git 狀態、對目前畫面上的
+  repository(含已展開的第二層)跑 `git fetch`。面板先更新不等網路,fetch 期間
+  狀態列顯示進度,抓完再重畫一次。沒有 remote、離線或認證失敗一律安靜略過,
+  保留上一次已知的數字。
 
 #### Path terminal 清單
 
