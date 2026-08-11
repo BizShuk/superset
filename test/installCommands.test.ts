@@ -391,6 +391,20 @@ describe("terminal command dispatch", () => {
                 repo: "bizshuk/cc-plugin",
             },
             {
+                label: "bizshuk/tools",
+                description:
+                    "macOS 工具鏈 · Apple 生態整合與 pm2 / autop / proxy 等 CLI skills",
+                detail: "GitHub · bizshuk/tools",
+                repo: "bizshuk/tools",
+            },
+            {
+                label: "bizshuk/platform",
+                description:
+                    "Go 開發與本機基礎設施 plugin 目錄 (gosdk / inf / n8n)",
+                detail: "GitHub · bizshuk/platform",
+                repo: "bizshuk/platform",
+            },
+            {
                 label: "anthropics/claude-plugins-official",
                 description:
                     "Anthropic 維護的 Claude Code 高品質 Plugin 目錄",

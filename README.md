@@ -364,6 +364,8 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 | 顯示名稱                             | 用途                                               | GitHub repository                         |
 | ------------------------------------ | -------------------------------------------------- | ----------------------------------------- |
 | `bizshuk/cc-plugin`（預設）          | AI 編碼代理的全域設定、Skills、Agents 與記憶工具   | `bizshuk/cc-plugin`                       |
+| `bizshuk/tools`                      | macOS 工具鏈與 pm2 / autop / proxy 等 CLI skills   | `bizshuk/tools`                           |
+| `bizshuk/platform`                   | Go 開發與本機基礎設施 plugin 目錄 (gosdk / inf / n8n) | `bizshuk/platform`                     |
 | `anthropics/claude-plugins-official` | Anthropic 維護的 Claude Code 高品質 Plugin 目錄    | `anthropics/claude-plugins-official`      |
 | `anthropics/skills`                  | Anthropic 的 Agent Skills 範例、規格與文件處理技能 | `anthropics/skills`                       |
 | `awesome-claude-code-subagents`      | 涵蓋多種開發任務的 Claude Code 專用 Subagents 合集 | `VoltAgent/awesome-claude-code-subagents` |
