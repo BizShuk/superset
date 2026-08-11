@@ -161,11 +161,18 @@ async function readBranch(dir: string): Promise<string | undefined> {
  *
  * 未追蹤檔案不在 `git diff` 的範圍內,因此`不計入`;要看未追蹤請開 SCM 面板。
  * 尚無 commit 的 repo 沒有 `HEAD`,退回只比對工作區與 index。
+ *
+ * `--ignore-submodules=all` 排除 gitlink:submodule 指標更新在 numstat 是
+ * `1\t1\t<path>`,但 parent repo 裡`沒有任何一行檔案內容`改變,計入會讓
+ * 一個只是 pin 前進的 workspace 看起來有一堆待處理的編輯。submodule 自己的
+ * 改動由它自己那一列顯示。
  */
+const DIFF_ARGS = ["--numstat", "--ignore-submodules=all"];
+
 async function readDiffLines(dir: string): Promise<DiffLineCounts> {
     const output =
-        (await runGit(dir, ["diff", "HEAD", "--numstat"])) ??
-        (await runGit(dir, ["diff", "--numstat"]));
+        (await runGit(dir, ["diff", "HEAD", ...DIFF_ARGS])) ??
+        (await runGit(dir, ["diff", ...DIFF_ARGS]));
     return output === undefined ? { added: 0, removed: 0 } : parseNumstat(output);
 }
 
