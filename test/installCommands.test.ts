@@ -405,6 +405,13 @@ describe("terminal command dispatch", () => {
                 repo: "bizshuk/platform",
             },
             {
+                label: "bizshuk/product",
+                description:
+                    "產品研究容器 · 跨媒體 IP 孵化 (ip-incubation) 等產品線 plugin 目錄",
+                detail: "GitHub · bizshuk/product",
+                repo: "bizshuk/product",
+            },
+            {
                 label: "anthropics/claude-plugins-official",
                 description:
                     "Anthropic 維護的 Claude Code 高品質 Plugin 目錄",
