@@ -80,6 +80,10 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
         label: "mdserver",
         cmd: "go install github.com/bizshuk/mdserver@master",
     },
+    {
+        label: "ytdl",
+        cmd: "go install github.com/bizshuk/ytdl@master",
+    },
 ] as const;
 
 const SKILL_REPOSITORIES: readonly CuratedSkillRepositoryPickItem[] = [

@@ -189,7 +189,7 @@ describe("terminal command dispatch", () => {
         asMock(vscode.window.showQuickPick).mockResolvedValue(undefined);
     });
 
-    it("installDefaultTools spawns nine separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
+    it("installDefaultTools spawns ten separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
         const expectedTools = [
             {
                 label: "pm2",
@@ -227,6 +227,10 @@ describe("terminal command dispatch", () => {
                 label: "mdserver",
                 cmd: "go install github.com/bizshuk/mdserver@master",
             },
+            {
+                label: "ytdl",
+                cmd: "go install github.com/bizshuk/ytdl@master",
+            },
         ];
         const makeTerminal = () =>
             ({
@@ -245,7 +249,8 @@ describe("terminal command dispatch", () => {
             .mockReturnValueOnce(terminals[5])
             .mockReturnValueOnce(terminals[6])
             .mockReturnValueOnce(terminals[7])
-            .mockReturnValueOnce(terminals[8]);
+            .mockReturnValueOnce(terminals[8])
+            .mockReturnValueOnce(terminals[9]);
         terminalFactory = spawn;
         const pCtx = fakePluginContext();
         globalCommandsPlugin.activate(pCtx as never);
@@ -308,7 +313,7 @@ describe("terminal command dispatch", () => {
         const failures = log.mock.calls.filter(([message]) =>
             String(message).includes("terminal unavailable")
         );
-        expect(failures).toHaveLength(9);
+        expect(failures).toHaveLength(10);
     });
 
     it("projectsSetup runs the bundled setup script against the fixed ~/projects root", async () => {
