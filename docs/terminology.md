@@ -359,7 +359,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Direct Subfolder`     | 所選 path 正下方的一層 child directory；名稱不含 path separator，不代表 nested relative path。                        |
 | `Create Subfolder`     | `superset.cliLauncherCreateSubfolder` 的顯示名稱。在每個所選 path 建立同名 Direct Subfolder，不改 CLI settings。      |
 | `Quiet Git Status`     | 分支為 `master` / `main` 且行數增減皆為零的靜止狀態；description 略過不顯示，tooltip 仍保留完整值。                      |
-| `Auto Refresh`         | View 可見時每 30 秒一次的全樹重刷（`AUTO_REFRESH_INTERVAL_MS`）；面板隱藏即停止，不在背景重掃。                          |
+| `Auto Refresh`         | View 可見時每 5 分鐘一次的全樹重刷（`AUTO_REFRESH_INTERVAL_MS`）；面板隱藏即停止，不在背景重掃。                        |
 
 ## Markdown 與 Preview 術語
 

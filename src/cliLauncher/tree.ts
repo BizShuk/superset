@@ -8,7 +8,7 @@
 // `superset.cliLauncher.entries` 的 literal Pinned Paths 與 Regex Dynamic Entries
 // 排在一般 Git repository 結果之前；兩者維持各自的移除語意。
 //
-// 面板可見時每 30 秒自動重刷一次
+// 面板可見時每 5 分鐘自動重刷一次
 // (`AUTO_REFRESH_INTERVAL_MS`),讓 git 狀態跟得上外部的 commit / checkout;這一輪
 // 只讀本地,不連遠端。`Refresh` (`refreshWithFetch`) 才會對畫面上的 repository 跑
 // `git fetch`,讓未推送／未拉取的 commit 數反映遠端當下的狀態。
@@ -202,10 +202,10 @@ export class CLITerminalTreeItem extends vscode.TreeItem {
 export type CLILauncherTreeItem = CLIEntryTreeItem | CLITerminalTreeItem;
 
 /**
- * 自動重刷間隔。git 分支與行數增減沒有可訂閱的事件來源,只能定期重讀;30 秒
+ * 自動重刷間隔。git 分支與行數增減沒有可訂閱的事件來源,只能定期重讀;5 分鐘
  * 對「切過去看一眼」夠即時,又不至於讓 `readdir` + `git` 變成常駐負載。
  */
-export const AUTO_REFRESH_INTERVAL_MS = 30_000;
+export const AUTO_REFRESH_INTERVAL_MS = 300_000;
 
 export class CLILauncherTreeProvider
     implements vscode.TreeDataProvider<CLILauncherTreeItem>, vscode.Disposable
@@ -241,7 +241,7 @@ export class CLILauncherTreeProvider
 
     /**
      * 由 `registerViewVisibility` 驅動。面板看不見時不重掃 —— 掃描沒有快取,
-     * 隱藏的面板每 30 秒打一輪 `readdir` + `git` 只是純浪費。
+     * 隱藏的面板每 5 分鐘打一輪 `readdir` + `git` 只是純浪費。
      */
     setVisible(visible: boolean): void {
         if (this.visible === visible) {

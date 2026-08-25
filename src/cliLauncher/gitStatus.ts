@@ -312,7 +312,7 @@ async function forEachWithConcurrency<T>(
  * 更新這些資料夾的 remote-tracking refs (`git fetch`),讓之後讀到的領先／落後
  * 數字反映遠端`現在`的狀態。
  *
- * 只在使用者按下 `Refresh` 時呼叫:fetch 會走網路與認證,不能掛在每 30 秒的
+ * 只在使用者按下 `Refresh` 時呼叫:fetch 會走網路與認證,不能掛在每 5 分鐘的
  * 自動刷新上 —— 那等於替每個開著面板的人固定對所有遠端發流量。
  *
  * 不是 repository 的路徑直接跳過;任何失敗 (沒有 remote、離線、認證失敗、逾時)

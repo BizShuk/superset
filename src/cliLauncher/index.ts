@@ -108,7 +108,7 @@ export function register(ctx: PluginContext): void {
     changesView.message = changesProvider.message;
     void setPathSelectionContext(false);
 
-    // 面板可見時才每 30 秒重掃一次;git 狀態沒有事件來源,只能定期重讀。
+    // 面板可見時才每 5 分鐘重掃一次;git 狀態沒有事件來源,只能定期重讀。
     const visibilitySub = registerViewVisibility(view, VIEW_ID, (visible) =>
         provider.setVisible(visible)
     );

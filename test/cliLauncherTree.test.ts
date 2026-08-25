@@ -120,7 +120,7 @@ function providerWith(source: FakeTerminalSource) {
     return new Provider(source);
 }
 
-/** 自動重刷測試用:縮短間隔,不必等真正的 30 秒。 */
+/** 自動重刷測試用:縮短間隔,不必等真正的 5 分鐘。 */
 function withInterval(intervalMs: number) {
     const Provider = CLILauncherTreeProvider as unknown as new (
         source: FakeTerminalSource,
@@ -427,7 +427,7 @@ describe("CLILauncherTreeProvider", () => {
     });
 
     it("defaults to a 30s auto refresh", () => {
-        expect(AUTO_REFRESH_INTERVAL_MS).toBe(30_000);
+        expect(AUTO_REFRESH_INTERVAL_MS).toBe(300_000);
     });
 
     it("fetches the rows already on screen and redraws twice", async () => {

@@ -522,7 +522,7 @@ Superset 不建立重複 workflow。Change action 失敗時會顯示原因。
   沒推的乾淨 repo。detached HEAD 時顯示短 commit hash。
 - Hover tooltip 只有兩行:完整的 git 狀態(含被 description 省略的靜止狀態)與
   `CLI terminals: <數量>`。第二層的狀態在展開時才讀取。
-- 面板`可見`時每 30 秒自動重刷一次,外部 commit / checkout / stash 的結果不必手動
+- 面板`可見`時每 5 分鐘自動重刷一次,外部 commit / checkout / stash 的結果不必手動
   `Refresh` 也會跟上;面板隱藏時停止,不在背景重掃。自動刷新`不` fetch。
 - `Refresh` 會做三件事:重掃路徑清單、重讀本地 git 狀態、對目前畫面上的
   repository(含已展開的第二層)跑 `git fetch`。面板先更新不等網路,fetch 期間
