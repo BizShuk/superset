@@ -9,8 +9,8 @@
 // `restyleLayout` before anything is written back.
 
 import * as vscode from "vscode";
-import type { EditorLayoutDescriptor, ShapePolicy } from "./layoutModes";
-import { clampMaxRatio } from "./layoutModes";
+import type { EditorLayoutDescriptor, ShapePolicy } from "./grid";
+import { clampMaxRatio } from "./grid";
 import type { LayoutHost } from "./controller";
 
 export const GET_EDITOR_LAYOUT_COMMAND = "vscode.getEditorLayout";

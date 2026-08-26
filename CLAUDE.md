@@ -47,7 +47,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | `src/sessions/` | Agent session 清單與 summary markdown(讀 `sessiond` JSONL) | `sessionsPlugin` |
 | `src/todo/` | 當前 workspace 遞迴掃描的 `README.todo` 與 plans（含 workspace store / tree provider） | `todoPlugin` |
 | `src/git/` | Explorer GitHub URL、Git hooks Install/Link 與 Status Bar | `gitPlugin` |
-| `src/editorLayout/` | Editor group 四模式佈局（水平/垂直 × 均分/放大）與網格形狀 | `editorLayoutPlugin` |
+| `src/editorLayout/` | Editor group 固定佈局規則（左右均分 × 作用中列放大）與網格形狀 | `editorLayoutPlugin` |
 | `src/diskUsage/` | 第一個 workspace volume 的 disk capacity Status Bar 顯示與週期刷新 | `diskUsagePlugin` |
 | `src/cliLauncher/` | 獨立「CLI」container：`Repo Path` 掃描與 agent terminals；`Change` 提供 grouped status、staging actions 與 Diff Editor | `cliLauncherPlugin` |
 | `src/installCommands.ts` | Default Project、Default Tools、Skill Install 與 Projects Setup commands | `registerInstallCommands` |
@@ -99,12 +99,15 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - `src/sessions/` 不得改寫 ingest session content，唯一 content writer 是 `sample-*.jsonl` 假資料指令；`Clear Sample Sessions` 仍只清除該 prefix，不得批次影響 ingest sessions。`Delete Session` 則直接刪除所選 sample 或 ingest JSONL，不顯示 confirmation；`deleteSession` 必須在內部限制為 configured Sessions store 內的 `.jsonl`，不得只依賴 UI 傳入的 path。
 - Sessions 的 Tree View 與 summary renderer 必須共用單一 `SessionStore`。cache 只在 `sizeBytes + mtimeMs` 同時相符時重用 parsed record，directory scan 必須淘汰已刪除檔案；recursive Store Watcher 只在 `Sessions View` visible 時存在。
 - Summary markdown 的 heading 契約固定為 `#` session /`##` round /`###` tool，由 `markdown.ts` 單點決定。`##` 層級保留給「Round」序列使用；其他段落（含 Resume、Summary、Overview 等）一律降到 `###` 或更深，確保 VS Code outline 將 round 顯示為同一連續序列，不被同層插入的 heading 打斷。
-- Editor Layout 的 mode 是`兩個方向各自的 sizing 組合`（`{horizontal: even|max} × {vertical: even|max}`），固定四個字面值 `even-even` / `max-even` / `even-max` / `max-max`。決定某一層套用哪個 sizing 的是`該層的方向`而非深度：level 0 依 root `orientation`，以下逐層交替（`directionAt`）。不得回退成「選一個主軸」的單軸模型，也不得加入沿路徑攤平的深度補償 —— 那會讓 `2×2` 的兄弟節點被壓到最小尺寸而看似消失。
-- 網格形狀 (grid shape) 與 root orientation 都與四個 mode 正交，不得升為第五個模式。四個 mode 一律走`保形 (topology-preserving)` 的 `restyleLayout`，保留樹形與 orientation、只重寫各層 `size`；orientation 只由 `transpose` 改變。`buildLayout` 是唯一會改變格子數的路徑，只能從 shape pick / reset 進入，且必須先過 `reconcileShape` 讓 `sum(shape) === groupCount`（`vscode.setEditorLayout` 對 leaf 數不符會新建空 group 或 `mergeGroup` 既有 group）。
+- Editor Layout 的 sizing 規則是`固定`的：horizontal `even`、vertical `max`（`grid.ts#MAX_AXIS`）。不得回退成可選 mode —— 沒有 mode 就沒有 mode 記錄、沒有 status bar、沒有 picker/cycle/toggle 命令，`workspaceState` 不存任何 layout 狀態。決定某一層套用哪個 sizing 的是`該層的方向`而非深度：level 0 依 root `orientation`，以下逐層交替（`directionAt`）。不得加入沿路徑攤平的深度補償 —— 那會讓 `2×2` 的兄弟節點被壓到最小尺寸而看似消失。
+- Editor Layout 只有四個命令：`Refresh`（唯一綁鍵，`Cmd+Alt+V`）、`Transpose`、`Pick/Reset Editor Grid Shape`。不得新增 status bar item —— 只有一種佈局時，狀態列指示沒有可顯示的狀態。
+
+- 網格形狀 (grid shape) 與 root orientation 都與 sizing 規則正交，不得升格成可選模式。套用一律走`保形 (topology-preserving)` 的 `restyleLayout`，保留樹形與 orientation、只重寫各層 `size`；orientation 只由 `transpose` 改變。`buildLayout` 是唯一會改變格子數的路徑，只能從 shape pick / reset 進入，且必須先過 `reconcileShape` 讓 `sum(shape) === groupCount`（`vscode.setEditorLayout` 對 leaf 數不符會新建空 group 或 `mergeGroup` 既有 group）。
 - `activeShare` 必須保證每個非作用中的兄弟至少留下 `MIN_SIBLING_SHARE`，並且不得小於均分值；同層兄弟過多時退化為均分。這是防止 `max` 把格子擠到 VS Code 最小尺寸而視覺上消失的第一道防線。
 - 送進 `setEditorLayout` 的 `size` 必須是`與 getEditorLayout 相同量級的整數像素`，每個 sibling set 沿用該 set 現有的像素總量（無法取得時退回 `FALLBACK_SET_TOTAL`），由 `allocateSizes` 以最大餘數法分配且每格至少 1。不可送出加總為 1 的小數比例 —— `createSerializedGrid` 以 size 總和推導虛擬網格尺寸，小數會造出 `1x1` 的網格，每個 group 都低於最小尺寸而被 clamp，結果是兄弟看似消失但實際存在。
 - 因為 size 是像素，`layoutSignature` 必須以`同層佔比`比較而非原始像素，否則視窗縮放或 ±1px 誤差會被誤判成待套用的變更。
 - Editor Layout 的 `activeIndex` 只能來自 `activeTabGroup.viewColumn - 1`。`tabGroups.all` 是 group `建立順序`，descriptor 的 leaf 序是 `GRID_APPEARANCE` 深度優先順序，兩者在 split / 搬移後會分歧；用 `all.indexOf` 會放大錯誤的 group。
+- Editor Layout 的 `Refresh` 是唯一的 reconcile 入口：`controller.reset()` 清掉 signature memo，再 `force` 重套；`superset.editorLayout.*` 的設定變更走同一條路徑（`affectsConfiguration` gate），因為設定變動不會產生任何 grid event，沒有這條線 `maxRatio` 改了也只會停在舊比例。Refresh 不寫入任何持久狀態。
 - Editor Layout 的 signature guard 只比對`本次寫入 vs 上次寫入`，不得改成比對即時佈局 —— VS Code 會 clamp 最小寬高，requested 與 actual 本來就不同，比對即時佈局會讓 follow-active-group 無限重套。明確命令一律 `force`，事件驅動的重套才受 guard 約束。
 - `orientation` 只在 root 生效，巢狀層自動垂直於父層；`size` 是同層相對值。方向命名與 VS Code 選單相反，見 [`docs/terminology.md`](docs/terminology.md)。
 - `PluginManager` activation 失敗時必須立即 dispose 該 plugin 已註冊的 partial disposables 並移除 reset/diagnostics registration；root `deactivate()` 必須 await reverse teardown，再釋放 diagnostic channel。

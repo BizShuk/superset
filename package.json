@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.44.1",
+    "version": "0.47.0",
     "scripts": {
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -613,48 +613,8 @@
                 "icon": "$(folder-opened)"
             },
             {
-                "command": "superset.editorLayoutEven",
-                "title": "Superset: Editor Layout — Even Both Directions",
-                "icon": "$(editor-layout)"
-            },
-            {
-                "command": "superset.editorLayoutMaxHorizontal",
-                "title": "Superset: Editor Layout — Max Horizontal, Even Vertical",
-                "icon": "$(editor-layout)"
-            },
-            {
-                "command": "superset.editorLayoutMaxVertical",
-                "title": "Superset: Editor Layout — Even Horizontal, Max Vertical",
-                "icon": "$(editor-layout)"
-            },
-            {
-                "command": "superset.editorLayoutMaxBoth",
-                "title": "Superset: Editor Layout — Max Both Directions",
-                "icon": "$(editor-layout)"
-            },
-            {
-                "command": "superset.editorLayoutToggleHorizontal",
-                "title": "Superset: Toggle Horizontal Editor Sizing",
-                "icon": "$(editor-layout)"
-            },
-            {
-                "command": "superset.editorLayoutToggleVertical",
-                "title": "Superset: Toggle Vertical Editor Sizing",
-                "icon": "$(editor-layout)"
-            },
-            {
                 "command": "superset.editorLayoutTranspose",
                 "title": "Superset: Transpose Editor Grid",
-                "icon": "$(editor-layout)"
-            },
-            {
-                "command": "superset.editorLayoutCycle",
-                "title": "Superset: Cycle Editor Layout Mode",
-                "icon": "$(editor-layout)"
-            },
-            {
-                "command": "superset.editorLayoutPick",
-                "title": "Superset: Pick Editor Layout Mode",
                 "icon": "$(editor-layout)"
             },
             {
@@ -666,6 +626,11 @@
                 "command": "superset.editorLayoutShapeReset",
                 "title": "Superset: Reset Editor Grid Shape",
                 "icon": "$(debug-restart)"
+            },
+            {
+                "command": "superset.editorLayoutRefresh",
+                "title": "Superset: Refresh Editor Layout",
+                "icon": "$(refresh)"
             },
             {
                 "command": "superset.cliLauncherAddPath",
@@ -1284,15 +1249,9 @@
                 "mac": "ctrl+alt+t"
             },
             {
-                "command": "superset.editorLayoutCycle",
+                "command": "superset.editorLayoutRefresh",
                 "key": "cmd+alt+v",
                 "mac": "cmd+alt+v",
-                "when": "editorIsOpen"
-            },
-            {
-                "command": "superset.editorLayoutPick",
-                "key": "ctrl+alt+shift+v",
-                "mac": "ctrl+alt+shift+v",
                 "when": "editorIsOpen"
             },
             {

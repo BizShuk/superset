@@ -20,7 +20,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 | Explorer GitHub URL       | 檔案右鍵複製固定 `master` branch 的 GitHub URL              | 分享 repository 檔案連結的人         |
 | Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒 | 使用 repository-local hooks 的開發者 |
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
-| Editor Layout 四模式      | 水平與垂直方向`各自` even／max 的四種組合                   | 常同時開多個 editor group 的人       |
+| Editor Layout             | 固定規則：左右均分、作用中列放大，一鍵重套                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
 | `CLI` 面板                | 以 `Repo Path` 與 Focus list 選 repository、啟動 agent CLI，並在 `Change` View 管理變更與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
 
@@ -406,35 +406,30 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 12. Editor Layout — 四個 editor group 佈局模式
+### 12. Editor Layout — 固定的 editor group 佈局規則
 
-模式是`兩個方向各自`的 even／max `組合`，不是「選一個方向」：
+佈局規則是`固定`的，沒有模式可選、沒有狀態列指示：
 
 ```text
-mode = { horizontal: even | max } × { vertical: even | max }
+左右方向 (horizontal) = 均分     上下方向 (vertical) = 作用中列放大
 ```
 
-| 模式            | 左右方向     | 上下方向     | 在 `2×2` 網格上的效果                            |
-| --------------- | ------------ | ------------ | ------------------------------------------------ |
-| `H·Even V·Even` | 均分         | 均分         | 四格等大                                         |
-| `H·Max V·Even`  | 作用中欄放大 | 均分         | 作用中那`一欄`變寬（預設佔 80%），欄內兩列仍等高 |
-| `H·Even V·Max`  | 均分         | 作用中列放大 | 兩欄等寬，作用中那`一列`變高                     |
-| `H·Max V·Max`   | 作用中欄放大 | 作用中列放大 | 作用中格子最大，其餘仍看得見                     |
+在 `2×2` 網格上就是：兩欄等寬，作用中的那`一列`變高（預設佔該欄 80%），其餘格子仍然看得見。純左右切的 `1×N` 佈局沒有上下層可放大，因此一律等寬。
 
-`Ctrl+Alt+V` 循環四個組合，`Ctrl+Alt+Shift+V` 開 Quick Pick 直接挑。狀態列右側永遠顯示`兩個方向`（例：`H·Max V·Even 2×2`），點擊等同 Quick Pick。
+`Cmd+Alt+V` 執行 `Superset: Refresh Editor Layout`：清掉 signature guard 的記憶，強制把規則重新套用一次。手動拖過分隔線、或改了 `maxRatio` 之後想回到規則的樣子時按它。改動 `superset.editorLayout.*` 任一設定時會自動做同一件事，不需手動觸發。
 
-決定套用到哪一層的是`方向`而不是深度。VS Code 的巢狀層一律垂直於父層，所以 root 往左右切時，`H` 的 sizing 管 root、`V` 管下一層；`Superset: Transpose Editor Grid` 翻轉 root 方向後，兩者管的層級跟著對調 —— 這也就是 NxM 的轉置（`2 欄 × 3 列` 變 `3 欄 × 2 列`），格子數不變。
+決定套用到哪一層的是`方向`而不是深度。VS Code 的巢狀層一律垂直於父層，所以 root 往左右切時，均分管 root、放大管下一層；`Superset: Transpose Editor Grid` 翻轉 root 方向後，兩者管的層級跟著對調 —— 這也就是 NxM 的轉置（`2 欄 × 3 列` 變 `3 欄 × 2 列`），格子數不變。
 
 `不會把格子擠不見`。每個非作用中的兄弟節點至少保有該層 `10%` 的空間；`maxRatio` 太大或同層兄弟太多時，作用中的比例會自動下修，必要時退化成均分。
 
 其他行為：
 
-- 四個模式`保留現有網格形狀與 root 方向`，只重寫各層比例；手動拖出來的巢狀結構不會被覆蓋 —— 每次套用都先讀回目前的真實網格。
+- 套用時`保留現有網格形狀與 root 方向`，只重寫各層比例；手動拖出來的巢狀結構不會被覆蓋 —— 每次套用都先讀回目前的真實網格。
 - `只有兩個命令會改變網格形狀`：`Superset: Pick Editor Grid Shape` 與 `Superset: Reset Editor Grid Shape`。形狀清單只列出`格子總數與現有群組數相符`的選項，不會意外產生空群組或把 editor 併到別的群組去。
-- 只要有一個方向是 `max`，佈局就會跟著作用中的群組跑；`H·Even V·Even` 不會自動重算，手動拖過的分隔線會留著。
+- 佈局會跟著作用中的群組跑（可用 `followActiveGroup` 關閉）；沒有任何模式狀態被寫入 workspace。
 - VS Code 對群組有最小寬高限制，`superset.editorLayout.maxRatio` 是`比例提示`而非保證值。
 - 佈局命令只作用於`目前視窗`的 editor 區域；`Move Editor into New Window` 開出來的浮動視窗各有自己的網格。
-- 設定 `superset.editorLayout.maxRatio` 控制 `max` 方向上作用中群組的佔比，預設 `0.8`，可調範圍 `0.5`–`0.9`。其餘設定：`defaultShape`、`followActiveGroup`、`restoreOnActivate`。
+- 設定 `superset.editorLayout.maxRatio` 控制作用中列的佔比，預設 `0.8`，可調範圍 `0.5`–`0.9`。其餘設定：`defaultShape`、`followActiveGroup`、`restoreOnActivate`。
 
 ---
 
@@ -738,10 +733,7 @@ code --install-extension superset-*.vsix
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
 | `Superset: Install Default Tools`               | —                   | 安裝十個預設 Go CLI（含 `mdserver`、`ytdl`）                                   |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
-| `Superset: Cycle Editor Layout Mode`            | `Ctrl+Alt+V`        | 循環四個 editor group 佈局模式                                                |
-| `Superset: Pick Editor Layout Mode`             | `Ctrl+Alt+Shift+V`  | Quick Pick 直接挑一個佈局模式                                                 |
-| `Superset: Toggle Horizontal Editor Sizing`     | —                   | 只翻左右方向的 even／max                                                      |
-| `Superset: Toggle Vertical Editor Sizing`       | —                   | 只翻上下方向的 even／max                                                      |
+| `Superset: Refresh Editor Layout`               | `Cmd+Alt+V`         | 強制重套佈局規則（左右均分、作用中列放大）                                    |
 | `Superset: Transpose Editor Grid`               | —                   | 翻 root 方向，等同 NxM 網格轉置                                               |
 | `Superset: Pick Editor Grid Shape`              | —                   | 重塑 editor 網格形狀（唯一會改變格子數的命令）                                |
 | `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                        |

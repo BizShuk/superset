@@ -12,11 +12,10 @@ import {
     reconcileShape,
     restyleLayout,
     type EditorLayoutDescriptor,
-    type EditorLayoutMode,
     type LayoutOrientation,
     type LayoutShape,
     type ShapePolicy,
-} from "./layoutModes";
+} from "./grid";
 
 /** Everything the controller needs from the editor host. */
 export interface LayoutHost {
@@ -76,9 +75,9 @@ export class LayoutController {
     }
 
     /**
-     * Topology-preserving apply — the path taken by all four modes.
-     * The live orientation is preserved unless `orientation` is given,
-     * which only the transpose command does.
+     * Topology-preserving apply. The live orientation is preserved
+     * unless `orientation` is given, which only the transpose command
+     * does.
      *
      * `force` is set by every explicit user command. Event-driven
      * re-applies leave it off so the signature guard can suppress them:
@@ -91,8 +90,7 @@ export class LayoutController {
      * comparing against the live layout would make every event look
      * like a pending change and reintroduce the loop.
      */
-    async applyMode(
-        mode: EditorLayoutMode,
+    async apply(
         options: { force?: boolean; orientation?: LayoutOrientation } = {}
     ): Promise<boolean> {
         if (this.host.groupCount() < 1) return false;
@@ -100,7 +98,6 @@ export class LayoutController {
         const current = await this.host.readLayout();
         const desired = restyleLayout(
             current,
-            mode,
             this.host.activeIndex(),
             this.host.maxRatio(),
             options.orientation
@@ -126,10 +123,10 @@ export class LayoutController {
      * Flip the root orientation, which transposes an NxM grid without
      * touching the tree: nested levels are always perpendicular to
      * their parent, so `[2,2]` laid out as 2 columns of 2 rows becomes
-     * 2 rows of 2 columns. Sizing follows the direction, so the mode's
-     * horizontal and vertical rules swap levels with it.
+     * 2 rows of 2 columns. Sizing follows the direction, so the
+     * even and max rules swap levels with it.
      */
-    async transpose(mode: EditorLayoutMode): Promise<boolean> {
+    async transpose(): Promise<boolean> {
         const current = await this.host.readLayout();
         if (!isLayoutDescriptor(current)) {
             this.host.log(
@@ -137,7 +134,7 @@ export class LayoutController {
             );
             return false;
         }
-        return this.applyMode(mode, {
+        return this.apply({
             force: true,
             orientation: flipOrientation(current.orientation),
         });
@@ -150,10 +147,7 @@ export class LayoutController {
      * shape whose sum differs from the live group count would make
      * VS Code spawn empty groups or merge existing ones.
      */
-    async applyShape(
-        mode: EditorLayoutMode,
-        shape: LayoutShape
-    ): Promise<boolean> {
+    async applyShape(shape: LayoutShape): Promise<boolean> {
         const count = this.host.groupCount();
         if (count < 1) return false;
 
@@ -163,7 +157,6 @@ export class LayoutController {
             : 0;
         const reconciled = reconcileShape(shape, count, this.host.shapePolicy());
         const desired = buildLayout(
-            mode,
             reconciled,
             orientation,
             this.host.activeIndex(),
@@ -176,15 +169,9 @@ export class LayoutController {
         return true;
     }
 
-    /** Live grid shape, for the status bar and the picker check-mark. */
+    /** Live grid shape, for the picker check-mark. */
     async currentShape(): Promise<LayoutShape> {
         return describeShape(await this.host.readLayout());
-    }
-
-    /** Live root orientation, for the status bar. Defaults to horizontal. */
-    async currentOrientation(): Promise<LayoutOrientation> {
-        const current = await this.host.readLayout();
-        return isLayoutDescriptor(current) ? current.orientation : 0;
     }
 
     /** Candidate shapes for the live group count. Every entry is safe. */

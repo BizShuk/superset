@@ -686,38 +686,12 @@ describe("Editor Layout manifest contributions", () => {
         manifest.contributes.commands.map((c) => [c.command, c.title])
     );
 
-    it("publishes one command per sizing combination, naming both directions", () => {
-        // A mode is {horizontal} x {vertical}; a title that named only
-        // one direction would hide half the state it selects.
-        expect(titles.get("superset.editorLayoutEven")).toBe(
-            "Superset: Editor Layout — Even Both Directions"
-        );
-        expect(titles.get("superset.editorLayoutMaxHorizontal")).toBe(
-            "Superset: Editor Layout — Max Horizontal, Even Vertical"
-        );
-        expect(titles.get("superset.editorLayoutMaxVertical")).toBe(
-            "Superset: Editor Layout — Even Horizontal, Max Vertical"
-        );
-        expect(titles.get("superset.editorLayoutMaxBoth")).toBe(
-            "Superset: Editor Layout — Max Both Directions"
-        );
-    });
-
-    it("publishes the per-direction toggles, transpose and pickers", () => {
-        expect(titles.get("superset.editorLayoutToggleHorizontal")).toBe(
-            "Superset: Toggle Horizontal Editor Sizing"
-        );
-        expect(titles.get("superset.editorLayoutToggleVertical")).toBe(
-            "Superset: Toggle Vertical Editor Sizing"
+    it("publishes only the four commands the feature still owns", () => {
+        expect(titles.get("superset.editorLayoutRefresh")).toBe(
+            "Superset: Refresh Editor Layout"
         );
         expect(titles.get("superset.editorLayoutTranspose")).toBe(
             "Superset: Transpose Editor Grid"
-        );
-        expect(titles.get("superset.editorLayoutCycle")).toBe(
-            "Superset: Cycle Editor Layout Mode"
-        );
-        expect(titles.get("superset.editorLayoutPick")).toBe(
-            "Superset: Pick Editor Layout Mode"
         );
         expect(titles.get("superset.editorLayoutShapePick")).toBe(
             "Superset: Pick Editor Grid Shape"
@@ -725,10 +699,24 @@ describe("Editor Layout manifest contributions", () => {
         expect(titles.get("superset.editorLayoutShapeReset")).toBe(
             "Superset: Reset Editor Grid Shape"
         );
+        expect(
+            [...titles.keys()].filter((c) => c.startsWith("superset.editorLayout"))
+        ).toHaveLength(4);
     });
 
-    it("does not keep any superseded single-axis command", () => {
+    it("keeps no mode-selection command", () => {
+        // The sizing rule is fixed (horizontal even, vertical max), so
+        // every command that used to SELECT one is gone — along with
+        // the superseded single-axis ids from before that.
         for (const stale of [
+            "superset.editorLayoutEven",
+            "superset.editorLayoutMaxHorizontal",
+            "superset.editorLayoutMaxVertical",
+            "superset.editorLayoutMaxBoth",
+            "superset.editorLayoutToggleHorizontal",
+            "superset.editorLayoutToggleVertical",
+            "superset.editorLayoutCycle",
+            "superset.editorLayoutPick",
             "superset.editorLayoutHorizontalEven",
             "superset.editorLayoutHorizontalMax",
             "superset.editorLayoutVerticalEven",
@@ -740,18 +728,14 @@ describe("Editor Layout manifest contributions", () => {
         }
     });
 
-    it("binds cycle and pick only while an editor is open", () => {
-        const cycle = keybindings.find(
-            (k) => k.command === "superset.editorLayoutCycle"
+    it("binds refresh, and only refresh, while an editor is open", () => {
+        const layoutKeys = keybindings.filter((k) =>
+            k.command.startsWith("superset.editorLayout")
         );
-        const pick = keybindings.find(
-            (k) => k.command === "superset.editorLayoutPick"
-        );
-        expect(cycle?.key).toBe("cmd+alt+v");
-        expect(cycle?.mac).toBe("cmd+alt+v");
-        expect(cycle?.when).toBe("editorIsOpen");
-        expect(pick?.key).toBe("ctrl+alt+shift+v");
-        expect(pick?.when).toBe("editorIsOpen");
+        expect(layoutKeys).toHaveLength(1);
+        expect(layoutKeys[0].command).toBe("superset.editorLayoutRefresh");
+        expect(layoutKeys[0].key).toBe("cmd+alt+v");
+        expect(layoutKeys[0].when).toBe("editorIsOpen");
     });
 
     it("does not turn a bound key into a chord leader", () => {

@@ -1,19 +1,18 @@
-// editorLayout/layoutModes — pure domain for the four editor-layout
-// modes. No `vscode` import, so every rule here is unit-testable in
-// plain Node.
+// editorLayout/grid — pure domain for the editor grid. No `vscode`
+// import, so every rule here is unit-testable in plain Node.
 //
-// A mode is a COMBINATION of two independent sizings, one per screen
-// direction:
+// The sizing rule is FIXED, not a user-selectable mode:
 //
-//     { horizontal: even | max } x { vertical: even | max }
+//     horizontal: even   |   vertical: max
 //
-// so `max-even` means "the active column dominates the horizontal
-// direction, while rows inside it stay equal". The direction — not the
-// nesting depth — decides which sizing applies to a level, because
-// `orientation` alternates on every level of the tree.
+// Columns always share the width equally; inside a column, the active
+// row takes the larger share. The direction — not the nesting depth —
+// decides which rule applies to a level, because `orientation`
+// alternates on every level of the tree, which is what `directionAt`
+// walks.
 //
-// The grid SHAPE (NxM) is orthogonal to those four modes and is never
-// promoted to a fifth mode. Two consequences:
+// The grid SHAPE (NxM) and the root ORIENTATION are orthogonal to the
+// sizing rule. Two consequences:
 //
 //  - `restyleLayout` is the default path: it takes the tree returned by
 //    `vscode.getEditorLayout`, keeps the topology AND the orientation,
@@ -41,30 +40,11 @@
 /** Screen direction a tree level splits along. */
 export type LayoutAxis = "horizontal" | "vertical";
 
-/** Siblings share space equally, or the active one dominates. */
-export type LayoutSizing = "even" | "max";
-
 /**
- * The complete state space — exactly four values, no others. The id
- * reads `<horizontal>-<vertical>`, so `max-even` is "max horizontally,
- * even vertically".
+ * The one direction whose active sibling is enlarged. Levels splitting
+ * the other way always divide evenly.
  */
-export type EditorLayoutMode =
-    | "even-even"
-    | "max-even"
-    | "even-max"
-    | "max-max";
-
-/** Cycle order used by `superset.editorLayoutCycle`. */
-export const EDITOR_LAYOUT_MODES: readonly EditorLayoutMode[] = [
-    "even-even",
-    "max-even",
-    "even-max",
-    "max-max",
-];
-
-/** Default mode for a workspace with no stored record. */
-export const DEFAULT_EDITOR_LAYOUT_MODE: EditorLayoutMode = "even-even";
+export const MAX_AXIS: LayoutAxis = "vertical";
 
 /** Root orientation: `0` = groups run left->right, `1` = top->bottom. */
 export type LayoutOrientation = 0 | 1;
@@ -182,49 +162,6 @@ export function allocateSizes(
     return sizes;
 }
 
-const modeSet = new Set<string>(EDITOR_LAYOUT_MODES);
-
-/** Coerce arbitrary stored/user input into one of the four modes. */
-export function parseMode(raw: unknown): EditorLayoutMode | undefined {
-    return typeof raw === "string" && modeSet.has(raw)
-        ? (raw as EditorLayoutMode)
-        : undefined;
-}
-
-/** The sizing this mode applies to one direction. */
-export function sizingFor(
-    mode: EditorLayoutMode,
-    axis: LayoutAxis
-): LayoutSizing {
-    const [horizontal, vertical] = mode.split("-") as LayoutSizing[];
-    return axis === "horizontal" ? horizontal : vertical;
-}
-
-export function modeOf(
-    horizontal: LayoutSizing,
-    vertical: LayoutSizing
-): EditorLayoutMode {
-    return `${horizontal}-${vertical}` as EditorLayoutMode;
-}
-
-/** Flip one direction's sizing, leave the other untouched. */
-export function toggleSizing(
-    mode: EditorLayoutMode,
-    axis: LayoutAxis
-): EditorLayoutMode {
-    const flip = (sizing: LayoutSizing): LayoutSizing =>
-        sizing === "even" ? "max" : "even";
-    return axis === "horizontal"
-        ? modeOf(flip(sizingFor(mode, "horizontal")), sizingFor(mode, "vertical"))
-        : modeOf(sizingFor(mode, "horizontal"), flip(sizingFor(mode, "vertical")));
-}
-
-/** Next mode in `EDITOR_LAYOUT_MODES`, wrapping around. */
-export function cycleMode(mode: EditorLayoutMode): EditorLayoutMode {
-    const idx = EDITOR_LAYOUT_MODES.indexOf(mode);
-    return EDITOR_LAYOUT_MODES[(idx + 1) % EDITOR_LAYOUT_MODES.length];
-}
-
 /** Flip the root orientation — the transpose of an NxM grid. */
 export function flipOrientation(
     orientation: LayoutOrientation
@@ -331,22 +268,20 @@ export function findLeafPath(
  * Rewrite the sizes of one sibling list, recursing into children.
  *
  * `path` is the root->leaf index path of the active group. A level is
- * enlarged only when it sits on that path AND the mode asks for `max`
- * in the direction that level splits along — which is what keeps
- * `max-even` from squeezing the rows inside the widened column.
+ * enlarged only when it sits on that path AND splits along `MAX_AXIS`
+ * — which is what keeps the enlarged row from squeezing the columns
+ * that contain it.
  */
 function styleNodes(
     nodes: readonly GroupLayoutNode[],
     path: readonly number[],
     level: number,
-    mode: EditorLayoutMode,
     orientation: LayoutOrientation,
     maxRatio: number
 ): GroupLayoutNode[] {
     const count = nodes.length;
     const onPath = level < path.length ? path[level] : -1;
-    const wantsMax =
-        sizingFor(mode, directionAt(level, orientation)) === "max";
+    const wantsMax = directionAt(level, orientation) === MAX_AXIS;
     const useMax = wantsMax && onPath >= 0 && count > 1;
     const ratio = useMax ? activeShare(maxRatio, count) : 0;
     const others = useMax ? (1 - ratio) / (count - 1) : 1 / count;
@@ -374,7 +309,6 @@ function styleNodes(
                 kids,
                 i === onPath ? path : [],
                 level + 1,
-                mode,
                 orientation,
                 maxRatio
             ),
@@ -384,16 +318,19 @@ function styleNodes(
 
 function styleTree(
     nodes: readonly GroupLayoutNode[],
-    mode: EditorLayoutMode,
     orientation: LayoutOrientation,
     activeIndex: number,
     maxRatio: number
 ): EditorLayoutDescriptor {
-    const needsPath = mode !== "even-even";
-    const path = needsPath ? findLeafPath(nodes, activeIndex) : [];
     return {
         orientation,
-        groups: styleNodes(nodes, path, 0, mode, orientation, maxRatio),
+        groups: styleNodes(
+            nodes,
+            findLeafPath(nodes, activeIndex),
+            0,
+            orientation,
+            maxRatio
+        ),
     };
 }
 
@@ -403,18 +340,16 @@ function clampIndex(index: unknown, leafCount: number): number {
 }
 
 /**
- * Topology-preserving restyle — the default path for all four modes.
+ * Topology-preserving restyle — the default path.
  *
  * `current` is the raw `vscode.getEditorLayout` result. The returned
  * descriptor keeps the identical tree shape and leaf count, and keeps
  * the live orientation unless `orientationOverride` is given (only the
  * transpose command does that). Returns `undefined` when `current` is
- * malformed or holds no groups, in which case the caller must no-op
- * (and must NOT clear the stored mode).
+ * malformed or holds no groups, in which case the caller must no-op.
  */
 export function restyleLayout(
     current: unknown,
-    mode: EditorLayoutMode,
     activeIndex: number,
     maxRatio: number,
     orientationOverride?: LayoutOrientation
@@ -424,7 +359,6 @@ export function restyleLayout(
     if (leafCount < 1) return undefined;
     return styleTree(
         current.groups,
-        mode,
         orientationOverride ?? current.orientation,
         clampIndex(activeIndex, leafCount),
         maxRatio
@@ -438,7 +372,6 @@ export function restyleLayout(
  * create empty groups or merge existing ones.
  */
 export function buildLayout(
-    mode: EditorLayoutMode,
     shape: LayoutShape,
     orientation: LayoutOrientation,
     activeIndex: number,
@@ -460,7 +393,6 @@ export function buildLayout(
 
     return styleTree(
         skeleton,
-        mode,
         orientation,
         clampIndex(activeIndex, leafCount),
         maxRatio
@@ -468,10 +400,9 @@ export function buildLayout(
 }
 
 /**
- * Derive the partition list of an existing tree, for display only
- * (status bar, shape picker check-mark). Nested depth beyond two levels
- * collapses into the leaf count of each root slot, which is exactly
- * what the NxM label needs.
+ * Derive the partition list of an existing tree, for the shape picker
+ * check-mark. Nested depth beyond two levels collapses into the leaf
+ * count of each root slot, which is exactly what the NxM label needs.
  */
 export function describeShape(current: unknown): LayoutShape {
     if (!isLayoutDescriptor(current)) return [];
@@ -592,4 +523,13 @@ export function formatShape(shape: LayoutShape): string {
     return shape.every((slot) => slot === first)
         ? `${shape.length}×${first}`
         : shape.join("+");
+}
+
+/**
+ * Human-readable label for one candidate shape. Falls back to `N × 1`
+ * for a flat split, where `formatShape` deliberately says nothing.
+ */
+export function renderShapeLabel(shape: LayoutShape): string {
+    const formatted = formatShape(shape);
+    return formatted || `${shape.length} × 1`;
 }

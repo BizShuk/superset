@@ -1,34 +1,29 @@
-// editorLayoutModes — the pure four-mode domain. A mode is a
-// COMBINATION of one sizing per direction, so the tests below check
-// that each direction is honoured independently: `max-even` must widen
-// the active column WITHOUT squeezing the rows inside it.
+// editorLayoutGrid — the pure grid domain. The sizing rule is FIXED
+// (horizontal even, vertical max), so the assertions below check that
+// the two directions stay independent: heightening the active row must
+// NOT squeeze the columns that contain it, and which tree level each
+// rule owns follows the root orientation, not the depth.
 
 import { describe, it, expect } from "vitest";
 import {
     DEFAULT_MAX_RATIO,
     FALLBACK_SET_TOTAL,
-    allocateSizes,
-    EDITOR_LAYOUT_MODES,
+    MAX_AXIS,
     MIN_SIBLING_SHARE,
     activeShare,
+    allocateSizes,
     buildLayout,
     clampMaxRatio,
     countLeaves,
-    cycleMode,
     describeShape,
     directionAt,
     findLeafPath,
     flipOrientation,
     isLayoutDescriptor,
-    modeOf,
-    parseMode,
     restyleLayout,
-    sizingFor,
-    toggleSizing,
     type EditorLayoutDescriptor,
-    type EditorLayoutMode,
     type GroupLayoutNode,
-} from "../src/editorLayout/layoutModes";
+} from "../src/editorLayout/grid";
 
 /** Strip every size so two trees can be compared on topology alone. */
 function topology(nodes: readonly GroupLayoutNode[]): unknown[] {
@@ -105,66 +100,16 @@ const deep3: EditorLayoutDescriptor = {
     ],
 };
 
-describe("mode algebra", () => {
-    it("is the combination of one sizing per direction", () => {
-        expect(EDITOR_LAYOUT_MODES).toEqual([
-            "even-even",
-            "max-even",
-            "even-max",
-            "max-max",
-        ]);
-        for (const horizontal of ["even", "max"] as const) {
-            for (const vertical of ["even", "max"] as const) {
-                const mode = modeOf(horizontal, vertical);
-                expect(EDITOR_LAYOUT_MODES).toContain(mode);
-                expect(sizingFor(mode, "horizontal")).toBe(horizontal);
-                expect(sizingFor(mode, "vertical")).toBe(vertical);
-            }
-        }
-    });
+const fixtures: Array<[string, EditorLayoutDescriptor]> = [
+    ["flat 3", flat3],
+    ["2x2", grid2x2],
+    ["ragged 2+2+1", ragged],
+    ["depth 3", deep3],
+];
 
-    it("parses only the four literals", () => {
-        for (const mode of EDITOR_LAYOUT_MODES) {
-            expect(parseMode(mode)).toBe(mode);
-        }
-        // The previous single-axis ids must not survive an upgrade.
-        expect(parseMode("h-even")).toBeUndefined();
-        expect(parseMode("v-max")).toBeUndefined();
-        expect(parseMode("Even-Even")).toBeUndefined();
-        expect(parseMode("")).toBeUndefined();
-        expect(parseMode(undefined)).toBeUndefined();
-        expect(parseMode(3)).toBeUndefined();
-    });
-
-    it("toggles one direction without touching the other", () => {
-        for (const mode of EDITOR_LAYOUT_MODES) {
-            const h = toggleSizing(mode, "horizontal");
-            expect(sizingFor(h, "horizontal")).not.toBe(
-                sizingFor(mode, "horizontal")
-            );
-            expect(sizingFor(h, "vertical")).toBe(sizingFor(mode, "vertical"));
-            expect(toggleSizing(h, "horizontal")).toBe(mode);
-
-            const v = toggleSizing(mode, "vertical");
-            expect(sizingFor(v, "vertical")).not.toBe(
-                sizingFor(mode, "vertical")
-            );
-            expect(sizingFor(v, "horizontal")).toBe(
-                sizingFor(mode, "horizontal")
-            );
-            expect(toggleSizing(v, "vertical")).toBe(mode);
-        }
-    });
-
-    it("cycles through all four modes and returns to the start", () => {
-        let mode: EditorLayoutMode = "even-even";
-        const seen: EditorLayoutMode[] = [];
-        for (let i = 0; i < 4; i++) {
-            seen.push(mode);
-            mode = cycleMode(mode);
-        }
-        expect(seen).toEqual(EDITOR_LAYOUT_MODES);
-        expect(mode).toBe("even-even");
+describe("the fixed sizing rule", () => {
+    it("maxes the vertical direction and only that one", () => {
+        expect(MAX_AXIS).toBe("vertical");
     });
 
     it("clamps maxRatio into 0.5-0.9 and falls back on junk", () => {
@@ -261,13 +206,12 @@ describe("pixel-magnitude sizes", () => {
     };
 
     it("emits integers, never fractions", () => {
-        for (const mode of EDITOR_LAYOUT_MODES) {
-            assertIntegerSizes(restyleLayout(livePixels, mode, 0, 0.7)!.groups);
-        }
+        assertIntegerSizes(restyleLayout(livePixels, 0, 0.7)!.groups);
+        assertIntegerSizes(restyleLayout(livePixels, 3, 0.9)!.groups);
     });
 
     it("preserves each sibling set's pixel extent", () => {
-        const out = restyleLayout(livePixels, "max-even", 0, 0.7)!;
+        const out = restyleLayout(livePixels, 0, 0.7)!;
         expect(out.groups.reduce((sum, n) => sum + n.size!, 0)).toBe(1600);
         for (const column of out.groups) {
             expect(column.groups!.reduce((sum, n) => sum + n.size!, 0)).toBe(
@@ -276,11 +220,12 @@ describe("pixel-magnitude sizes", () => {
         }
     });
 
-    it("splits the live extent by the mode's ratios", () => {
-        const out = restyleLayout(livePixels, "max-even", 0, 0.7)!;
-        expect(out.groups[0].size).toBe(1120);
-        expect(out.groups[1].size).toBe(480);
-        expect(out.groups[0].groups![0].size).toBe(800);
+    it("splits the live extent evenly across, by ratio down", () => {
+        const out = restyleLayout(livePixels, 0, 0.7)!;
+        expect(out.groups[0].size).toBe(800);
+        expect(out.groups[1].size).toBe(800);
+        expect(out.groups[0].groups![0].size).toBe(1120);
+        expect(out.groups[0].groups![1].size).toBe(480);
     });
 
     it("falls back to a usable budget when the live sizes are unusable", () => {
@@ -288,7 +233,7 @@ describe("pixel-magnitude sizes", () => {
             orientation: 0,
             groups: [{}, {}, {}],
         };
-        const out = restyleLayout(noSizes, "even-even", 0, 0.7)!;
+        const out = restyleLayout(noSizes, 0, 0.7)!;
         expect(out.groups.reduce((sum, n) => sum + n.size!, 0)).toBe(
             FALLBACK_SET_TOTAL
         );
@@ -296,63 +241,27 @@ describe("pixel-magnitude sizes", () => {
 });
 
 describe("restyleLayout", () => {
-    const fixtures: Array<[string, EditorLayoutDescriptor]> = [
-        ["flat 3", flat3],
-        ["2x2", grid2x2],
-        ["ragged 2+2+1", ragged],
-        ["depth 3", deep3],
-    ];
-
     it("never changes the topology or the leaf count", () => {
         for (const [name, fixture] of fixtures) {
-            for (const mode of EDITOR_LAYOUT_MODES) {
-                const out = restyleLayout(fixture, mode, 1, 0.7);
-                expect(out, name).toBeDefined();
-                expect(topology(out!.groups), `${name} / ${mode}`).toEqual(
-                    topology(fixture.groups)
-                );
-                expect(countLeaves(out!.groups)).toBe(
-                    countLeaves(fixture.groups)
-                );
-            }
+            const out = restyleLayout(fixture, 1, 0.7);
+            expect(out, name).toBeDefined();
+            expect(topology(out!.groups), name).toEqual(
+                topology(fixture.groups)
+            );
+            expect(countLeaves(out!.groups)).toBe(countLeaves(fixture.groups));
         }
     });
 
     it("preserves the live orientation unless overridden", () => {
-        expect(restyleLayout(flat3, "max-max", 0, 0.7)!.orientation).toBe(0);
-        expect(restyleLayout(ragged, "max-max", 0, 0.7)!.orientation).toBe(1);
-        expect(restyleLayout(flat3, "even-even", 0, 0.7, 1)!.orientation).toBe(
-            1
-        );
+        expect(restyleLayout(flat3, 0, 0.7)!.orientation).toBe(0);
+        expect(restyleLayout(ragged, 0, 0.7)!.orientation).toBe(1);
+        expect(restyleLayout(flat3, 0, 0.7, 1)!.orientation).toBe(1);
     });
 
-    it("splits every sibling set evenly in even-even", () => {
-        for (const [name, fixture] of fixtures) {
-            const out = restyleLayout(fixture, "even-even", 0, 0.7)!;
-            assertNoCollapse(out.groups);
-            const expected = 1 / fixture.groups.length;
-            for (let i = 0; i < out.groups.length; i++) {
-                expect(share(out.groups, i), name).toBeCloseTo(expected, 2);
-            }
-        }
-    });
-
-    it("max-even widens the active column and leaves its rows equal", () => {
-        // The regression this whole model exists for: a 2x2 grid must
-        // stay a visible 2x2, not collapse into one big editor.
-        const out = restyleLayout(grid2x2, "max-even", 0, 0.7)!;
-        assertNoCollapse(out.groups);
-
-        expect(share(out.groups, 0)).toBeCloseTo(0.7, 2);
-        expect(share(out.groups, 1)).toBeCloseTo(0.3, 2);
-        for (const column of out.groups) {
-            expect(share(column.groups!, 0)).toBeCloseTo(0.5, 2);
-            expect(share(column.groups!, 1)).toBeCloseTo(0.5, 2);
-        }
-    });
-
-    it("even-max heightens the active row and leaves columns equal", () => {
-        const out = restyleLayout(grid2x2, "even-max", 0, 0.7)!;
+    it("heightens the active row and leaves the columns equal", () => {
+        // The regression this model exists for: a 2x2 grid must stay a
+        // visible 2x2, not collapse into one big editor.
+        const out = restyleLayout(grid2x2, 0, 0.7)!;
         assertNoCollapse(out.groups);
 
         expect(share(out.groups, 0)).toBeCloseTo(0.5, 2);
@@ -363,76 +272,69 @@ describe("restyleLayout", () => {
         expect(share(out.groups[1].groups!, 0)).toBeCloseTo(0.5, 2);
     });
 
-    it("max-max enlarges both directions without collapsing a sibling", () => {
-        const out = restyleLayout(grid2x2, "max-max", 3, 0.7)!;
+    it("splits a horizontal-only grid evenly, with nothing to max", () => {
+        // A flat left-to-right split has no vertical level at all, so
+        // the active group gets no more room than its neighbours.
+        const out = restyleLayout(flat3, 1, 0.7)!;
         assertNoCollapse(out.groups);
-        expect(share(out.groups, 1)).toBeCloseTo(0.7, 2);
-        expect(share(out.groups[1].groups!, 1)).toBeCloseTo(0.7, 2);
-        // Every other group keeps 30% of its own level — visible.
-        expect(share(out.groups, 0)).toBeCloseTo(0.3, 2);
+        for (let i = 0; i < out.groups.length; i++) {
+            expect(share(out.groups, i)).toBeCloseTo(1 / 3, 2);
+        }
     });
 
-    it("swaps which level each sizing owns when the root is vertical", () => {
+    it("moves the max to the root when the root splits top to bottom", () => {
         const vertical: EditorLayoutDescriptor = {
             ...grid2x2,
             orientation: 1,
         };
-        const out = restyleLayout(vertical, "max-even", 0, 0.7)!;
-        // Root now splits top-to-bottom, so the VERTICAL sizing (even)
-        // applies there and the horizontal max moves one level down.
-        expect(share(out.groups, 0)).toBeCloseTo(0.5, 2);
-        expect(share(out.groups[0].groups!, 0)).toBeCloseTo(0.7, 2);
+        const out = restyleLayout(vertical, 0, 0.7)!;
+        // Root now splits top-to-bottom, so the vertical max applies
+        // there and the level below it divides evenly.
+        expect(share(out.groups, 0)).toBeCloseTo(0.7, 2);
+        expect(share(out.groups, 1)).toBeCloseTo(0.3, 2);
+        expect(share(out.groups[0].groups!, 0)).toBeCloseTo(0.5, 2);
     });
 
-    it("never squeezes a sibling below the floor at any mode or depth", () => {
+    it("never squeezes a sibling below the floor at any depth", () => {
         for (const [name, fixture] of fixtures) {
-            for (const mode of EDITOR_LAYOUT_MODES) {
-                for (const ratio of [0.5, 0.7, 0.9]) {
-                    for (
-                        let active = 0;
-                        active < countLeaves(fixture.groups);
-                        active++
-                    ) {
-                        const out = restyleLayout(
-                            fixture,
-                            mode,
-                            active,
-                            ratio
-                        )!;
-                        expect(
-                            () => assertNoCollapse(out.groups),
-                            `${name} / ${mode} / ${ratio} / ${active}`
-                        ).not.toThrow();
-                    }
+            for (const ratio of [0.5, 0.7, 0.9]) {
+                for (
+                    let active = 0;
+                    active < countLeaves(fixture.groups);
+                    active++
+                ) {
+                    const out = restyleLayout(fixture, active, ratio)!;
+                    expect(
+                        () => assertNoCollapse(out.groups),
+                        `${name} / ${ratio} / ${active}`
+                    ).not.toThrow();
                 }
             }
         }
     });
 
     it("clamps an out-of-range activeIndex instead of throwing", () => {
-        const high = restyleLayout(grid2x2, "max-even", 99, 0.7)!;
-        expect(share(high.groups, 1)).toBeCloseTo(0.7, 2);
-        const low = restyleLayout(grid2x2, "max-even", -5, 0.7)!;
-        expect(share(low.groups, 0)).toBeCloseTo(0.7, 2);
+        const high = restyleLayout(grid2x2, 99, 0.7)!;
+        expect(share(high.groups[1].groups!, 1)).toBeCloseTo(0.7, 2);
+        const low = restyleLayout(grid2x2, -5, 0.7)!;
+        expect(share(low.groups[0].groups!, 0)).toBeCloseTo(0.7, 2);
     });
 
-    it("gives a lone group the whole area in every mode", () => {
+    it("gives a lone group the whole area", () => {
         const single: EditorLayoutDescriptor = {
             orientation: 1,
             groups: [{ size: 0.3 }],
         };
-        for (const mode of EDITOR_LAYOUT_MODES) {
-            const out = restyleLayout(single, mode, 0, 0.7)!;
-            expect(out.groups).toHaveLength(1);
-            expect(share(out.groups, 0)).toBe(1);
-        }
+        const out = restyleLayout(single, 0, 0.7)!;
+        expect(out.groups).toHaveLength(1);
+        expect(share(out.groups, 0)).toBe(1);
     });
 
     it("returns undefined for malformed or empty layouts", () => {
-        expect(restyleLayout(undefined, "even-even", 0, 0.7)).toBeUndefined();
-        expect(restyleLayout({}, "even-even", 0, 0.7)).toBeUndefined();
+        expect(restyleLayout(undefined, 0, 0.7)).toBeUndefined();
+        expect(restyleLayout({}, 0, 0.7)).toBeUndefined();
         expect(
-            restyleLayout({ orientation: 0, groups: [] }, "even-even", 0, 0.7)
+            restyleLayout({ orientation: 0, groups: [] }, 0, 0.7)
         ).toBeUndefined();
     });
 });
@@ -464,41 +366,49 @@ describe("findLeafPath", () => {
 
 describe("buildLayout", () => {
     it("turns a partition into leaves, nesting only when needed", () => {
-        expect(topology(buildLayout("even-even", [1, 1, 1], 0, 0, 0.7)!.groups))
-            .toEqual([{}, {}, {}]);
-        expect(topology(buildLayout("even-even", [2, 2], 0, 0, 0.7)!.groups))
-            .toEqual([{ groups: [{}, {}] }, { groups: [{}, {}] }]);
-        expect(topology(buildLayout("even-even", [2, 2, 1], 0, 0, 0.7)!.groups))
-            .toEqual([{ groups: [{}, {}] }, { groups: [{}, {}] }, {}]);
+        expect(topology(buildLayout([1, 1, 1], 0, 0, 0.7)!.groups)).toEqual([
+            {},
+            {},
+            {},
+        ]);
+        expect(topology(buildLayout([2, 2], 0, 0, 0.7)!.groups)).toEqual([
+            { groups: [{}, {}] },
+            { groups: [{}, {}] },
+        ]);
+        expect(topology(buildLayout([2, 2, 1], 0, 0, 0.7)!.groups)).toEqual([
+            { groups: [{}, {}] },
+            { groups: [{}, {}] },
+            {},
+        ]);
     });
 
     it("produces exactly sum(shape) leaves", () => {
         for (const shape of [[1], [1, 1, 1], [2, 2], [3, 3], [2, 2, 1], [4, 2]]) {
-            const out = buildLayout("even-even", shape, 1, 0, 0.7)!;
+            const out = buildLayout(shape, 1, 0, 0.7)!;
             const expected = shape.reduce((sum, slot) => sum + slot, 0);
             expect(countLeaves(out.groups)).toBe(expected);
         }
     });
 
     it("uses the orientation it is handed", () => {
-        expect(buildLayout("even-even", [2, 2], 1, 0, 0.7)!.orientation).toBe(1);
-        expect(buildLayout("even-even", [2, 2], 0, 0, 0.7)!.orientation).toBe(0);
+        expect(buildLayout([2, 2], 1, 0, 0.7)!.orientation).toBe(1);
+        expect(buildLayout([2, 2], 0, 0, 0.7)!.orientation).toBe(0);
     });
 
     it("keeps every sibling visible on a built grid", () => {
-        const out = buildLayout("max-max", [3, 3], 0, 4, 0.75)!;
+        const out = buildLayout([3, 3], 0, 4, 0.75)!;
         assertNoCollapse(out.groups);
         assertIntegerSizes(out.groups);
     });
 
     it("falls back to a workable pixel budget with no sizes to inherit", () => {
-        const out = buildLayout("even-even", [1, 1, 1, 1], 0, 0, 0.7)!;
+        const out = buildLayout([1, 1, 1, 1], 0, 0, 0.7)!;
         const total = out.groups.reduce((sum, n) => sum + (n.size ?? 0), 0);
         expect(total).toBe(FALLBACK_SET_TOTAL);
     });
 
     it("returns undefined for an empty shape", () => {
-        expect(buildLayout("even-even", [], 0, 0, 0.7)).toBeUndefined();
+        expect(buildLayout([], 0, 0, 0.7)).toBeUndefined();
     });
 });
 
@@ -517,9 +427,9 @@ describe("describeShape", () => {
 
     it("round-trips a shape through buildLayout", () => {
         for (const shape of [[1, 1, 1], [2, 2], [2, 2, 1], [3, 3]]) {
-            expect(
-                describeShape(buildLayout("even-even", shape, 0, 0, 0.7)!)
-            ).toEqual(shape);
+            expect(describeShape(buildLayout(shape, 0, 0, 0.7)!)).toEqual(
+                shape
+            );
         }
     });
 });

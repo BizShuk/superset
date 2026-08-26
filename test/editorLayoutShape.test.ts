@@ -11,7 +11,8 @@ import {
     flatShape,
     formatShape,
     reconcileShape,
-} from "../src/editorLayout/layoutModes";
+    renderShapeLabel,
+} from "../src/editorLayout/grid";
 
 const sum = (shape: readonly number[]): number =>
     shape.reduce((total, slot) => total + slot, 0);
@@ -142,5 +143,19 @@ describe("formatShape", () => {
         expect(formatShape([1, 1, 1])).toBe("");
         expect(formatShape([1])).toBe("");
         expect(formatShape([])).toBe("");
+    });
+});
+
+describe("renderShapeLabel", () => {
+    it("names uniform and ragged grids the way formatShape does", () => {
+        expect(renderShapeLabel([2, 2])).toBe("2×2");
+        expect(renderShapeLabel([2, 2, 1])).toBe("2+2+1");
+    });
+
+    it("falls back to N x 1 where formatShape says nothing", () => {
+        // The picker still needs a row label for the flat split.
+        expect(formatShape([1, 1, 1])).toBe("");
+        expect(renderShapeLabel([1, 1, 1])).toBe("3 × 1");
+        expect(renderShapeLabel([1])).toBe("1 × 1");
     });
 });

@@ -13,7 +13,7 @@ import {
     countLeaves,
     type EditorLayoutDescriptor,
     type ShapePolicy,
-} from "../src/editorLayout/layoutModes";
+} from "../src/editorLayout/grid";
 
 interface FakeHost extends LayoutHost {
     writes: EditorLayoutDescriptor[];
@@ -94,12 +94,12 @@ describe("layoutSignature", () => {
     });
 });
 
-describe("LayoutController.applyMode", () => {
+describe("LayoutController.apply", () => {
     it("preserves the topology AND the orientation of an NxM grid", async () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyMode("max-max", { force: true });
+        await controller.apply({ force: true });
 
         expect(host.writes).toHaveLength(1);
         const written = host.writes[0];
@@ -117,8 +117,8 @@ describe("LayoutController.applyMode", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        expect(await controller.applyMode("max-even")).toBe(true);
-        expect(await controller.applyMode("max-even")).toBe(false);
+        expect(await controller.apply()).toBe(true);
+        expect(await controller.apply()).toBe(false);
         expect(host.writes).toHaveLength(1);
     });
 
@@ -129,7 +129,7 @@ describe("LayoutController.applyMode", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyMode("max-even");
+        await controller.apply();
         host.layout = {
             orientation: 0,
             groups: [
@@ -138,7 +138,7 @@ describe("LayoutController.applyMode", () => {
             ],
         };
 
-        expect(await controller.applyMode("max-even")).toBe(false);
+        expect(await controller.apply()).toBe(false);
         expect(host.writes).toHaveLength(1);
     });
 
@@ -146,8 +146,8 @@ describe("LayoutController.applyMode", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyMode("even-even");
-        expect(await controller.applyMode("even-even", { force: true })).toBe(true);
+        await controller.apply();
+        expect(await controller.apply({ force: true })).toBe(true);
         expect(host.writes).toHaveLength(2);
     });
 
@@ -155,9 +155,9 @@ describe("LayoutController.applyMode", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyMode("max-even");
+        await controller.apply();
         host.index = 3;
-        expect(await controller.applyMode("max-even")).toBe(true);
+        expect(await controller.apply()).toBe(true);
         expect(host.writes).toHaveLength(2);
     });
 
@@ -165,7 +165,7 @@ describe("LayoutController.applyMode", () => {
         const host = makeHost(grid2x2, { count: 0 });
         const controller = new LayoutController(host);
 
-        expect(await controller.applyMode("even-even", { force: true })).toBe(
+        expect(await controller.apply({ force: true })).toBe(
             false
         );
         expect(host.writes).toHaveLength(0);
@@ -175,7 +175,7 @@ describe("LayoutController.applyMode", () => {
         const host = makeHost(undefined, { count: 2 });
         const controller = new LayoutController(host);
 
-        expect(await controller.applyMode("even-even", { force: true })).toBe(
+        expect(await controller.apply({ force: true })).toBe(
             false
         );
         expect(host.writes).toHaveLength(0);
@@ -186,9 +186,9 @@ describe("LayoutController.applyMode", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyMode("max-even");
+        await controller.apply();
         controller.reset();
-        expect(await controller.applyMode("max-even")).toBe(true);
+        expect(await controller.apply()).toBe(true);
         expect(host.writes).toHaveLength(2);
     });
 });
@@ -198,7 +198,7 @@ describe("LayoutController.transpose", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        expect(await controller.transpose("even-even")).toBe(true);
+        expect(await controller.transpose()).toBe(true);
 
         const written = host.writes[0];
         expect(written.orientation).toBe(1);
@@ -209,29 +209,30 @@ describe("LayoutController.transpose", () => {
         );
     });
 
-    it("moves each direction's sizing to the level it now owns", async () => {
-        // Root was horizontal, so `max-even` widened the columns. After
-        // the transpose the root splits top-to-bottom, so the even
-        // vertical sizing takes the root and the max moves one level in.
+    it("moves the max to the level the flip hands it", async () => {
+        // Root was horizontal, so the columns split evenly and the max
+        // lived one level in. After the transpose the root splits
+        // top-to-bottom, so the max moves up to the root.
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyMode("max-even", { force: true });
-        expect(share(host.writes[0].groups, 0)).toBeCloseTo(0.7, 2);
+        await controller.apply({ force: true });
+        expect(share(host.writes[0].groups, 0)).toBeCloseTo(0.5, 2);
+        expect(share(host.writes[0].groups[0].groups!, 0)).toBeCloseTo(0.7, 2);
 
-        await controller.transpose("max-even");
+        await controller.transpose();
         const after = host.writes[1];
         expect(after.orientation).toBe(1);
-        expect(share(after.groups, 0)).toBeCloseTo(0.5, 2);
-        expect(share(after.groups[0].groups!, 0)).toBeCloseTo(0.7, 2);
+        expect(share(after.groups, 0)).toBeCloseTo(0.7, 2);
+        expect(share(after.groups[0].groups!, 0)).toBeCloseTo(0.5, 2);
     });
 
     it("returns to the original orientation when applied twice", async () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.transpose("even-even");
-        await controller.transpose("even-even");
+        await controller.transpose();
+        await controller.transpose();
         expect(host.writes[1].orientation).toBe(0);
     });
 
@@ -239,7 +240,7 @@ describe("LayoutController.transpose", () => {
         const host = makeHost(undefined, { count: 4 });
         const controller = new LayoutController(host);
 
-        expect(await controller.transpose("even-even")).toBe(false);
+        expect(await controller.transpose()).toBe(false);
         expect(host.writes).toHaveLength(0);
     });
 });
@@ -249,7 +250,7 @@ describe("LayoutController.applyShape", () => {
         const host = makeHost({ ...grid2x2, orientation: 1 });
         const controller = new LayoutController(host);
 
-        await controller.applyShape("even-even", [1, 1, 1, 1]);
+        await controller.applyShape([1, 1, 1, 1]);
 
         const written = host.writes[0];
         expect(written.groups).toHaveLength(4);
@@ -263,7 +264,7 @@ describe("LayoutController.applyShape", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyShape("even-even", [3, 3]);
+        await controller.applyShape([3, 3]);
 
         expect(countLeaves(host.writes[0].groups)).toBe(4);
     });
@@ -272,7 +273,7 @@ describe("LayoutController.applyShape", () => {
         const host = makeHost(grid2x2, { count: 0 });
         const controller = new LayoutController(host);
 
-        expect(await controller.applyShape("even-even", [2, 2])).toBe(false);
+        expect(await controller.applyShape([2, 2])).toBe(false);
         expect(host.writes).toHaveLength(0);
     });
 
@@ -280,8 +281,8 @@ describe("LayoutController.applyShape", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
 
-        await controller.applyShape("even-even", [1, 1, 1, 1]);
-        expect(await controller.applyMode("even-even")).toBe(false);
+        await controller.applyShape([1, 1, 1, 1]);
+        expect(await controller.apply()).toBe(false);
     });
 });
 
@@ -290,19 +291,6 @@ describe("LayoutController introspection", () => {
         const host = makeHost(grid2x2);
         const controller = new LayoutController(host);
         expect(await controller.currentShape()).toEqual([2, 2]);
-    });
-
-    it("reports the live orientation, defaulting to horizontal", async () => {
-        const host = makeHost(grid2x2);
-        expect(await new LayoutController(host).currentOrientation()).toBe(0);
-
-        const vertical = makeHost({ ...grid2x2, orientation: 1 });
-        expect(
-            await new LayoutController(vertical).currentOrientation()
-        ).toBe(1);
-
-        const broken = makeHost(undefined, { count: 2 });
-        expect(await new LayoutController(broken).currentOrientation()).toBe(0);
     });
 
     it("offers only shapes matching the live group count", () => {

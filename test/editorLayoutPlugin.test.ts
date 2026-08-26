@@ -5,7 +5,7 @@
 // same depth-first walk that produces a layout descriptor, while
 // `tabGroups.all` is ordered by group CREATION. The fixture below makes
 // the two disagree on purpose — indexing by `all.indexOf` would enlarge
-// the wrong group in `max` mode.
+// the wrong group.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -14,22 +14,7 @@ const state = vi.hoisted(() => ({
     executed: [] as Array<{ command: string; arg: unknown }>,
     disposed: 0,
     listeners: [] as Array<() => void>,
-    statusItem: {
-        text: "",
-        tooltip: "",
-        command: "",
-        shown: 0,
-        hidden: 0,
-        show(): void {
-            this.shown++;
-        },
-        hide(): void {
-            this.hidden++;
-        },
-        dispose(): void {
-            state.disposed++;
-        },
-    },
+    configListeners: [] as Array<(event: unknown) => void>,
     layout: {
         orientation: 0 as 0 | 1,
         groups: [
@@ -54,7 +39,6 @@ const state = vi.hoisted(() => ({
 vi.mock("vscode", () => ({
     StatusBarAlignment: { Left: 1, Right: 2 },
     window: {
-        createStatusBarItem: () => state.statusItem,
         get tabGroups() {
             return {
                 all: state.tabs.all,
@@ -91,18 +75,19 @@ vi.mock("vscode", () => ({
         getConfiguration: () => ({
             get: (key: string) => state.config[key],
         }),
+        onDidChangeConfiguration: (cb: (event: unknown) => void) => {
+            state.configListeners.push(cb);
+            return { dispose: () => state.disposed++ };
+        },
     },
 }));
 
 const { editorLayoutPlugin, EDITOR_LAYOUT_COMMANDS, EDITOR_LAYOUT_PLUGIN_ID } =
     await import("../src/editorLayout/plugin");
 const { readActiveIndex } = await import("../src/editorLayout/applyLayout");
-const { EDITOR_LAYOUT_MODE_KEY } = await import(
-    "../src/editorLayout/modeStorage"
-);
 
-function makeContext(stored: Record<string, unknown> = {}) {
-    const store = { ...stored };
+function makeContext() {
+    const store: Record<string, unknown> = {};
     const disposables: Array<{ dispose(): void }> = [];
     const resetHandlers: Array<() => void | Promise<void>> = [];
     return {
@@ -145,13 +130,18 @@ function makeContext(stored: Record<string, unknown> = {}) {
 const setLayoutCalls = () =>
     state.executed.filter((call) => call.command === "vscode.setEditorLayout");
 
+/** Fire every grid listener and let the debounce elapse. */
+async function emitGridChange(): Promise<void> {
+    for (const listener of state.listeners) listener();
+    await vi.advanceTimersByTimeAsync(200);
+}
+
 beforeEach(() => {
     state.commands.clear();
     state.executed.length = 0;
     state.listeners.length = 0;
+    state.configListeners.length = 0;
     state.disposed = 0;
-    state.statusItem.shown = 0;
-    state.statusItem.hidden = 0;
     state.tabs.all = [
         { viewColumn: 3 },
         { viewColumn: 1 },
@@ -183,7 +173,7 @@ describe("editorLayoutPlugin identity", () => {
     it("exposes a stable id and name", () => {
         expect(editorLayoutPlugin.id).toBe(EDITOR_LAYOUT_PLUGIN_ID);
         expect(editorLayoutPlugin.id).toBe("editorLayout");
-        expect(editorLayoutPlugin.name).toBe("Editor Layout Modes");
+        expect(editorLayoutPlugin.name).toBe("Editor Layout");
     });
 
     it("does not contribute a markdown-it hook", () => {
@@ -212,21 +202,36 @@ describe("readActiveIndex", () => {
 });
 
 describe("editorLayoutPlugin activation", () => {
-    it("registers all eleven commands", async () => {
+    it("registers exactly the four commands it owns", async () => {
         const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
 
         const expected = Object.values(EDITOR_LAYOUT_COMMANDS);
-        expect(expected).toHaveLength(11);
+        expect(expected).toHaveLength(4);
         for (const command of expected) {
             expect(state.commands.has(command), command).toBe(true);
         }
     });
 
-    it("wires the status bar to the mode picker", async () => {
+    it("owns no status bar item", async () => {
+        // The vscode fake has no `createStatusBarItem`, so activating
+        // at all is the assertion: touching one would throw.
+        const harness = makeContext();
+        await expect(
+            editorLayoutPlugin.activate(harness.ctx as never)
+        ).resolves.toBeUndefined();
+        await vi.advanceTimersByTimeAsync(100);
+    });
+
+    it("persists nothing — the rule is fixed, not remembered", async () => {
         const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
-        expect(state.statusItem.command).toBe(EDITOR_LAYOUT_COMMANDS.pick);
+        await vi.advanceTimersByTimeAsync(100);
+
+        await state.commands.get(EDITOR_LAYOUT_COMMANDS.refresh)!();
+        await state.commands.get(EDITOR_LAYOUT_COMMANDS.transpose)!();
+
+        expect(Object.keys(harness.store)).toHaveLength(0);
     });
 
     it("registers a reset handler and disposables for every resource", async () => {
@@ -234,13 +239,13 @@ describe("editorLayoutPlugin activation", () => {
         await editorLayoutPlugin.activate(harness.ctx as never);
 
         expect(harness.resetHandlers).toHaveLength(1);
-        // 11 commands + status item + 2 listeners + the timer guard.
-        expect(harness.disposables.length).toBeGreaterThanOrEqual(15);
+        // 4 commands + 3 listeners + the timer guard.
+        expect(harness.disposables.length).toBeGreaterThanOrEqual(8);
         for (const disposable of harness.disposables) disposable.dispose();
     });
 
-    it("restores the stored mode without reshaping or reorienting", async () => {
-        const harness = makeContext({ [EDITOR_LAYOUT_MODE_KEY]: "max-max" });
+    it("applies on activation without reshaping or reorienting", async () => {
+        const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
 
         await vi.advanceTimersByTimeAsync(100);
@@ -256,7 +261,24 @@ describe("editorLayoutPlugin activation", () => {
         expect(applied.groups.every((n) => n.groups?.length === 2)).toBe(true);
     });
 
-    it("skips the restore when the setting is off", async () => {
+    it("lays out columns evenly and heightens the active row", async () => {
+        const harness = makeContext();
+        await editorLayoutPlugin.activate(harness.ctx as never);
+        await vi.advanceTimersByTimeAsync(100);
+
+        const applied = setLayoutCalls()[0].arg as {
+            groups: Array<{ size: number; groups: Array<{ size: number }> }>;
+        };
+        const share = (nodes: Array<{ size: number }>, i: number) =>
+            nodes[i].size / nodes.reduce((sum, n) => sum + n.size, 0);
+
+        expect(share(applied.groups, 0)).toBeCloseTo(0.5, 2);
+        // Active group is view column 2 — the second row of column one.
+        expect(share(applied.groups[0].groups, 1)).toBeCloseTo(0.7, 2);
+        expect(share(applied.groups[1].groups, 0)).toBeCloseTo(0.5, 2);
+    });
+
+    it("skips the activation apply when the setting is off", async () => {
         state.config.restoreOnActivate = false;
         const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
@@ -265,29 +287,9 @@ describe("editorLayoutPlugin activation", () => {
         expect(setLayoutCalls()).toHaveLength(0);
     });
 
-    it("persists the mode a command selects", async () => {
-        const harness = makeContext();
-        await editorLayoutPlugin.activate(harness.ctx as never);
-
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.maxBoth)!();
-        expect(harness.store[EDITOR_LAYOUT_MODE_KEY]).toBe("max-max");
-
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.toggleVertical)!();
-        expect(harness.store[EDITOR_LAYOUT_MODE_KEY]).toBe("max-even");
-
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.toggleHorizontal)!();
-        expect(harness.store[EDITOR_LAYOUT_MODE_KEY]).toBe("even-even");
-
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.cycle)!();
-        expect(harness.store[EDITOR_LAYOUT_MODE_KEY]).toBe("max-even");
-
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.maxVertical)!();
-        expect(harness.store[EDITOR_LAYOUT_MODE_KEY]).toBe("even-max");
-    });
-
-    it("transposes without persisting a mode change", async () => {
+    it("transposes the grid without persisting anything", async () => {
         state.config.restoreOnActivate = false;
-        const harness = makeContext({ [EDITOR_LAYOUT_MODE_KEY]: "max-even" });
+        const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
         await vi.advanceTimersByTimeAsync(100);
 
@@ -297,37 +299,78 @@ describe("editorLayoutPlugin activation", () => {
             orientation: number;
         };
         expect(applied.orientation).toBe(1);
-        expect(harness.store[EDITOR_LAYOUT_MODE_KEY]).toBe("max-even");
     });
 
-    it("re-applies on focus change when either direction is max", async () => {
+    it("re-applies on demand, past the signature guard", async () => {
         state.config.restoreOnActivate = false;
         const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
         await vi.advanceTimersByTimeAsync(100);
+        const before = setLayoutCalls().length;
 
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.maxHorizontal)!();
+        await state.commands.get(EDITOR_LAYOUT_COMMANDS.refresh)!();
+        await state.commands.get(EDITOR_LAYOUT_COMMANDS.refresh)!();
+
+        // Nothing about the grid moved, so the guard would have
+        // swallowed both writes — a refresh must get through anyway.
+        expect(setLayoutCalls().length).toBe(before + 2);
+    });
+
+    it("re-applies when an editorLayout setting changes", async () => {
+        state.config.restoreOnActivate = false;
+        const harness = makeContext();
+        await editorLayoutPlugin.activate(harness.ctx as never);
+        await vi.advanceTimersByTimeAsync(100);
+        const before = setLayoutCalls().length;
+
+        state.config.maxRatio = 0.9;
+        for (const listener of state.configListeners) {
+            listener({
+                affectsConfiguration: (section: string) =>
+                    section === "superset.editorLayout",
+            });
+        }
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(setLayoutCalls().length).toBe(before + 1);
+    });
+
+    it("ignores configuration changes outside its own section", async () => {
+        state.config.restoreOnActivate = false;
+        const harness = makeContext();
+        await editorLayoutPlugin.activate(harness.ctx as never);
+        await vi.advanceTimersByTimeAsync(100);
+        const before = setLayoutCalls().length;
+
+        for (const listener of state.configListeners) {
+            listener({ affectsConfiguration: () => false });
+        }
+        await vi.advanceTimersByTimeAsync(100);
+
+        expect(setLayoutCalls().length).toBe(before);
+    });
+
+    it("follows the active group when focus moves", async () => {
+        const harness = makeContext();
+        await editorLayoutPlugin.activate(harness.ctx as never);
+        await vi.advanceTimersByTimeAsync(100);
         const before = setLayoutCalls().length;
 
         state.tabs.active = { viewColumn: 4 };
-        for (const listener of state.listeners) listener();
-        await vi.advanceTimersByTimeAsync(200);
+        await emitGridChange();
 
         expect(setLayoutCalls().length).toBeGreaterThan(before);
     });
 
-    it("leaves even-even alone when the grid emits events", async () => {
-        state.config.restoreOnActivate = false;
+    it("writes nothing on an event that changes no sizes", async () => {
+        // The guard is what stops `setEditorLayout` — which itself
+        // fires the tab-group event — from looping forever.
         const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
         await vi.advanceTimersByTimeAsync(100);
-
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.even)!();
         const before = setLayoutCalls().length;
 
-        state.tabs.active = { viewColumn: 4 };
-        for (const listener of state.listeners) listener();
-        await vi.advanceTimersByTimeAsync(200);
+        await emitGridChange();
 
         expect(setLayoutCalls().length).toBe(before);
     });
@@ -338,25 +381,21 @@ describe("editorLayoutPlugin activation", () => {
         const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
         await vi.advanceTimersByTimeAsync(100);
-
-        await state.commands.get(EDITOR_LAYOUT_COMMANDS.maxHorizontal)!();
         const before = setLayoutCalls().length;
 
         state.tabs.active = { viewColumn: 4 };
-        for (const listener of state.listeners) listener();
-        await vi.advanceTimersByTimeAsync(200);
+        await emitGridChange();
 
         expect(setLayoutCalls().length).toBe(before);
     });
 
-    it("hides the status bar and writes nothing without editor groups", async () => {
+    it("writes nothing without editor groups", async () => {
         state.tabs.all = [];
         const harness = makeContext();
         await editorLayoutPlugin.activate(harness.ctx as never);
         await vi.advanceTimersByTimeAsync(100);
 
         expect(setLayoutCalls()).toHaveLength(0);
-        expect(state.statusItem.hidden).toBeGreaterThan(0);
     });
 
     it("survives a failing getEditorLayout without writing a layout", async () => {
