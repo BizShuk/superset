@@ -66,8 +66,8 @@ let repositoryPaths = new Set<string>();
 /** 路徑 → git 分支與行數增減;沒有列出的路徑代表不是 repository。 */
 let gitStatus = new Map<string, GitFolderStatus>();
 let gitReads = 0;
-/** 每次 `fetchGitFolders` 收到的路徑批次;`Refresh` 才會有值。 */
-let fetched: string[][] = [];
+/** 每次 `pullGitFolders` 收到的路徑批次;`Refresh` 才會有值。 */
+let pulled: string[][] = [];
 
 interface FakeTrackedTerminal {
     id: string;
@@ -172,8 +172,8 @@ vi.mock("../src/cliLauncher/repositoryDiscovery", () => ({
 // 才會被這裡的斷言釘住。
 vi.mock("../src/cliLauncher/gitStatus", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../src/cliLauncher/gitStatus")>()),
-    fetchGitFolders: async (dirs: readonly string[]) => {
-        fetched.push([...dirs]);
+    pullGitFolders: async (dirs: readonly string[]) => {
+        pulled.push([...dirs]);
     },
     readGitFolderStatusMap: async (dirs: readonly string[]) => {
         gitReads += 1;
@@ -220,7 +220,7 @@ beforeEach(() => {
     );
     gitStatus = new Map();
     gitReads = 0;
-    fetched = [];
+    pulled = [];
     hidden = [];
     focused = [];
     focusedOnly = false;
@@ -430,18 +430,18 @@ describe("CLILauncherTreeProvider", () => {
         expect(AUTO_REFRESH_INTERVAL_MS).toBe(300_000);
     });
 
-    it("fetches the rows already on screen and redraws twice", async () => {
+    it("pulls the rows already on screen and redraws twice", async () => {
         const provider = new CLILauncherTreeProvider();
         const items = await provider.getChildren();
-        await provider.getChildren(items[1]); // 展開第二層,它也要一起 fetch
+        await provider.getChildren(items[1]); // 展開第二層,它也要一起 pull
         let refreshes = 0;
         provider.onDidChangeTreeData(() => {
             refreshes += 1;
         });
 
-        await provider.refreshWithFetch();
+        await provider.refreshWithPull();
 
-        expect(fetched).toEqual([
+        expect(pulled).toEqual([
             [
                 "/opt/tools/cli",
                 `${HOME}/projects/platform`,
@@ -450,17 +450,17 @@ describe("CLILauncherTreeProvider", () => {
                 `${HOME}/projects/platform/gateway`,
             ],
         ]);
-        // 先重畫一次不等網路,fetch 完再重畫一次讓領先／落後跟上。
+        // 先重畫一次不等網路,pull 完再重畫一次讓分支與領先／落後跟上。
         expect(refreshes).toBe(2);
         provider.dispose();
     });
 
-    it("does not fetch when nothing has been materialised yet", async () => {
+    it("does not pull when nothing has been materialised yet", async () => {
         const provider = new CLILauncherTreeProvider();
 
-        await provider.refreshWithFetch();
+        await provider.refreshWithPull();
 
-        expect(fetched).toEqual([]);
+        expect(pulled).toEqual([]);
         provider.dispose();
     });
 

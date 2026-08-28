@@ -7,7 +7,8 @@
 // 那是常態,一整排 `master(+0,-0)` 只會把真正在動的 repo 淹掉;tooltip 仍給完整值。
 //
 // 領先／落後的 commit 數讀的是`本地已有的` remote-tracking refs,因此每次刷新都
-// 能算而不必連網;真正去抓遠端的 `fetchGitFolders` 只在使用者按 `Refresh` 時跑。
+// 能算而不必連網;真正連遠端的 `pullGitFolders` (fetch + fast-forward) 只在使用者
+// 按 `Refresh` 時跑。
 //
 // 只有`資料夾自己`是 repository (含 submodule / worktree 的 `.git` 檔) 才會執行
 // git。刻意不讓 git 沿著父層往上找:`~/projects/platform` 不是 repo 時若往上找會
@@ -309,16 +310,25 @@ async function forEachWithConcurrency<T>(
 }
 
 /**
- * 更新這些資料夾的 remote-tracking refs (`git fetch`),讓之後讀到的領先／落後
- * 數字反映遠端`現在`的狀態。
+ * 對這些資料夾做一次 `fetch` + fast-forward,等同 `git pull --ff-only`:先更新
+ * remote-tracking refs 讓領先／落後反映遠端`現在`的狀態,再把落後的分支快轉到
+ * upstream。
+ *
+ * 刻意拆成兩個命令而不是單一 `git pull --ff-only`:`pull` 在沒有 upstream 時會
+ * 直接放棄,連 refs 都不更新,面板的落後數字就跟著停在舊值。分開跑之後,快轉
+ * 失敗只是「這次沒快轉」,fetch 拿到的數字仍然生效。
  *
  * 只在使用者按下 `Refresh` 時呼叫:fetch 會走網路與認證,不能掛在每 5 分鐘的
  * 自動刷新上 —— 那等於替每個開著面板的人固定對所有遠端發流量。
  *
- * 不是 repository 的路徑直接跳過;任何失敗 (沒有 remote、離線、認證失敗、逾時)
- * 都當成「這次沒抓到」而安靜略過,面板仍顯示上一次已知的狀態。
+ * `--ff-only` 是唯一允許的整合方式:不產生 merge commit、不 rebase、不動已存在
+ * 的本地 commit。分支與 upstream 分岔、工作區的改動會被覆蓋、或根本沒有
+ * upstream 時,git 自己會拒絕,那些 repository 就維持原狀等使用者親自處理。
+ *
+ * 不是 repository 的路徑直接跳過;任何失敗 (沒有 remote、離線、認證失敗、逾時、
+ * 無法快轉) 都當成「這次沒動」而安靜略過,面板仍顯示上一次已知的狀態。
  */
-export async function fetchGitFolders(dirs: readonly string[]): Promise<void> {
+export async function pullGitFolders(dirs: readonly string[]): Promise<void> {
     const unique = [...new Set(dirs)];
     await forEachWithConcurrency(unique, FETCH_CONCURRENCY, async (dir) => {
         if (!(await hasOwnGitMarker(dir))) {
@@ -326,11 +336,21 @@ export async function fetchGitFolders(dirs: readonly string[]): Promise<void> {
         }
         // `--no-tags` 讓 fetch 只更新這個 remote 的 branch refs;面板要的是分支
         // 的領先／落後,tag 對這個數字沒有貢獻,卻是大 repo 最貴的那一段。
-        await runGit(
+        const fetched = await runGit(
             dir,
             ["fetch", "--quiet", "--no-tags"],
             GIT_FETCH_TIMEOUT_MS
         );
+        if (fetched === undefined) {
+            return;
+        }
+        // 純本地的快轉;`@{upstream}` 不存在時 git 直接失敗,不需要另外查。
+        await runGit(dir, [
+            "merge",
+            "--ff-only",
+            "--quiet",
+            "@{upstream}",
+        ]);
     });
 }
 

@@ -154,8 +154,9 @@ export function register(ctx: PluginContext): void {
             }
         }),
         // `Refresh` 除了重掃路徑與重讀本地 git 狀態,還會對目前列出的 repository
-        // 跑一次 `git fetch`,抓完再重畫一次領先／落後的 commit 數。網路那一段
-        // 掛在 window progress 上,面板本身不等它就先更新。
+        // 跑一次 `git fetch` + fast-forward (等同 `git pull --ff-only`),完成後
+        // 再重畫一次分支與領先／落後的 commit 數。網路那一段掛在 window progress
+        // 上,面板本身不等它就先更新。
         vscode.commands.registerCommand(
             "superset.cliLauncherRefresh",
             async () => {
@@ -163,9 +164,9 @@ export function register(ctx: PluginContext): void {
                 await vscode.window.withProgress(
                     {
                         location: vscode.ProgressLocation.Window,
-                        title: "CLI: fetching remotes",
+                        title: "CLI: pulling (fast-forward)",
                     },
-                    () => provider.refreshWithFetch()
+                    () => provider.refreshWithPull()
                 );
             }
         ),
