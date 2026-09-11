@@ -1,0 +1,23 @@
+{
+  "name": "superset",
+  "description": "Superset extension and workspace toolkit — bundles the `todo-review` skill for reviewing, prioritizing, domain re-grouping, and archiving `.todo` files and completed plans.",
+  "version": "0.48.0",
+  "author": {
+    "name": "shuk",
+    "url": "https://github.com/bizshuk"
+  },
+  "homepage": "https://github.com/BizShuk/superset",
+  "repository": "https://github.com/BizShuk/superset",
+  "license": "Apache-2.0",
+  "keywords": [
+    "superset",
+    "todo",
+    "todo-review",
+    "triage",
+    "prioritize",
+    "terminal",
+    "vscode"
+  ],
+  "agents": [],
+  "skills": []
+}

@@ -342,6 +342,8 @@ yarn.lock.bak
 !.claude/settings.local.json
 !.claude/memories/
 !.claude/scheduled_tasks.json
+!.claude-plugin/
+!.claude-plugin/**
 
 # Gemini CLI / Gemini Code Assist
 
