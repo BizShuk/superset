@@ -1,5 +1,21 @@
 # TODO
 
+## CLI 延伸模組 (CLI Extension)
+
+- [ ] [P1] [feature] CLI Change 原生 UI 驗收: 按 `F5` 開 Extension Development Host，檢查三個 root groups、compact hierarchy 與 group / folder / file inline actions。Automated tests 無法證明 native Tree View 的實際排列、icon theme 與 SCM-style interaction。 — see [plans/2026-08-06-Refresh.md](plans/2026-08-06-Refresh.md)
+- [ ] [P1] [feature] CLI Change 真實 Repo 變更驗收: 在安全 test repository 逐一操作 Diff、Stage、Unstage 與 Discard，並確認 Trash recovery。驗證真實 Git index、working tree 與 filesystem recovery，補足 deterministic tests 的 acceptance boundary。 — see [plans/2026-08-06-Refresh.md](plans/2026-08-06-Refresh.md)
+- [ ] [P1] [feature] CLI Repo Path Focus UI 驗收: 按 `F5` 開 Extension Development Host，檢查 title toggle 的互斥狀態、path context menu 的 Add/Remove，以及第二層 Focused Path 的 ancestor category。Automated tests 無法證明 native View Title 與 context menu 的實際排列、icon theme 與互動。 — see [plans/2026-08-06-Refresh.md](plans/2026-08-06-Refresh.md)
+
+## 可視化 (Visualization)
+
+- [ ] [P2] [feature] Claude TUI Mermaid 預覽連結支援: 在 Claude TUI 產生 Mermaid 內容，確認目前不會出現可點擊 preview link。保留已重現但尚未解決的 terminal-to-preview discoverability 問題。 — see [plans/2026-08-06-Refresh.md](plans/2026-08-06-Refresh.md)
+
+## Architecture
+
+## Plans
+
+- [2026-08-06-Refresh](plans/2026-08-06-Refresh.md)
+
 ## Archive
 
 無。
