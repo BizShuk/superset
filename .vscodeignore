@@ -30,6 +30,8 @@ CLAUDE.md
 .agents
 .claude
 tmp/**
+pnpm-lock.yaml
+pnpm-workspace.yaml
 # LICENSE is kept — required by vsce for Marketplace validation;
 # other meta files above are documentation-only and stay excluded.
 
