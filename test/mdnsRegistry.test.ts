@@ -283,6 +283,45 @@ describe("MdnsRegistry", () => {
         expect(transport.browseCalled).toBe(true);
     });
 
+    describe("discovery window", () => {
+        beforeEach(() => vi.useFakeTimers());
+        afterEach(() => vi.useRealTimers());
+
+        it("opens the socket only on refresh and closes it after the window", () => {
+            // Nothing listens until asked: an always-open socket parses every
+            // Bonjour packet on the LAN for a panel nobody is looking at.
+            expect(transport.started).toBe(false);
+
+            registry.refresh(1_000);
+            expect(transport.started).toBe(true);
+            expect(transport.browseCalled).toBe(true);
+
+            vi.advanceTimersByTime(1_000);
+            expect(transport.started).toBe(false);
+        });
+
+        it("re-asking mid-window restarts the deadline instead of stacking", () => {
+            registry.refresh(1_000);
+            vi.advanceTimersByTime(600);
+            registry.refresh(1_000);
+
+            vi.advanceTimersByTime(600);
+            expect(transport.started).toBe(true);
+
+            vi.advanceTimersByTime(400);
+            expect(transport.started).toBe(false);
+        });
+
+        it("reset closes the socket without re-opening it", () => {
+            registry.refresh(1_000);
+            registry.reset();
+            expect(transport.started).toBe(false);
+
+            vi.advanceTimersByTime(10_000);
+            expect(transport.started).toBe(false);
+        });
+    });
+
     it("listener unsubscribe stops events", async () => {
         const listener = vi.fn();
         const off = registry.onDidChange(listener);

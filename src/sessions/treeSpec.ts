@@ -3,7 +3,7 @@
 // spec directly.
 
 import { formatAge, formatBytes, formatStamp } from "./markdown";
-import type { SessionRecord } from "./types";
+import type { SessionSummary } from "./types";
 
 export interface SessionRowSpec {
     readonly label: string;
@@ -21,11 +21,11 @@ const AGENT_ICONS: Record<string, string> = {
 };
 
 export function buildSessionRow(
-    record: SessionRecord,
+    record: SessionSummary,
     nowMs: number
 ): SessionRowSpec {
-    const { meta, turns } = record;
-    const turnLabel = `${turns.length} turn${turns.length === 1 ? "" : "s"}`;
+    const { meta, turnCount } = record;
+    const turnLabel = `${turnCount} turn${turnCount === 1 ? "" : "s"}`;
 
     return {
         label: meta.title || meta.session_id,

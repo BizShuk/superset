@@ -12,7 +12,6 @@ import { topologyPlugin } from "./topology/plugin";
 import { todoPlugin } from "./todo/plugin";
 import { sessionsPlugin } from "./sessions/plugin";
 import { gitPlugin } from "./git/plugin";
-import { editorLayoutPlugin } from "./editorLayout/plugin";
 import { diskUsagePlugin } from "./diskUsage/plugin";
 import { cliLauncherPlugin } from "./cliLauncher/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
@@ -93,7 +92,6 @@ export async function activate(
         sessionsPlugin,
         todoPlugin,
         gitPlugin,
-        editorLayoutPlugin,
         diskUsagePlugin,
         cliLauncherPlugin,
         globalCommandsPlugin,

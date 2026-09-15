@@ -20,7 +20,6 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 | Explorer GitHub URL       | 檔案右鍵複製固定 `master` branch 的 GitHub URL              | 分享 repository 檔案連結的人         |
 | Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒 | 使用 repository-local hooks 的開發者 |
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
-| Editor Layout             | 固定規則：左右均分、作用中列放大，一鍵重套                   | 常同時開多個 editor group 的人       |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
 | `CLI` 面板                | 以 `Repo Path` 與 Focus list 選 repository、啟動 agent CLI，並在 `Change` View 管理變更與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
 
@@ -56,6 +55,8 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 #### 1.2 跑 TUI App(`claude`、`vim`、`htop`)
 
 **功能**:TUI app 在 Shell Integration 眼中是一次永不結束的 execution,所以高亮改由 process tree 判定 —— Superset 每次輪詢跑`一次` `ps`,比較各 terminal 前景子程序的累計 CPU 時間,有推進就視為活動。用 VSCode 任何方式開的 terminal 都適用,不需要特定命令。
+
+輪詢間隔是 `30 秒`:這條路徑是 extension 唯一常駐的耗電來源(每次輪詢等於一次掃全機 process table 的 `ps`),而`一般命令`的開始與結束由 Shell Integration 即時回報,不必等這個間隔。只有全螢幕 TUI 的「還在忙」需要等下一次輪詢才會亮起來。判定門檻同樣依間隔等比例放大(輪詢視窗的 `1%` CPU 時間),所以只是重繪畫面的閒置 TUI 不會被算成活動。
 
 **逐步使用**:
 
@@ -116,13 +117,17 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 4. 面板會監看 shared sessions root，子 project 新增 session 或 append turn 後自動刷新。
 5. `Seed/Clear Sample Sessions` 只影響 current workspace root 的 `sample-*.jsonl`，不會修改 descendant projects 或 ingest 產生的 sessions。
 
+面板只保留每個 session 的`列資訊`(標題、agent、大小、turn 數、最後活動時間);turn 內容在點開 Markdown summary 時才讀,讀完不留 —— 正在進行中的 session 會持續 append,把整份 transcript 留在記憶體等於讓 extension 的佔用跟著 agent 一直寫下去。
+
 預設資料根為 `~/.config/superset/data/sessions`；開發時可用 `superset.sessions.dataDir` 指向 scratch store。
 
 ---
 
 ### 2. `MDNS` — 區網服務探索
 
-**功能**:訂閱同網段 mDNS / DNS-SD 廣播(印表機、AirPlay、SSH 等),以 tree view 列出所有可發現服務,展開可看位址、埠號、TXT 屬性等細節,並可一鍵複製 `host:port` 或連線。
+**功能**:查詢同網段 mDNS / DNS-SD 服務(印表機、AirPlay、SSH 等),以 tree view 列出所有可發現服務,展開可看位址、埠號、TXT 屬性等細節,並可一鍵複製 `host:port` 或連線。
+
+探索`只由 `Superset: Refresh mDNS` 觸發`:按下後才開 multicast socket、送出一次 DNS-SD 查詢,收集 `5` 秒後關閉。面板平時顯示的是上一次查詢的結果,不會隨時間自己更新 —— 常駐的 socket 會把整個區網的 Bonjour 廣播(AirPlay、印表機、其他人的筆電)全部搬到 extension host 上解析,而那是沒人在看面板時也要付的成本。第一次打開面板是空的,按 `Refresh` 才會有內容。
 
 #### 2.1 自動去重 (Network-identity dedup)
 
@@ -145,7 +150,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 
 #### 2.2 過期移除 (TTL grace-period sweep)
 
-服務一段時間未再廣播即自動過期移除,以 `3 × TTL` 為寬限期(RFC 6762 §10.1 cache-flush),沒帶 TTL 的記錄 fallback 到 120 秒。實作位於 `src/mdns/expiration.ts`(`MdnsExpirationSweeper` 類別,registry 持有):
+服務一段時間未再廣播即過期移除,以 `3 × TTL` 為寬限期(RFC 6762 §10.1 cache-flush),沒帶 TTL 的記錄 fallback 到 120 秒。掃描只在探索視窗開著時進行 —— socket 關上之後沒有新廣播可比對,面板就維持上一次的結果直到下次 `Refresh`。實作位於 `src/mdns/expiration.ts`(`MdnsExpirationSweeper` 類別,registry 持有):
 
 | 常數                   | 值      | 說明                               |
 | ---------------------- | ------- | ---------------------------------- |
@@ -406,34 +411,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 12. Editor Layout — 固定的 editor group 佈局規則
-
-佈局規則是`固定`的，沒有模式可選、沒有狀態列指示：
-
-```text
-左右方向 (horizontal) = 均分     上下方向 (vertical) = 作用中列放大
-```
-
-在 `2×2` 網格上就是：兩欄等寬，作用中的那`一列`變高（預設佔該欄 80%），其餘格子仍然看得見。純左右切的 `1×N` 佈局沒有上下層可放大，因此一律等寬。
-
-`Cmd+Alt+V` 執行 `Superset: Refresh Editor Layout`：清掉 signature guard 的記憶，強制把規則重新套用一次。手動拖過分隔線、或改了 `maxRatio` 之後想回到規則的樣子時按它。改動 `superset.editorLayout.*` 任一設定時會自動做同一件事，不需手動觸發。
-
-決定套用到哪一層的是`方向`而不是深度。VS Code 的巢狀層一律垂直於父層，所以 root 往左右切時，均分管 root、放大管下一層；`Superset: Transpose Editor Grid` 翻轉 root 方向後，兩者管的層級跟著對調 —— 這也就是 NxM 的轉置（`2 欄 × 3 列` 變 `3 欄 × 2 列`），格子數不變。
-
-`不會把格子擠不見`。每個非作用中的兄弟節點至少保有該層 `10%` 的空間；`maxRatio` 太大或同層兄弟太多時，作用中的比例會自動下修，必要時退化成均分。
-
-其他行為：
-
-- 套用時`保留現有網格形狀與 root 方向`，只重寫各層比例；手動拖出來的巢狀結構不會被覆蓋 —— 每次套用都先讀回目前的真實網格。
-- `只有兩個命令會改變網格形狀`：`Superset: Pick Editor Grid Shape` 與 `Superset: Reset Editor Grid Shape`。形狀清單只列出`格子總數與現有群組數相符`的選項，不會意外產生空群組或把 editor 併到別的群組去。
-- 佈局會跟著作用中的群組跑（可用 `followActiveGroup` 關閉）；沒有任何模式狀態被寫入 workspace。
-- VS Code 對群組有最小寬高限制，`superset.editorLayout.maxRatio` 是`比例提示`而非保證值。
-- 佈局命令只作用於`目前視窗`的 editor 區域；`Move Editor into New Window` 開出來的浮動視窗各有自己的網格。
-- 設定 `superset.editorLayout.maxRatio` 控制作用中列的佔比，預設 `0.8`，可調範圍 `0.5`–`0.9`。其餘設定：`defaultShape`、`followActiveGroup`、`restoreOnActivate`。
-
----
-
-### 13. Disk Usage — Status Bar 磁碟容量
+### 12. Disk Usage — Status Bar 磁碟容量
 
 啟用 Superset 後，Status Bar 右側會顯示第一個 workspace 所在 volume 的已使用比例，例如
 `$(database) Disk 80%`。Hover tooltip 會列出 used、free 與 total capacity；資料每 30 秒刷新一次。
@@ -442,7 +420,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ---
 
-### 14. `CLI` — 路徑啟動器
+### 13. `CLI` — 路徑啟動器
 
 Activity Bar 上獨立的 `CLI` 圖示，container 內有 `Repo Path` 與 `Change` 兩個 View。
 `Repo Path` 以`兩層`樹狀列出 `~/projects` 底下的 Git repositories：
@@ -715,7 +693,7 @@ code --install-extension superset-*.vsix
 | `Superset: Go to Terminal`                      | `Ctrl+Alt+T`        | Fuzzy 跳轉到 terminal                                                         |
 | `Superset: Reset Caches`                        | —                   | 重置所有快取(有確認彈窗)                                                      |
 | `Superset: Scan Network Topology`               | —                   | 掃描網路拓撲                                                                  |
-| `Superset: Refresh mDNS`                        | —                   | 重新整理 mDNS 面板                                                            |
+| `Superset: Refresh mDNS`                        | —                   | 執行一次 mDNS 探索(唯一會開 multicast socket 的入口)                          |
 | `Superset: Copy Service Address`                | —                   | 複製 `host:port`                                                              |
 | `Superset: Connect`                             | —                   | 驗證 mDNS 連線資料後，以外部 URI 或 SSH terminal 連線                         |
 | `Superset: New Terminal`                        | `Ctrl+Shift+``      | 開新 terminal                                                                 |
@@ -733,10 +711,6 @@ code --install-extension superset-*.vsix
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
 | `Superset: Install Default Tools`               | —                   | 安裝十個預設 Go CLI（含 `mdserver`、`ytdl`）                                   |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
-| `Superset: Refresh Editor Layout`               | `Cmd+Alt+V`         | 強制重套佈局規則（左右均分、作用中列放大）                                    |
-| `Superset: Transpose Editor Grid`               | —                   | 翻 root 方向，等同 NxM 網格轉置                                               |
-| `Superset: Pick Editor Grid Shape`              | —                   | 重塑 editor 網格形狀（唯一會改變格子數的命令）                                |
-| `Superset: Reset Editor Grid Shape`             | —                   | 回到設定的預設網格形狀                                                        |
 | `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+2/3/4`(CLI 面板且已選 path) | 在選取路徑開 terminal 並執行對應 agent CLI                       |
 | `CLI: Open Terminal at Path`                    | `Ctrl+1`(CLI 面板且已選 path) | 只在選取路徑開 terminal,不執行命令                                      |
 | `CLI: Open in New Window`                       | `Cmd+N`(CLI 面板且已選 path) | 以獨立 VS Code window 開啟選取路徑                                      |

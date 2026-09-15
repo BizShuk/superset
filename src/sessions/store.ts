@@ -13,6 +13,7 @@ import type {
     SessionMeta,
     SessionProject,
     SessionRecord,
+    SessionSummary,
     SessionTurn,
 } from "./types";
 
@@ -127,10 +128,22 @@ function lastActivity(turns: readonly SessionTurn[], mtimeMs: number): number {
 
 type SessionParser = typeof parseSessionJsonl;
 
+/** Drop the turns, keep what a row is made of. */
+export function summarizeSession(record: SessionRecord): SessionSummary {
+    return {
+        meta: record.meta,
+        turnCount: record.turns.length,
+        filePath: record.filePath,
+        sizeBytes: record.sizeBytes,
+        lastActiveMs: record.lastActiveMs,
+        malformedLines: record.malformedLines,
+    };
+}
+
 interface CachedSession {
     readonly sizeBytes: number;
     readonly mtimeMs: number;
-    readonly record: SessionRecord;
+    readonly summary: SessionSummary;
 }
 
 /**
@@ -140,6 +153,11 @@ interface CachedSession {
  * record that can safely reuse its parsed object. One store instance is shared
  * by the Tree View and summary renderer; watcher refreshes therefore stat every
  * candidate but only read and parse files that changed.
+ *
+ * What survives a parse is only the {@link SessionSummary}. The turns are
+ * handed to whoever asked and then dropped — an open session is appended to
+ * continuously, and holding its full transcript would mean the store grows for
+ * as long as an agent keeps typing.
  */
 export class SessionStore {
     private readonly cache = new Map<string, CachedSession>();
@@ -153,7 +171,7 @@ export class SessionStore {
     ) {}
 
     /** Every session recorded for `workspacePath`, newest first. */
-    listSessions(workspacePath: string): SessionRecord[] {
+    listSessions(workspacePath: string): SessionSummary[] {
         return this.listSessionsInDir(
             workspaceSessionsDir(workspacePath, this.currentOverride())
         );
@@ -196,8 +214,36 @@ export class SessionStore {
         return projects;
     }
 
-    /** Read one session, reusing its parsed record while metadata is stable. */
+    /**
+     * Read one session in full, turns included.
+     *
+     * Always parses: the caller is the Markdown renderer, which wants the
+     * content, and the content is exactly what must not be retained. The cached
+     * summary is refreshed on the way past so a later listing does not re-read
+     * the same bytes.
+     */
     readSession(filePath: string): SessionRecord | undefined {
+        try {
+            const stat = fs.statSync(filePath);
+            const text = fs.readFileSync(filePath, "utf8");
+            const record = this.parse(text, filePath, stat.size, stat.mtimeMs);
+            this.remember(filePath, {
+                sizeBytes: stat.size,
+                mtimeMs: stat.mtimeMs,
+                summary: summarizeSession(record),
+            });
+            return record;
+        } catch {
+            this.forget(filePath);
+            return undefined;
+        }
+    }
+
+    /**
+     * Row-shaped view of one session, reusing the cached summary while size +
+     * mtime are unchanged. This is the listing path; it never keeps turns.
+     */
+    readSessionSummary(filePath: string): SessionSummary | undefined {
         try {
             const stat = fs.statSync(filePath);
             const cached = this.cache.get(filePath);
@@ -205,22 +251,19 @@ export class SessionStore {
                 cached?.sizeBytes === stat.size &&
                 cached.mtimeMs === stat.mtimeMs
             ) {
-                return cached.record;
+                return cached.summary;
             }
 
             const text = fs.readFileSync(filePath, "utf8");
-            const record = this.parse(
-                text,
-                filePath,
-                stat.size,
-                stat.mtimeMs
+            const summary = summarizeSession(
+                this.parse(text, filePath, stat.size, stat.mtimeMs)
             );
             this.remember(filePath, {
                 sizeBytes: stat.size,
                 mtimeMs: stat.mtimeMs,
-                record,
+                summary,
             });
-            return record;
+            return summary;
         } catch {
             this.forget(filePath);
             return undefined;
@@ -278,7 +321,7 @@ export class SessionStore {
         return this.dataDirOverride();
     }
 
-    private listSessionsInDir(dir: string): SessionRecord[] {
+    private listSessionsInDir(dir: string): SessionSummary[] {
         let entries: string[];
         try {
             entries = fs.readdirSync(dir);
@@ -288,13 +331,13 @@ export class SessionStore {
         }
 
         const observed = new Set<string>();
-        const records: SessionRecord[] = [];
+        const records: SessionSummary[] = [];
         for (const name of entries) {
             if (!name.endsWith(".jsonl")) continue;
             const filePath = path.join(dir, name);
             observed.add(filePath);
-            const record = this.readSession(filePath);
-            if (record) records.push(record);
+            const summary = this.readSessionSummary(filePath);
+            if (summary) records.push(summary);
         }
 
         this.evictMissing(dir, observed);
@@ -340,7 +383,7 @@ function isWorkspaceOrDescendant(root: string, candidate: string): boolean {
 export function listSessions(
     workspacePath: string,
     override?: string
-): SessionRecord[] {
+): SessionSummary[] {
     return new SessionStore(() => override).listSessions(workspacePath);
 }
 

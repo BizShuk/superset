@@ -16,7 +16,9 @@ import {
     listSessionProjects,
     listSessions,
     parseSessionJsonl,
+    readSession,
     SessionStore,
+    summarizeSession,
     workspaceSessionsDir,
 } from "../src/sessions/store";
 import { buildSessionRow } from "../src/sessions/treeSpec";
@@ -191,7 +193,36 @@ describe("SessionStore cache and deletion boundary", () => {
             const third = store.listSessionProjects(workspace);
 
             expect(parser).toHaveBeenCalledTimes(2);
-            expect(third[0].sessions[0].turns).toHaveLength(2);
+            expect(third[0].sessions[0].turnCount).toBe(2);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
+
+    it("retains row-shaped summaries, never turn content", () => {
+        // The footprint has to be set by the number of sessions on disk, not
+        // by their transcript bytes: an open session is appended to for as
+        // long as the agent keeps working.
+        const root = mkdtempSync(path.join(tmpdir(), "superset-summary-"));
+        const workspace = "/workspace/summary";
+        const dir = workspaceSessionsDir(workspace, root);
+        const secret = "PROMPT-BODY-THAT-MUST-NOT-BE-RETAINED";
+
+        try {
+            mkdirSync(dir, { recursive: true });
+            writeFileSync(
+                path.join(dir, "ingested.jsonl"),
+                jsonl(META, turn(1, { user: secret }))
+            );
+            const store = new SessionStore(() => root);
+
+            const [row] = store.listSessions(workspace);
+            expect(row.turnCount).toBe(1);
+            expect(row).not.toHaveProperty("turns");
+            expect(JSON.stringify(row)).not.toContain(secret);
+
+            // The content is still one on-demand read away.
+            expect(store.readSession(row.filePath)!.turns[0].user).toBe(secret);
         } finally {
             rmSync(root, { recursive: true, force: true });
         }
@@ -307,7 +338,7 @@ describe("buildSessionRow", () => {
     it("puts size, turn count and age in the dim description", () => {
         const rec = parseSessionJsonl(jsonl(META, turn(1)), FILE, 2_048, 0);
         const now = rec.lastActiveMs + 2 * 60 * 60 * 1000;
-        const row = buildSessionRow(rec, now);
+        const row = buildSessionRow(summarizeSession(rec), now);
         expect(row.label).toBe("探查 agent session 格式");
         expect(row.description).toBe("2.0 KB · 1 turn · 2h ago");
         expect(row.tooltip).toContain("claude · 70471642");
@@ -398,7 +429,10 @@ describe("sample fixture matrix", () => {
     writeSampleSessions(WS, NOW, dir);
     const records = listSessions(WS, dir);
     const byId = new Map(records.map((r) => [r.meta.session_id, r]));
-    const md = (id: string) => renderSessionMarkdown(byId.get(id)!);
+    // Rows carry summaries only; the full transcript is read on demand, which
+    // is the same path the Markdown preview takes.
+    const md = (id: string) =>
+        renderSessionMarkdown(readSession(byId.get(id)!.filePath)!);
 
     afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -419,7 +453,9 @@ describe("sample fixture matrix", () => {
     });
 
     it("covers every summary source and both turn statuses", () => {
-        const turns = records.flatMap((r) => r.turns);
+        const turns = records.flatMap(
+            (r) => readSession(r.filePath)!.turns
+        );
         expect(new Set(turns.map((t) => t.source))).toEqual(
             new Set(["llm", "heuristic", "native"])
         );
@@ -441,7 +477,7 @@ describe("sample fixture matrix", () => {
 
     it("includes a zero-turn session that renders the empty branch", () => {
         const empty = byId.get("sample-codex-emptystart")!;
-        expect(empty.turns).toHaveLength(0);
+        expect(empty.turnCount).toBe(0);
         expect(buildSessionRow(empty, NOW).description).toContain("0 turns");
         expect(md("sample-codex-emptystart")).toContain("尚無 turn 記錄");
     });
@@ -449,7 +485,7 @@ describe("sample fixture matrix", () => {
     it("includes a torn-tail session that surfaces the malformed warning", () => {
         const torn = byId.get("sample-claude-torntail")!;
         expect(torn.malformedLines).toBe(1);
-        expect(torn.turns).toHaveLength(1); // the complete turn survives
+        expect(torn.turnCount).toBe(1); // the complete turn survives
         expect(md("sample-claude-torntail")).toContain("無法解析");
         expect(buildSessionRow(torn, NOW).tooltip).toContain("malformed");
     });

@@ -7,7 +7,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { SessionStore } from "./store";
 import { buildSessionRow } from "./treeSpec";
-import type { SessionProject, SessionRecord } from "./types";
+import type { SessionProject, SessionSummary } from "./types";
 
 export const SESSION_CONTEXT_VALUE = "supersetSession";
 
@@ -20,7 +20,7 @@ export {
 /** A project group, session row, or the placeholder shown on an empty store. */
 export type SessionsElement =
     | { readonly kind: "project"; readonly project: SessionProject }
-    | { readonly kind: "session"; readonly record: SessionRecord }
+    | { readonly kind: "session"; readonly record: SessionSummary }
     | { readonly kind: "empty" };
 
 export class SessionsTreeProvider

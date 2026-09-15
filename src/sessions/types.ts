@@ -62,7 +62,32 @@ export interface SessionTurn {
 export interface SessionProject {
     /** Canonical workspace path decoded from the store bucket name. */
     readonly projectPath: string;
-    readonly sessions: readonly SessionRecord[];
+    readonly sessions: readonly SessionSummary[];
+}
+
+/**
+ * What a session row needs, and nothing else.
+ *
+ * The panel shows a title, an agent icon, a size, a turn count and an age —
+ * none of which require the turns themselves. Keeping only this in the store's
+ * cache is the difference between a footprint set by the number of sessions on
+ * disk and one set by their total transcript bytes: every turn carries the
+ * user text, the summary and each tool call's input and result, so a retained
+ * {@link SessionRecord} per file grows without bound as agents keep writing.
+ * Turn content is read on demand by the Markdown renderer and dropped again.
+ */
+export interface SessionSummary {
+    readonly meta: SessionMeta;
+    /** Number of turns, in place of the turns. */
+    readonly turnCount: number;
+    /** Absolute path of the backing `.jsonl`. */
+    readonly filePath: string;
+    /** Byte size on disk — surfaced as the dim row description. */
+    readonly sizeBytes: number;
+    /** Newest of (last turn `at`, file mtime) as epoch millis. */
+    readonly lastActiveMs: number;
+    /** Lines that failed to parse. Non-zero means drift worth showing. */
+    readonly malformedLines: number;
 }
 
 export interface SessionRecord {

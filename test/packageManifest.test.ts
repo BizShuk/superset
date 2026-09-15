@@ -664,7 +664,7 @@ describe("Explorer GitHub URL manifest contribution", () => {
     });
 });
 
-describe("Editor Layout manifest contributions", () => {
+describe("Editor Layout removal", () => {
     interface ManifestKeybinding {
         readonly command: string;
         readonly key: string;
@@ -679,63 +679,24 @@ describe("Editor Layout manifest contributions", () => {
         .keybindings as ManifestKeybinding[];
     const configuration = manifest.contributes
         .configuration as ManifestConfigBlock[];
-    const layoutConfig = configuration.find(
-        (block) => block.title === "Superset Editor Layout"
-    );
-    const titles = new Map(
-        manifest.contributes.commands.map((c) => [c.command, c.title])
-    );
 
-    it("publishes only the four commands the feature still owns", () => {
-        expect(titles.get("superset.editorLayoutRefresh")).toBe(
-            "Superset: Refresh Editor Layout"
-        );
-        expect(titles.get("superset.editorLayoutTranspose")).toBe(
-            "Superset: Transpose Editor Grid"
-        );
-        expect(titles.get("superset.editorLayoutShapePick")).toBe(
-            "Superset: Pick Editor Grid Shape"
-        );
-        expect(titles.get("superset.editorLayoutShapeReset")).toBe(
-            "Superset: Reset Editor Grid Shape"
-        );
+    it("publishes no editor-layout command, setting or keybinding", () => {
+        // The feature is gone, not disabled: a leftover contribution would
+        // still put a dead entry in the Command Palette and the Settings UI.
         expect(
-            [...titles.keys()].filter((c) => c.startsWith("superset.editorLayout"))
-        ).toHaveLength(4);
-    });
-
-    it("keeps no mode-selection command", () => {
-        // The sizing rule is fixed (horizontal even, vertical max), so
-        // every command that used to SELECT one is gone — along with
-        // the superseded single-axis ids from before that.
-        for (const stale of [
-            "superset.editorLayoutEven",
-            "superset.editorLayoutMaxHorizontal",
-            "superset.editorLayoutMaxVertical",
-            "superset.editorLayoutMaxBoth",
-            "superset.editorLayoutToggleHorizontal",
-            "superset.editorLayoutToggleVertical",
-            "superset.editorLayoutCycle",
-            "superset.editorLayoutPick",
-            "superset.editorLayoutHorizontalEven",
-            "superset.editorLayoutHorizontalMax",
-            "superset.editorLayoutVerticalEven",
-            "superset.editorLayoutVerticalMax",
-            "superset.editorLayoutToggleAxis",
-            "superset.editorLayoutToggleSizing",
-        ]) {
-            expect(titles.has(stale), stale).toBe(false);
-        }
-    });
-
-    it("binds refresh, and only refresh, while an editor is open", () => {
-        const layoutKeys = keybindings.filter((k) =>
-            k.command.startsWith("superset.editorLayout")
-        );
-        expect(layoutKeys).toHaveLength(1);
-        expect(layoutKeys[0].command).toBe("superset.editorLayoutRefresh");
-        expect(layoutKeys[0].key).toBe("cmd+alt+v");
-        expect(layoutKeys[0].when).toBe("editorIsOpen");
+            manifest.contributes.commands
+                .map((c) => c.command)
+                .filter((c) => c.startsWith("superset.editorLayout"))
+        ).toEqual([]);
+        expect(
+            keybindings.filter((k) =>
+                k.command.startsWith("superset.editorLayout")
+            )
+        ).toEqual([]);
+        expect(
+            configuration.flatMap((block) => Object.keys(block.properties))
+                .filter((key) => key.startsWith("superset.editorLayout"))
+        ).toEqual([]);
     });
 
     it("does not turn a bound key into a chord leader", () => {
@@ -743,33 +704,5 @@ describe("Editor Layout manifest contributions", () => {
         // command and the prefix of a chord.
         const chords = keybindings.filter((k) => k.key.includes(" "));
         expect(chords).toEqual([]);
-    });
-
-    it("declares the four settings with their bounds", () => {
-        expect(layoutConfig).toBeDefined();
-        const props = layoutConfig!.properties;
-        expect(Object.keys(props).sort()).toEqual([
-            "superset.editorLayout.defaultShape",
-            "superset.editorLayout.followActiveGroup",
-            "superset.editorLayout.maxRatio",
-            "superset.editorLayout.restoreOnActivate",
-        ]);
-
-        const ratio = props["superset.editorLayout.maxRatio"];
-        expect(ratio.type).toBe("number");
-        expect(ratio.default).toBe(0.8);
-        expect(ratio.minimum).toBe(0.5);
-        expect(ratio.maximum).toBe(0.9);
-
-        const shape = props["superset.editorLayout.defaultShape"];
-        expect(shape.enum).toEqual(["flat", "balanced"]);
-        expect(shape.default).toBe("flat");
-
-        expect(props["superset.editorLayout.followActiveGroup"].default).toBe(
-            true
-        );
-        expect(props["superset.editorLayout.restoreOnActivate"].default).toBe(
-            true
-        );
     });
 });

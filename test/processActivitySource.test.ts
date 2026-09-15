@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
+    cpuThresholdFor,
     createProcessActivitySource,
+    DEFAULT_POLL_INTERVAL_MS,
     pollOnce,
 } from "../src/terminals/processActivitySource";
 import type { ActivityEvent } from "../src/terminals/activitySource";
 import type { TerminalHandle } from "../src/terminals/types";
-import type { ShellSample } from "../src/terminals/processTreeSampler";
+import {
+    CPU_DELTA_THRESHOLD_MS,
+    type ShellSample,
+} from "../src/terminals/processTreeSampler";
 
 function fakeTerminal(name: string): TerminalHandle {
     return { name, show: vi.fn(), dispose: vi.fn() };
@@ -197,6 +202,48 @@ describe("pollOnce", () => {
         await pollOnce(ctx);
         await pollOnce(ctx);
         expect(resolvePid).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("poll cadence", () => {
+    it("polls at 30s by default", () => {
+        // The cadence is this source's entire standing cost — one `ps` over
+        // the whole process table per tick, in every window, forever.
+        expect(DEFAULT_POLL_INTERVAL_MS).toBe(30_000);
+    });
+
+    it("scales the CPU threshold with the window, never below ps resolution", () => {
+        // A fixed 10ms threshold across a 30s window would mean "busy 0.03%
+        // of the time", and every idle TUI would read as working.
+        expect(cpuThresholdFor(1_000)).toBe(CPU_DELTA_THRESHOLD_MS);
+        expect(cpuThresholdFor(30_000)).toBe(300);
+        expect(cpuThresholdFor(100)).toBe(CPU_DELTA_THRESHOLD_MS);
+    });
+
+    it("applies the scaled threshold to a full poll cycle", async () => {
+        // 200ms of CPU across a 30s window is an idle TUI redrawing, not work.
+        const emit = vi.fn();
+        const previous = new WeakMap<TerminalHandle, ShellSample>();
+        const pids = new WeakMap<TerminalHandle, number>();
+        const terminal = fakeTerminal("a");
+        const ctx = (ps: string) => ({
+            deps: {
+                runPs: async () => ps,
+                getTerminals: () => [terminal],
+                resolvePid: async () => 500,
+            },
+            emit,
+            previous,
+            pids,
+            cpuThresholdMs: cpuThresholdFor(30_000),
+        });
+
+        await pollOnce(ctx("500 1 0:00.00 zsh\n600 500 0:01.00 claude"));
+        await pollOnce(ctx("500 1 0:00.00 zsh\n600 500 0:01.20 claude"));
+        expect(emit).not.toHaveBeenCalled();
+
+        await pollOnce(ctx("500 1 0:00.00 zsh\n600 500 0:02.00 claude"));
+        expect(emit).toHaveBeenCalledTimes(1);
     });
 });
 

@@ -15,6 +15,7 @@ import type { ActivityEvent, ActivitySource } from "./activitySource";
 import type { TerminalHandle } from "./types";
 import {
     buildChildIndex,
+    CPU_DELTA_THRESHOLD_MS,
     diffSamples,
     parsePsOutput,
     sampleShell,
@@ -22,12 +23,37 @@ import {
 } from "./processTreeSampler";
 
 /**
- * Poll cadence. 1 Hz is fast enough that a background build finishing feels
- * immediate in the panel, and slow enough that the `ps` cost is irrelevant
- * (a full process-table scan is single-digit milliseconds and runs in a child
- * process, not on the extension-host thread).
+ * Poll cadence.
+ *
+ * Every tick forks a `ps` that walks the whole process table, so the cadence
+ * is this source's entire standing cost — it is paid forever, in every window,
+ * whether or not the panel is visible or the window is in the foreground. At
+ * 1 Hz that was ~86k process spawns a day per window, enough to keep the CPU
+ * out of its idle states on a laptop. 30s keeps "that terminal is still
+ * working" true without being a wakeup source of its own; the shell-integration
+ * source (`B`) still reports command start/end at event latency, so the only
+ * thing that waits for this tick is a full-screen TUI's CPU burn.
  */
-export const DEFAULT_POLL_INTERVAL_MS = 1000;
+export const DEFAULT_POLL_INTERVAL_MS = 30_000;
+
+/**
+ * Share of the poll window a process must be busy for to count as active.
+ *
+ * The CPU threshold cannot be a constant once the window is configurable: at
+ * 1 Hz, 10ms meant "busy 1% of the interval", but reused unchanged across a
+ * 30s window it would mean 0.03% — an idle TUI merely redrawing its prompt
+ * would clear it and every terminal would look busy. Scaling with the window
+ * keeps the meaning fixed.
+ */
+const CPU_DUTY_RATIO = 0.01;
+
+/** Threshold for one poll window, never below `ps`'s own resolution. */
+export function cpuThresholdFor(intervalMs: number): number {
+    return Math.max(
+        CPU_DELTA_THRESHOLD_MS,
+        Math.round(intervalMs * CPU_DUTY_RATIO)
+    );
+}
 
 export interface ProcessActivitySourceDeps {
     /** Runs the `ps` snapshot. Injected so tests never spawn a process. */
@@ -93,6 +119,7 @@ export function createProcessActivitySource(
                     emit,
                     previous,
                     pids,
+                    cpuThresholdMs: cpuThresholdFor(intervalMs),
                 });
             } catch (err) {
                 // A failed poll must not kill the loop — `ps` can fail
@@ -120,6 +147,8 @@ interface PollContext {
     readonly emit: (event: ActivityEvent) => void;
     readonly previous: WeakMap<TerminalHandle, ShellSample>;
     readonly pids: WeakMap<TerminalHandle, number>;
+    /** Defaults to `ps`'s own resolution when a caller drives one cycle. */
+    readonly cpuThresholdMs?: number;
 }
 
 /**
@@ -128,6 +157,7 @@ interface PollContext {
  */
 export async function pollOnce(ctx: PollContext): Promise<void> {
     const { deps, emit, previous, pids } = ctx;
+    const cpuThresholdMs = ctx.cpuThresholdMs ?? CPU_DELTA_THRESHOLD_MS;
     const terminals = deps.getTerminals();
     if (terminals.length === 0) {
         // Nothing to watch — skip the `ps` entirely. This is the common case
@@ -157,7 +187,11 @@ export async function pollOnce(ctx: PollContext): Promise<void> {
     const index = buildChildIndex(parsePsOutput(await deps.runPs()));
     for (const { terminal, pid } of targets) {
         const curr = sampleShell(index, pid);
-        const verdict = diffSamples(previous.get(terminal), curr);
+        const verdict = diffSamples(
+            previous.get(terminal),
+            curr,
+            cpuThresholdMs
+        );
         previous.set(terminal, curr);
         if (verdict.active) {
             emit({ terminal, reason: `proc: ${verdict.reason}` });

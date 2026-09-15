@@ -31,6 +31,21 @@ const DEFAULT_CLOCK: ClockSource = { now: () => Date.now() };
 const COALESCE_MS = 250;
 
 /**
+ * How long one `refresh()` keeps the multicast socket open.
+ *
+ * Discovery is a burst, not a subscription. A socket left open parses every
+ * Bonjour packet on the LAN — AirPlay, printers, HomeKit, every other laptop —
+ * on the extension-host thread, forever, for a panel nobody is looking at. The
+ * window is the entire answer to "when does this feature cost anything": the
+ * user asks, we listen for a few seconds, we close.
+ *
+ * Responders answer a DNS-SD query within a second or two (RFC 6762 §5.2
+ * spreads replies over a short random delay to avoid a storm), so a few
+ * seconds collects a full picture of the network without lingering.
+ */
+export const DISCOVERY_WINDOW_MS = 5_000;
+
+/**
  * Pure data layer for mDNS service discovery.
  * Subscribes to an `MdnsTransport`, parses DNS-SD records, and exposes
  * discovered services via the observer pattern.
@@ -43,6 +58,7 @@ export class MdnsRegistry {
     private listeners = new Set<MdnsListener>();
     private unsubscribeTransport?: () => void;
     private coalesceTimer?: ReturnType<typeof setTimeout>;
+    private discoveryTimer?: ReturnType<typeof setTimeout>;
     private pending = new Map<string, MutableService>();
     private clock: ClockSource;
 
@@ -72,6 +88,10 @@ export class MdnsRegistry {
     }
 
     stop(): void {
+        if (this.discoveryTimer) {
+            clearTimeout(this.discoveryTimer);
+            this.discoveryTimer = undefined;
+        }
         this.unsubscribeTransport?.();
         this.unsubscribeTransport = undefined;
         if (this.coalesceTimer) {
@@ -83,12 +103,18 @@ export class MdnsRegistry {
         this.transport.stop();
     }
 
+    /**
+     * Drop everything discovered so far and close the socket.
+     *
+     * Deliberately does *not* re-open it: nothing listens again until the user
+     * asks for a `refresh()`. Re-arming here would turn `Reset Caches` into a
+     * silent way to put the radio back on.
+     */
     reset(): void {
         this.stop();
         this.store.clear();
         this.pending.clear();
         this.emit({ type: "reset" });
-        this.start();
     }
 
     // ── Reads ──────────────────────────────────────────────
@@ -103,9 +129,33 @@ export class MdnsRegistry {
 
     // ── Mutations ──────────────────────────────────────────
 
-    /** Re-issue a browse query to discover services. */
-    refresh(): void {
-        this.transport.browse();
+    /**
+     * Run one discovery burst: open the socket if it is closed, ask the
+     * network what it has, and close again after {@link DISCOVERY_WINDOW_MS}.
+     *
+     * This is the *only* thing that opens the socket. Pressing refresh again
+     * mid-window re-asks and restarts the window rather than stacking timers,
+     * so a user drumming on the button still ends up with one socket and one
+     * closing deadline.
+     */
+    refresh(windowMs: number = DISCOVERY_WINDOW_MS): void {
+        const alreadyListening = this.unsubscribeTransport !== undefined;
+        // `start()` issues the first query itself; re-asking on top of it
+        // would put two identical questions on the wire for one button press.
+        this.start();
+        if (alreadyListening) {
+            this.transport.browse();
+        }
+        if (this.discoveryTimer) {
+            clearTimeout(this.discoveryTimer);
+        }
+        this.discoveryTimer = setTimeout(() => {
+            this.discoveryTimer = undefined;
+            this.stop();
+        }, windowMs);
+        // A pending close must never be the handle that keeps an orphan
+        // extension host alive.
+        (this.discoveryTimer as { unref?: () => void }).unref?.();
     }
 
     // ── Events ─────────────────────────────────────────────

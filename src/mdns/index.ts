@@ -11,8 +11,9 @@ import { joinShellCommand } from "../shellCommand";
 import { DIAGNOSTIC_METRIC } from "../diagnostics/metrics";
 
 export function register(ctx: PluginContext): void {
+    // Deliberately not started here. The multicast socket only opens for the
+    // few seconds after the user presses `Refresh` — see `MdnsRegistry.refresh`.
     const registry = new MdnsRegistry(new MulticastDnsTransport());
-    registry.start();
 
     const provider = new MdnsTreeProvider(registry);
     provider.start();
