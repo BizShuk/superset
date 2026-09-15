@@ -334,6 +334,7 @@ describe("CLILauncherTreeProvider", () => {
             removed: 3,
             ahead: 0,
             behind: 0,
+            hasUpstream: true,
         });
         gitStatus.set(`${HOME}/projects/platform`, {
             branch: "master",
@@ -341,34 +342,36 @@ describe("CLILauncherTreeProvider", () => {
             removed: 0,
             ahead: 0,
             behind: 0,
+            hasUpstream: true,
         });
 
         const provider = new CLILauncherTreeProvider();
         const items = await provider.getChildren();
 
         expect(items.map((item) => item.description)).toEqual([
-            "release(+12,-3)", // 釘選的 repo
-            "", // 預設分支且零改動:靜止狀態不佔 description
+            "release↑0↓0(+12,-3)", // 釘選的 repo
+            "master↑0↓0", // 零改動:領先／落後仍要顯示,行數增減省略
             "", // 不是 repository
         ]);
         provider.dispose();
     });
 
-    it("keeps the hidden clean-default-branch status in the tooltip", async () => {
+    it("drops the divergence for a branch without an upstream", async () => {
         gitStatus.set(`${HOME}/projects/platform`, {
-            branch: "main",
+            branch: "w-local",
             added: 0,
             removed: 0,
             ahead: 0,
             behind: 0,
+            hasUpstream: false,
         });
 
         const provider = new CLILauncherTreeProvider();
         const items = await provider.getChildren();
 
-        expect(items[1].description).toBe("");
+        expect(items[1].description).toBe("w-local");
         expect(items[1].tooltip).toEqual({
-            value: "`main(+0,-0)`\n\nCLI terminals: 0",
+            value: "`w-local`\n\nCLI terminals: 0",
         });
         provider.dispose();
     });
@@ -380,6 +383,7 @@ describe("CLILauncherTreeProvider", () => {
             removed: 1,
             ahead: 0,
             behind: 0,
+            hasUpstream: true,
         });
         const source = new FakeTerminalSource();
         source.set("/opt/tools/cli", [
@@ -389,7 +393,7 @@ describe("CLILauncherTreeProvider", () => {
 
         const items = await provider.getChildren();
         expect(items[0].tooltip).toEqual({
-            value: "`release(+2,-1)`\n\nCLI terminals: 1",
+            value: "`release↑0↓0(+2,-1)`\n\nCLI terminals: 1",
         });
         // 不是 repository 的資料夾只剩 terminal 數。
         expect(items[2].tooltip).toEqual({ value: "CLI terminals: 0" });
@@ -537,6 +541,7 @@ describe("CLILauncherTreeProvider", () => {
             removed: 0,
             ahead: 0,
             behind: 0,
+            hasUpstream: true,
         });
 
         const provider = new CLILauncherTreeProvider();
@@ -544,7 +549,7 @@ describe("CLILauncherTreeProvider", () => {
         const children = await provider.getChildren(items[1]);
 
         expect(children.map((item) => item.description)).toEqual([
-            "w-cli-git(+4,-0)",
+            "w-cli-git↑0↓0(+4,-0)",
             "",
         ]);
         provider.dispose();
@@ -557,6 +562,7 @@ describe("CLILauncherTreeProvider", () => {
             removed: 1,
             ahead: 0,
             behind: 0,
+            hasUpstream: true,
         });
         const source = new FakeTerminalSource();
         source.set("/opt/tools/cli", [
@@ -566,7 +572,7 @@ describe("CLILauncherTreeProvider", () => {
         const provider = providerWith(source);
 
         const [pathItem] = await provider.getChildren();
-        expect(pathItem.description).toBe("🟡 2 · release(+2,-1)");
+        expect(pathItem.description).toBe("🟡 2 · release↑0↓0(+2,-1)");
         expect(pathItem.collapsibleState).toBe(1); // Collapsed
         // icon 固定色,不跟 count 來源聯動。
         expect(pathItem.iconPath).toEqual({

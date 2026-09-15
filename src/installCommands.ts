@@ -84,6 +84,18 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
         label: "ytdl",
         cmd: "go install github.com/bizshuk/ytdl@master",
     },
+    {
+        label: "video-utils",
+        cmd: "go install github.com/bizshuk/video-utils@master",
+    },
+    {
+        label: "gx",
+        cmd: "go install github.com/bizshuk/gx@master",
+    },
+    {
+        label: "img",
+        cmd: "go install github.com/bizshuk/img@master",
+    },
 ] as const;
 
 const SKILL_REPOSITORIES: readonly CuratedSkillRepositoryPickItem[] = [

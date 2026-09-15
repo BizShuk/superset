@@ -39,7 +39,6 @@ import { isDescendantPath, type CLIEntry } from "./entries";
 import { projectFocusedPaths } from "./focus";
 import {
     pullGitFolders,
-    formatGitFolderDescription,
     formatGitFolderStatus,
     readGitFolderStatusMap,
     type GitFolderStatus,
@@ -112,10 +111,8 @@ function formatPathDescription(git: string, counts: TerminalCounts): string {
 
 export class CLIEntryTreeItem extends vscode.TreeItem {
     readonly children: readonly CLIEntry[];
-    /** description 用的簡短形式;預設分支且零改動時是空字串。 */
-    private readonly gitDescription: string;
-    /** tooltip 用的完整形式;只要是 repository 就一定有值。 */
-    private readonly gitTooltip: string;
+    /** 分支、領先／落後與行數增減;不是 repository 時是空字串。 */
+    private readonly gitSummary: string;
 
     constructor(
         readonly entry: CLIEntry,
@@ -142,8 +139,7 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
         );
 
         this.children = children;
-        this.gitDescription = formatGitFolderDescription(options.git);
-        this.gitTooltip = formatGitFolderStatus(options.git);
+        this.gitSummary = formatGitFolderStatus(options.git);
         this.id = options.id;
         this.iconPath = FOLDER_ICON;
         this.updateTerminalCount({
@@ -164,12 +160,11 @@ export class CLIEntryTreeItem extends vscode.TreeItem {
         this.collapsibleState = !hasChildren
             ? vscode.TreeItemCollapsibleState.None
             : vscode.TreeItemCollapsibleState.Collapsed;
-        this.description = formatPathDescription(this.gitDescription, counts);
+        this.description = formatPathDescription(this.gitSummary, counts);
         // tooltip 只回答兩件事:這個路徑現在的 git 狀態,以及開了幾個 CLI terminal。
-        // git 用完整形式,description 隱藏掉的靜止狀態在這裡仍看得到。
         this.tooltip = new vscode.MarkdownString(
             [
-                ...(this.gitTooltip === "" ? [] : [`\`${this.gitTooltip}\``]),
+                ...(this.gitSummary === "" ? [] : [`\`${this.gitSummary}\``]),
                 `CLI terminals: ${counts.total}`,
             ].join("\n\n")
         );

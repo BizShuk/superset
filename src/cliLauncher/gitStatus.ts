@@ -2,9 +2,14 @@
 // 以及待處理的行數增減。
 //
 // 面板的 description 欄原本重複顯示路徑 (label 已經是 basename),資訊量低;改成
-// `<branch>(+<新增行>,-<刪除行>)`,挑 cwd 時一眼看得出來在哪個分支、手上還有多少
-// 沒收的改動。停在預設分支 (`master` / `main`) 且零改動時 description 留空 ——
-// 那是常態,一整排 `master(+0,-0)` 只會把真正在動的 repo 淹掉;tooltip 仍給完整值。
+// `<branch>↑<領先>↓<落後>(+<新增行>,-<刪除行>)`,挑 cwd 時一眼看得出來在哪個
+// 分支、跟遠端差幾個 commit、手上還有多少沒收的改動。
+//
+// 兩種資訊的顯示規則`不同`:
+// - 領先／落後`一律顯示`(含 `↑0↓0`),與 VS Code 的 Source Control 一致 ——
+//   「跟遠端同步」本身就是要確認的事實,消失的數字無法與「還沒查」區分。
+//   只有`沒有設定 upstream` 時整段省略,那時候沒有可比較的對象。
+// - 行數增減`只在不為零時顯示`;一整排 `(+0,-0)` 純粹佔用橫向空間。
 //
 // 領先／落後的 commit 數讀的是`本地已有的` remote-tracking refs,因此每次刷新都
 // 能算而不必連網;真正連遠端的 `pullGitFolders` (fetch + fast-forward) 只在使用者
@@ -34,6 +39,8 @@ export interface GitFolderStatus {
     ahead: number;
     /** upstream 有、本地沒有的 commit 數;沒有 upstream 時是 0。 */
     behind: number;
+    /** 這個分支有沒有設定 upstream;沒有的話領先／落後無從比較,整段不顯示。 */
+    hasUpstream: boolean;
 }
 
 /** 同時處理的資料夾數上限;一次掃描可能有數十列,不能全部一起 spawn。 */
@@ -90,14 +97,17 @@ export function parseNumstat(output: string): DiffLineCounts {
 export interface CommitDivergence {
     ahead: number;
     behind: number;
+    /** 有沒有可比較的 upstream;沒有時 `ahead` / `behind` 的 0 不代表同步。 */
+    hasUpstream: boolean;
 }
 
 /**
  * 解析 `git rev-list --count --left-right <upstream>...HEAD` 的輸出:
  * 單行 `<左邊獨有>\t<右邊獨有>`,左邊是 upstream (落後數),右邊是 HEAD (領先數)。
  *
- * 沒有 upstream、尚無 commit 或輸出不成形時一律回傳 0/0 —— 這是裝飾資訊,
- * 「不知道」與「同步中」在畫面上都是不顯示。
+ * 沒有 upstream、尚無 commit 或輸出不成形時回 0/0 並標記 `hasUpstream: false`。
+ * 這個旗標不可省略:「沒有可比較的遠端」與「與遠端完全同步」都是 0/0,但畫面上
+ * 前者該空白、後者該顯示 `↑0↓0`。
  */
 export function parseAheadBehind(
     output: string | undefined
@@ -105,36 +115,41 @@ export function parseAheadBehind(
     const [behindText, aheadText] = (output ?? "").trim().split(/\s+/);
     const behind = Number.parseInt(behindText ?? "", 10);
     const ahead = Number.parseInt(aheadText ?? "", 10);
-    return {
-        ahead: Number.isNaN(ahead) ? 0 : ahead,
-        behind: Number.isNaN(behind) ? 0 : behind,
-    };
+    if (Number.isNaN(ahead) || Number.isNaN(behind)) {
+        return { ahead: 0, behind: 0, hasUpstream: false };
+    }
+    return { ahead, behind, hasUpstream: true };
 }
 
 /**
- * 預設分支名;停在預設分支且沒有改動是「沒事發生」的常態,不值得佔用 description。
- */
-const DEFAULT_BRANCHES = new Set(["master", "main"]);
-
-/**
- * 與 upstream 的差距 `↑<領先>↓<落後>`;為 0 的那一邊直接省略,兩邊都 0 時是空字串。
+ * 與 upstream 的差距 `↑<領先>↓<落後>`;`一律`輸出兩邊,包含 `↑0↓0`。
  *
- * 領先／落後只有`不為零`時才是資訊 —— 一整排 `↑0↓0` 等同雜訊,而且這一列還要
- * 塞分支名與行數增減,橫向空間本來就不夠。
+ * 這是面板上唯一能回答「這個 repo 推了沒、拉了沒」的欄位,而 0 正是最需要確認
+ * 的那個值 —— 省略它會讓「已同步」與「還沒查」長得一樣。沒有 upstream 時才回
+ * 空字串:那時候根本沒有可比較的對象。
  */
 function formatDivergence(status: GitFolderStatus): string {
-    const ahead = status.ahead > 0 ? `↑${status.ahead}` : "";
-    const behind = status.behind > 0 ? `↓${status.behind}` : "";
-    return `${ahead}${behind}`;
+    return status.hasUpstream ? `↑${status.ahead}↓${status.behind}` : "";
 }
 
 /**
- * 格式化成完整字串 `<branch><↑領先><↓落後>(+<新增>,-<刪除>)`。
+ * 待處理的行數增減 `(+<新增>,-<刪除>)`;兩邊都是 0 時回空字串。
  *
- * 沒有 git 資訊 (不是 repository、讀取失敗) 時回傳空字串。乾淨的 repo 仍然顯示
- * `master(+0,-0)` —— 這是 tooltip 用的完整形式,分支名本身就是有用資訊。
- * 領先／落後只在不為零時出現;它跟著分支放在前面,因為兩者講的是同一件事:
- * 這個 repo 現在停在哪、跟遠端差多少。
+ * 與領先／落後相反,行數增減的 0 是常態 —— 大多數 repo 在大多數時間都沒有未收的
+ * 改動,一整排 `(+0,-0)` 只會把真正在動的那幾列淹掉。
+ */
+function formatDiffLines(status: GitFolderStatus): string {
+    if (status.added === 0 && status.removed === 0) {
+        return "";
+    }
+    return `(+${status.added},-${status.removed})`;
+}
+
+/**
+ * 格式化成 `<branch><↑領先><↓落後>(+<新增>,-<刪除>)`,description 與 tooltip 共用。
+ *
+ * 沒有 git 資訊 (不是 repository、讀取失敗) 時回傳空字串。領先／落後跟著分支放在
+ * 前面,因為兩者講的是同一件事:這個 repo 現在停在哪、跟遠端差多少。
  */
 export function formatGitFolderStatus(
     status: GitFolderStatus | undefined
@@ -142,39 +157,7 @@ export function formatGitFolderStatus(
     if (!status || status.branch === "") {
         return "";
     }
-    const divergence = formatDivergence(status);
-    return `${status.branch}${divergence}(+${status.added},-${status.removed})`;
-}
-
-/**
- * 這個資料夾是不是「預設分支 + 零改動 + 與 upstream 同步」的靜止狀態。
- *
- * 只有這一種組合會從 description 隱藏;`w-*` 分支即使乾淨仍要顯示,因為
- * 「現在站在哪個 worktree 分支」本身就是要挑 cwd 的人在找的資訊。有未推送或
- * 未拉取的 commit 也一律顯示 —— 那正是 `Refresh` 抓完遠端後要看的東西。
- */
-export function isQuietGitFolderStatus(
-    status: GitFolderStatus | undefined
-): boolean {
-    return (
-        status !== undefined &&
-        status.added === 0 &&
-        status.removed === 0 &&
-        status.ahead === 0 &&
-        status.behind === 0 &&
-        DEFAULT_BRANCHES.has(status.branch)
-    );
-}
-
-/**
- * 格式化成面板 description 用的字串。與 `formatGitFolderStatus` 的差別只有一個:
- * 靜止狀態 (預設分支 + 零改動) 回傳空字串,讓一整排沒在動的 repo 不佔版面;
- * 完整資訊仍留在 tooltip。
- */
-export function formatGitFolderDescription(
-    status: GitFolderStatus | undefined
-): string {
-    return isQuietGitFolderStatus(status) ? "" : formatGitFolderStatus(status);
+    return `${status.branch}${formatDivergence(status)}${formatDiffLines(status)}`;
 }
 
 /**
@@ -284,6 +267,7 @@ export async function readGitFolderStatus(
         removed: lines.removed,
         ahead: divergence.ahead,
         behind: divergence.behind,
+        hasUpstream: divergence.hasUpstream,
     };
 }
 

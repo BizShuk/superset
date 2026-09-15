@@ -3,7 +3,6 @@
 
 import { describe, it, expect } from "vitest";
 import {
-    formatGitFolderDescription,
     formatGitFolderStatus,
     parseAheadBehind,
     parseNumstat,
@@ -18,6 +17,7 @@ function status(partial: Partial<GitFolderStatus>): GitFolderStatus {
         removed: 0,
         ahead: 0,
         behind: 0,
+        hasUpstream: true,
         ...partial,
     };
 }
@@ -54,46 +54,68 @@ describe("parseNumstat", () => {
 
 describe("parseAheadBehind", () => {
     it("reads left as behind and right as ahead", () => {
-        expect(parseAheadBehind("2\t5\n")).toEqual({ ahead: 5, behind: 2 });
+        expect(parseAheadBehind("2\t5\n")).toEqual({
+            ahead: 5,
+            behind: 2,
+            hasUpstream: true,
+        });
     });
 
-    it("treats a missing upstream as no divergence", () => {
-        expect(parseAheadBehind(undefined)).toEqual({ ahead: 0, behind: 0 });
-        expect(parseAheadBehind("")).toEqual({ ahead: 0, behind: 0 });
-        expect(parseAheadBehind("garbage")).toEqual({ ahead: 0, behind: 0 });
+    it("reports an in-sync branch as a real zero", () => {
+        expect(parseAheadBehind("0\t0\n")).toEqual({
+            ahead: 0,
+            behind: 0,
+            hasUpstream: true,
+        });
+    });
+
+    it("marks a missing upstream apart from an in-sync branch", () => {
+        for (const output of [undefined, "", "garbage"]) {
+            expect(parseAheadBehind(output)).toEqual({
+                ahead: 0,
+                behind: 0,
+                hasUpstream: false,
+            });
+        }
     });
 });
 
 describe("formatGitFolderStatus", () => {
-    it("renders the branch with its line deltas", () => {
-        expect(
-            formatGitFolderStatus(
-                status({ branch: "master", added: 12, removed: 3 })
-            )
-        ).toBe("master(+12,-3)");
-    });
-
-    it("keeps zeros so the branch stays visible on a clean repository", () => {
+    it("always renders the divergence from the upstream", () => {
         expect(formatGitFolderStatus(status({ branch: "master" }))).toBe(
-            "master(+0,-0)"
+            "master↑0↓0"
         );
-    });
-
-    it("appends unpushed and unpulled commit counts next to the branch", () => {
         expect(
             formatGitFolderStatus(
                 status({ branch: "master", ahead: 3, behind: 1 })
             )
-        ).toBe("master↑3↓1(+0,-0)");
+        ).toBe("master↑3↓1");
     });
 
-    it("omits the side that is in sync", () => {
-        expect(formatGitFolderStatus(status({ ahead: 2 }))).toBe(
-            "master↑2(+0,-0)"
-        );
+    it("keeps the zero side so the pair always reads the same way", () => {
+        expect(formatGitFolderStatus(status({ ahead: 2 }))).toBe("master↑2↓0");
         expect(formatGitFolderStatus(status({ behind: 4 }))).toBe(
-            "master↓4(+0,-0)"
+            "master↑0↓4"
         );
+    });
+
+    it("omits the divergence when the branch has no upstream", () => {
+        expect(
+            formatGitFolderStatus(
+                status({ branch: "w-cli-git", hasUpstream: false })
+            )
+        ).toBe("w-cli-git");
+    });
+
+    it("appends the line deltas only when there are changes", () => {
+        expect(
+            formatGitFolderStatus(
+                status({ branch: "master", added: 12, removed: 3 })
+            )
+        ).toBe("master↑0↓0(+12,-3)");
+        expect(
+            formatGitFolderStatus(status({ branch: "master", added: 5 }))
+        ).toBe("master↑0↓0(+5,-0)");
     });
 
     it("renders nothing when there is no git information", () => {
@@ -104,38 +126,5 @@ describe("formatGitFolderStatus", () => {
         expect(
             formatGitFolderStatus(status({ branch: "", added: 5, removed: 5 }))
         ).toBe("");
-    });
-});
-
-describe("formatGitFolderDescription", () => {
-    it("hides the default branch when there is nothing pending", () => {
-        for (const branch of ["master", "main"]) {
-            expect(formatGitFolderDescription(status({ branch }))).toBe("");
-        }
-    });
-
-    it("keeps the default branch as soon as there are changes", () => {
-        expect(
-            formatGitFolderDescription(status({ branch: "master", added: 1 }))
-        ).toBe("master(+1,-0)");
-    });
-
-    it("keeps a clean default branch that has commits to push or pull", () => {
-        expect(formatGitFolderDescription(status({ ahead: 1 }))).toBe(
-            "master↑1(+0,-0)"
-        );
-        expect(formatGitFolderDescription(status({ behind: 2 }))).toBe(
-            "master↓2(+0,-0)"
-        );
-    });
-
-    it("keeps a clean non-default branch — which branch you are on is the point", () => {
-        expect(formatGitFolderDescription(status({ branch: "w-cli-git" }))).toBe(
-            "w-cli-git(+0,-0)"
-        );
-    });
-
-    it("renders nothing without git information", () => {
-        expect(formatGitFolderDescription(undefined)).toBe("");
     });
 });

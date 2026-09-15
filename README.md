@@ -352,7 +352,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 
 ### 10. Default Tools — Go CLI 安裝
 
-`Superset: Install Default Tools` 會依序為目前使用者安裝十個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
+`Superset: Install Default Tools` 會依序為目前使用者安裝十三個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
 
 - `pm2` — `github.com/bizshuk/pm2@master`
 - `skills` — `github.com/bizshuk/skills@master`
@@ -364,6 +364,9 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 - `proxy` — `github.com/bizshuk/proxy@master`
 - `mdserver` — `github.com/bizshuk/mdserver@master`
 - `ytdl` — `github.com/bizshuk/ytdl@master`
+- `video-utils` — `github.com/bizshuk/video-utils@master`
+- `gx` — `github.com/bizshuk/gx@master`
+- `img` — `github.com/bizshuk/img@master`
 
 若只需要安裝 skill repository，使用 `Superset: Install Skills`。Quick Pick 可直接選擇下列 repository；若清單沒有目標，選擇 `自訂 repository…`，再於 Input Box 輸入 `owner/repository`。確認後會執行 `skills add <repository>`：
 
@@ -477,24 +480,24 @@ Superset 不建立重複 workflow。Change action 失敗時會顯示原因。
 
 每一列名稱右側顯示`該資料夾自己`的 git 狀態,格式為
 `<分支><↑未推送><↓未拉取>(+<新增或修改行數>,-<刪除行數>)`,例如
-`w-cli-git↑2↓1(+180,-165)`:
+`w-cli-git↑2↓1(+180,-165)`,乾淨且與遠端同步時是 `master↑0↓0`:
 
 - 行數是 `git diff HEAD` 的加總,`staged` 與 `unstaged` 一起算;`未追蹤`檔案不
   在 `git diff` 範圍內,因此不計入。二進位檔案略過。
 - `↑<數量>` 是本地有、upstream 沒有的 commit 數(還沒推上去的);`↓<數量>` 是
-  upstream 有、本地沒有的 commit 數(還沒拉下來的)。任一邊為 0 時該符號不顯示,
-  沒有設定 upstream 的分支兩邊都不顯示。
+  upstream 有、本地沒有的 commit 數(還沒拉下來的)。只要分支有 upstream,這一對
+  數字`一律顯示`(與遠端完全同步時是 `↑0↓0`)—— 與 VS Code Source Control 相同,
+  「已同步」是要確認的事實,省略它會跟「還沒查」長得一樣。沒有設定 upstream 的
+  分支則整段不顯示,那時候沒有可比較的對象。
 - 這兩個數字比對的是`上一次 fetch 下來的` remote refs,所以平時的自動刷新不會
   連網。按下 `Refresh` 才會對目前列出的 repository 跑一次 `git fetch`,抓完後
   重畫,數字才反映遠端當下的狀態。
 - 只有資料夾本身是 repository(含 submodule)時才顯示;不會沿父層往上找,
   所以 `~/projects/platform` 不會顯示 `~/projects` 的狀態。
-- 停在預設分支(`master` / `main`)、`零改動`且`與 upstream 同步`時 description
-  留空 —— 那是常態,一整排 `master(+0,-0)` 只會把真正在動的 repo 淹掉。其他情況
-  一律顯示,包含乾淨的 `w-*` 分支(站在哪個分支本身就是資訊)與只差幾個 commit
-  沒推的乾淨 repo。detached HEAD 時顯示短 commit hash。
-- Hover tooltip 只有兩行:完整的 git 狀態(含被 description 省略的靜止狀態)與
-  `CLI terminals: <數量>`。第二層的狀態在展開時才讀取。
+- `(+<新增>,-<刪除>)` 只在`有改動`時出現;乾淨的 repo 只剩分支與 `↑0↓0`,一整排
+  `(+0,-0)` 會把真正在動的那幾列淹掉。detached HEAD 時分支位置顯示短 commit hash。
+- Hover tooltip 只有兩行:同一份 git 狀態與 `CLI terminals: <數量>`。第二層的狀態
+  在展開時才讀取。
 - 面板`可見`時每 5 分鐘自動重刷一次,外部 commit / checkout / stash 的結果不必手動
   `Refresh` 也會跟上;面板隱藏時停止,不在背景重掃。自動刷新`不` fetch。
 - `Refresh` 會做三件事:重掃路徑清單、重讀本地 git 狀態、對目前畫面上的
@@ -709,7 +712,7 @@ code --install-extension superset-*.vsix
 | `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                                 |
 | `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                       |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
-| `Superset: Install Default Tools`               | —                   | 安裝十個預設 Go CLI（含 `mdserver`、`ytdl`）                                   |
+| `Superset: Install Default Tools`               | —                   | 安裝十三個預設 Go CLI（含 `mdserver`、`ytdl`、`video-utils` 等）             |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
 | `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+2/3/4`(CLI 面板且已選 path) | 在選取路徑開 terminal 並執行對應 agent CLI                       |
 | `CLI: Open Terminal at Path`                    | `Ctrl+1`(CLI 面板且已選 path) | 只在選取路徑開 terminal,不執行命令                                      |

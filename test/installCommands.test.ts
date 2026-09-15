@@ -189,7 +189,7 @@ describe("terminal command dispatch", () => {
         asMock(vscode.window.showQuickPick).mockResolvedValue(undefined);
     });
 
-    it("installDefaultTools spawns ten separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
+    it("installDefaultTools spawns thirteen separate terminals (one per go install), each cmdline suffixed with `&& exit`, and does NOT call createTerminal", async () => {
         const expectedTools = [
             {
                 label: "pm2",
@@ -231,6 +231,18 @@ describe("terminal command dispatch", () => {
                 label: "ytdl",
                 cmd: "go install github.com/bizshuk/ytdl@master",
             },
+            {
+                label: "video-utils",
+                cmd: "go install github.com/bizshuk/video-utils@master",
+            },
+            {
+                label: "gx",
+                cmd: "go install github.com/bizshuk/gx@master",
+            },
+            {
+                label: "img",
+                cmd: "go install github.com/bizshuk/img@master",
+            },
         ];
         const makeTerminal = () =>
             ({
@@ -250,7 +262,10 @@ describe("terminal command dispatch", () => {
             .mockReturnValueOnce(terminals[6])
             .mockReturnValueOnce(terminals[7])
             .mockReturnValueOnce(terminals[8])
-            .mockReturnValueOnce(terminals[9]);
+            .mockReturnValueOnce(terminals[9])
+            .mockReturnValueOnce(terminals[10])
+            .mockReturnValueOnce(terminals[11])
+            .mockReturnValueOnce(terminals[12]);
         terminalFactory = spawn;
         const pCtx = fakePluginContext();
         globalCommandsPlugin.activate(pCtx as never);
@@ -313,7 +328,7 @@ describe("terminal command dispatch", () => {
         const failures = log.mock.calls.filter(([message]) =>
             String(message).includes("terminal unavailable")
         );
-        expect(failures).toHaveLength(10);
+        expect(failures).toHaveLength(13);
     });
 
     it("projectsSetup runs the bundled setup script against the fixed ~/projects root", async () => {
