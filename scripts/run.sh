@@ -1,11 +1,10 @@
 #!/bin/bash
-# 預設執行程序：建置並打包擴充功能，同時執行單元測試。
-set -e
+# run:setup — 冪等 (idempotent) 的前置作業，不啟動任何服務。
+# 建置與打包是 `npm run build`，測試是 `npm run test`。
+set -euo pipefail
+cd "$(dirname "$0")/.."
 
-echo "=== 安裝相依套件與建置專案 ==="
-npm run build
+# fresh clone 之後要能直接 build / test 與在編輯器內取得型別，依賴是唯一前置條件。
+npm ci
 
-echo "=== 執行單元測試 ==="
-npm test
-
-echo "=== 專案建置與驗證成功 ==="
+echo "setup 完成；建置 VSIX 用 npm run build"
