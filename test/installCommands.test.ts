@@ -228,8 +228,8 @@ describe("terminal command dispatch", () => {
                 cmd: "go install github.com/bizshuk/mdserver@master",
             },
             {
-                label: "ytdl",
-                cmd: "go install github.com/bizshuk/ytdl@master",
+                label: "vdl",
+                cmd: "go install github.com/bizshuk/vdl@master",
             },
             {
                 label: "video-utils",

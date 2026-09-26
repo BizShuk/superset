@@ -363,7 +363,7 @@ Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath`
 - `auth` — `github.com/bizshuk/auth@master`
 - `proxy` — `github.com/bizshuk/proxy@master`
 - `mdserver` — `github.com/bizshuk/mdserver@master`
-- `ytdl` — `github.com/bizshuk/ytdl@master`
+- `vdl` — `github.com/bizshuk/vdl@master`
 - `video-utils` — `github.com/bizshuk/video-utils@master`
 - `gx` — `github.com/bizshuk/gx@master`
 - `img` — `github.com/bizshuk/img@master`
@@ -712,7 +712,7 @@ code --install-extension superset-*.vsix
 | `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                                 |
 | `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                       |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
-| `Superset: Install Default Tools`               | —                   | 安裝十三個預設 Go CLI（含 `mdserver`、`ytdl`、`video-utils` 等）             |
+| `Superset: Install Default Tools`               | —                   | 安裝十三個預設 Go CLI（含 `mdserver`、`vdl`、`video-utils` 等）             |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
 | `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+2/3/4`(CLI 面板且已選 path) | 在選取路徑開 terminal 並執行對應 agent CLI                       |
 | `CLI: Open Terminal at Path`                    | `Ctrl+1`(CLI 面板且已選 path) | 只在選取路徑開 terminal,不執行命令                                      |

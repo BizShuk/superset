@@ -81,8 +81,8 @@ const DEFAULT_TOOLS: readonly InstallToolsSpec[] = [
         cmd: "go install github.com/bizshuk/mdserver@master",
     },
     {
-        label: "ytdl",
-        cmd: "go install github.com/bizshuk/ytdl@master",
+        label: "vdl",
+        cmd: "go install github.com/bizshuk/vdl@master",
     },
     {
         label: "video-utils",
