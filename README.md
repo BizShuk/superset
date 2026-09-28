@@ -18,7 +18,7 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 | Markdown `tree` 預覽      | ` ```tree ` fenced block 渲染為 📁/📄 icon 結構             | 撰寫文件時想插入目錄樹狀圖           |
 | `README.todo` 預覽        | 摺疊/展開/過濾互動式檢視                                    | 想在 Markdown 預覽裡直接編輯 todo    |
 | Explorer GitHub URL       | 檔案右鍵複製固定 `master` branch 的 GitHub URL              | 分享 repository 檔案連結的人         |
-| Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒 | 使用 repository-local hooks 的開發者 |
+| Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒；push master 自動打 release tag 並交給 `inf deploy` 部署到 liva | 使用 repository-local hooks 的開發者 |
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
 | `CLI` 面板                | 以 `Repo Path` 與 Focus list 選 repository、啟動 agent CLI，並在 `Change` View 管理變更與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
@@ -327,6 +327,10 @@ URL 固定使用 `master` branch。Superset 只讀取本機 Git repository 與 G
 `Superset: Install Git Hooks` 只在手動執行時,從 extension 內建模板補齊目前 VS Code 視窗第一個 opened folder 的 `.githooks/`。既有同名檔案不會被覆蓋;補齊成功後會設定 repository-local `core.hooksPath=.githooks`。
 
 內建 `pre-push` 模板在將新 commit 推送到 `master` 時自動建立 annotated release tag。版本取 `max(最高 Git tag 的下一個 patch, package.json.version, .claude-plugin/plugin.json.version)`；不存在的 manifest 會被忽略，且只接受純 `major.minor.patch` 版本。Hook 只讀 manifest，不會回寫版本。
+
+同一支 `pre-push` 也負責 liva 的部署：把這次 push 交給 `inf deploy hook`（`platform/inf`）。git 沒有 post-push，`inf` 在背景等 push 真的落地，再依 liva compose 判斷：業務服務在本機從該 commit build、推到 `docker-registry.local:5000`、ssh 進 liva 重建；`inf` 本身則 ssh 進 liva 重套 compose。不在部署範圍的 repo 什麼都不做，機器上沒有 `inf` 就略過，部署失敗也不會擋下 push。log 在 `~/.config/inf/logs/deploy-<repo>.log`。
+
+Install 不覆寫既有檔案：在這之前裝過的 repo 要先刪掉 `.githooks/pre-push` 再執行 Install，才會拿到含部署交接的新模板。
 
 只需要重新設定 Git config 時,執行 `Superset: Link Git Hooks`。若 opened folder 已有 `.githooks/`,但 local `core.hooksPath` 沒有值,左側 Status Bar 會顯示 `Git hooks not linked`;點擊只執行 Link,不安裝模板。
 

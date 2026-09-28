@@ -25,16 +25,28 @@ async function git(cwd: string, ...args: string[]): Promise<string> {
     return stdout.trim();
 }
 
+// The hook hands every push to `inf deploy hook`. Tests put a fake inf first
+// on PATH that records its arguments and stdin, so no real deploy can start.
+const FAKE_INF = `#!/bin/sh
+dir=$(dirname "$0")
+echo "$*" > "$dir/inf.args"
+cat > "$dir/inf.stdin"
+`;
+
 async function createFixture(versions: FixtureVersions): Promise<{
     remote: string;
     repo: string;
     sha: string;
+    bin: string;
 }> {
     const root = await mkdtemp(path.join(tmpdir(), "superset-pre-push-"));
     roots.push(root);
     const remote = path.join(root, "remote.git");
     const repo = path.join(root, "repo");
+    const bin = path.join(root, "bin");
 
+    await mkdir(bin);
+    await writeFile(path.join(bin, "inf"), FAKE_INF, { mode: 0o755 });
     await mkdir(repo);
     await git(root, "init", "--bare", remote);
     await git(repo, "init");
@@ -67,18 +79,20 @@ async function createFixture(versions: FixtureVersions): Promise<{
         await git(repo, "tag", tag);
     }
 
-    return { remote, repo, sha: await git(repo, "rev-parse", "HEAD") };
+    return { remote, repo, sha: await git(repo, "rev-parse", "HEAD"), bin };
 }
 
 async function runPrePush(
     repo: string,
     remote: string,
-    sha: string
+    sha: string,
+    bin: string
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         const child = spawn(hookPath, ["origin", remote], {
             cwd: repo,
             stdio: ["pipe", "ignore", "pipe"],
+            env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
         });
         let stderr = "";
 
@@ -147,9 +161,9 @@ describe("pre-push release version selection", () => {
             expected: "v3.1.2",
         },
     ])("$name", async ({ versions, expected }) => {
-        const { remote, repo, sha } = await createFixture(versions);
+        const { remote, repo, sha, bin } = await createFixture(versions);
 
-        const stderr = await runPrePush(repo, remote, sha);
+        const stderr = await runPrePush(repo, remote, sha, bin);
 
         expect(await git(repo, "cat-file", "-t", `refs/tags/${expected}`)).toBe(
             "tag"
@@ -159,5 +173,21 @@ describe("pre-push release version selection", () => {
         ).toBe("tag");
         expect(stderr).toContain(`建立 tag ${expected}`);
         expect(stderr).toContain(`已推送 ${expected} 至 origin`);
+    });
+});
+
+describe("pre-push deploy handoff", () => {
+    it("passes the pushed refs and the git push pid to inf deploy hook", async () => {
+        const { remote, repo, sha, bin } = await createFixture({ tags: [] });
+
+        await runPrePush(repo, remote, sha, bin);
+
+        const args = await readFile(path.join(bin, "inf.args"), "utf8");
+        expect(args).toMatch(
+            new RegExp(`^deploy hook --git-pid \\d+ origin ${remote}\\n$`)
+        );
+        expect(await readFile(path.join(bin, "inf.stdin"), "utf8")).toBe(
+            `refs/heads/master ${sha} refs/heads/master ${zeroSha}\n`
+        );
     });
 });
