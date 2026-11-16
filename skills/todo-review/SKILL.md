@@ -13,6 +13,7 @@ disable-model-invocation: true
 effort: medium
 context: fork
 metadata:
+    source: https://github.com/BizShuk/superset
     type: technique
     platforms: [macos, linux]
 ---
