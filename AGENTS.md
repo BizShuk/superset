@@ -32,11 +32,11 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | 重新建置並把本地 `./superset-*.vsix` 安裝到 `agy-ide` | `npm run deploy:local` |
 | 產生 Sessions 面板假資料 | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
 
-執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。現行設計與相容性問題集中於 [`docs/specs/2026-08-06-Summary.md`](docs/specs/2026-08-06-Summary.md)。
+執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。現行設計與相容性問題集中於 [`docs/specs/2026-08-06-summary.md`](docs/specs/2026-08-06-summary.md)。
 
 ## 架構速覽 (Architecture)
 
-`src/extension.ts` 是 declarative composition root。它建立 active `PluginManager`、Tree View registry、diagnostic channel 與 native terminal capability，透過單一 `PluginContext` 注入所有 plugin；root `deactivate()` 反向停用 plugin 並釋放 root-owned resource。`PluginManager` 負責生命週期、錯誤隔離、disposable、reset handler、runtime diagnostics 與 Markdown extension 組合。`panelLayoutPlugin` 必須最後啟用，確保恢復 view focus 時其他 TreeView 已完成註冊。
+`src/extension.ts` 是 declarative composition root。它建立 active `PluginManager`、Tree View registry、diagnostic channel 與 native terminal capability，透過單一 `PluginContext` 注入所有 plugin；root `deactivate()` 反向停用 plugin 並釋放 root-owned resource。`PluginManager` 負責生命週期、錯誤隔離、disposable、reset handler、runtime diagnostics 與 Markdown extension 組合。Activation 不得主動 focus 或 reveal 任何 View —— 視窗開啟時保留 VS Code 自己恢復的 layout。
 
 | 模組 | 職責 | 主要入口 |
 | --- | --- | --- |
@@ -54,9 +54,8 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | `src/installCommands.ts` | Default Project、License 與 Projects Setup commands | `registerInstallCommands` |
 | `src/treePreview/` | Markdown `tree` fence 渲染 | `treePreviewPlugin` |
 | `src/todoPreview/` | `README.todo` 預覽重組與 CSS 互動 | `todoPreviewPlugin` |
-| `src/panelLayout/` | TreeView layout persistence | `panelLayoutPlugin` |
 
-目前 module 行為、資料流與已遇到的問題集中於 [`docs/specs/2026-08-06-Summary.md`](docs/specs/2026-08-06-Summary.md)。
+目前 module 行為、資料流與已遇到的問題集中於 [`docs/specs/2026-08-06-summary.md`](docs/specs/2026-08-06-summary.md)。
 
 ## 維護契約 (Invariants)
 
@@ -133,8 +132,8 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 ## 設計與問題索引 (Design and Problem Index)
 
-- 現行設計與已遇到的問題：[`docs/specs/2026-08-06-Summary.md`](docs/specs/2026-08-06-Summary.md)
-- 尚未完成的驗收與目前問題：[`plans/2026-08-06-Refresh.md`](plans/2026-08-06-Refresh.md)
+- 現行設計與已遇到的問題：[`docs/specs/2026-08-06-summary.md`](docs/specs/2026-08-06-summary.md)
+- 尚未完成的驗收與目前問題：[`plans/2026-08-06-refresh.md`](plans/2026-08-06-refresh.md)
 - Session JSONL 格式與 hook 事件：隨 `sessiond` 專案移至 [BizShuk/sessiond](https://github.com/BizShuk/sessiond)（[本地 `~/projects/tools/sessiond/docs/session/`](../../tools/sessiond/docs/session/)）
 
 外部 API：

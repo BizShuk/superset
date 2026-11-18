@@ -6,7 +6,6 @@ import { MulticastDnsTransport } from "./mdnsTransport";
 import { MdnsTreeProvider, type MdnsDetail } from "./mdnsTreeProvider";
 import { buildMdnsDetailFields } from "./mdnsTreeSpec";
 import { resolveConnectCommand } from "../mdnsConnect";
-import { registerViewVisibility } from "../plugin/viewVisibility";
 import { joinShellCommand } from "../shellCommand";
 import { DIAGNOSTIC_METRIC } from "../diagnostics/metrics";
 
@@ -32,7 +31,6 @@ export function register(ctx: PluginContext): void {
     });
 
     // Report active view for panel-layout persistence (plan §3).
-    const visibilitySub = registerViewVisibility(view, "superset.mdns");
 
     // Cross-panel reveal-in-tree wiring: mDNS tree is reachable
     // from `superset.revealInTree({ viewId: "superset.mdns", ... })`.
@@ -154,7 +152,6 @@ export function register(ctx: PluginContext): void {
         showDetailCmd,
         connectCmd,
         view,
-        visibilitySub,
         { dispose: () => provider.stop() },
         { dispose: () => registry.stop() },
     ]) {

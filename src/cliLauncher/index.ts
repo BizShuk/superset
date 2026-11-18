@@ -109,7 +109,7 @@ export function register(ctx: PluginContext): void {
     void setPathSelectionContext(false);
 
     // 面板可見時才每 5 分鐘重掃一次;git 狀態沒有事件來源,只能定期重讀。
-    const visibilitySub = registerViewVisibility(view, VIEW_ID, (visible) =>
+    const visibilitySub = registerViewVisibility(view, (visible) =>
         provider.setVisible(visible)
     );
     ctx.registerTreeView(

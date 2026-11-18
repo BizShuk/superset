@@ -3,7 +3,6 @@ import type { PluginContext } from "../plugin";
 import { TopologyStore } from "./topologyStore";
 import { NodeTopologyScanner } from "./topologyScanner";
 import { TopologyTreeProvider } from "./treeProvider";
-import { registerViewVisibility } from "../plugin/viewVisibility";
 
 export function register(ctx: PluginContext): void {
     const store = new TopologyStore(new NodeTopologyScanner());
@@ -23,7 +22,6 @@ export function register(ctx: PluginContext): void {
     });
 
     // Report active view for panel-layout persistence (plan §3).
-    const visibilitySub = registerViewVisibility(view, "superset.topology");
 
     // Cross-panel reveal-in-tree wiring.
     ctx.registerTreeView(
@@ -45,7 +43,6 @@ export function register(ctx: PluginContext): void {
     for (const disposable of [
         scanCmd,
         view,
-        visibilitySub,
         { dispose: () => provider.stop() },
         { dispose: () => store.stop() },
     ]) {

@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.52.1",
+    "version": "0.53.0",
     "scripts": {
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -245,11 +245,6 @@
                 "command": "superset.resetCaches",
                 "title": "Superset: Reset Caches",
                 "icon": "$(debug-restart)"
-            },
-            {
-                "command": "superset.reportViewVisible",
-                "title": "Superset: Report View Visible",
-                "icon": "$(eye)"
             },
             {
                 "command": "superset.focusView",

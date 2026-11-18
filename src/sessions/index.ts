@@ -48,7 +48,6 @@ export function register(ctx: PluginContext): void {
     // TODO / mDNS panels).
     const visibilitySub = registerViewVisibility(
         view,
-        VIEW_ID,
         (visible) => provider.setVisible(visible)
     );
 

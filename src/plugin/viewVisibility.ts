@@ -14,17 +14,10 @@ type VisibilityAwareView<T> = Pick<
  */
 export function registerViewVisibility<T>(
     view: VisibilityAwareView<T>,
-    viewId: string,
-    onVisibilityChange?: (visible: boolean) => void
+    onVisibilityChange: (visible: boolean) => void
 ): vscode.Disposable {
-    onVisibilityChange?.(view.visible);
+    onVisibilityChange(view.visible);
     return view.onDidChangeVisibility(({ visible }) => {
-        onVisibilityChange?.(visible);
-        if (visible) {
-            void vscode.commands.executeCommand(
-                "superset.reportViewVisible",
-                viewId
-            );
-        }
+        onVisibilityChange(visible);
     });
 }

@@ -437,7 +437,6 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `Cross-module State`          | Composition Root 建立、供少量 global commands 查找的 shared manager、channel 或 spawner reference。                               |
 | `Workspace State`             | VS Code 為 extension 管理、以 workspace 為 scope 的 persisted Memento。                                                           |
 | `Global State`                | VS Code 為 extension 管理、跨 workspace 的 persisted Memento。                                                                    |
-| `Panel Layout Persistence`    | 記錄最近 visible View ID，activation 後在所有 Tree Views registered 完成時恢復 focus。名稱是既有 module identifier。              |
 | `Static Resource`             | Extension 隨包附帶的非程式資產，統一放在 `pkg/resources/`。                                                                       |
 | `Contract Test`               | 驗證 manifest、activation、provider output 或純函式 boundary 的 regression test。                                                 |
 | `Full Build Verification`     | `npm run build` 的 clean output、install、compile、lean VSIX package 與 runtime-content verification 流程。                       |
@@ -483,7 +482,7 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `row button`      | `Inline Action`。                                                              |
 | `details panel`   | `Detail Row`、`Tooltip`、`Detail View`、`Details Editor` 或 `Details Dialog`。 |
 
-程式內既有的 `panelLayout` 等 module 名稱屬於 implementation identifier；除非另有
+程式內既有的 module 名稱屬於 implementation identifier；除非另有
 rename 計畫，不因本文件修改。新增對外文件與 UI 說明則一律採用本文件的標準術語。
 
 ## 官方參考 (Official References)

@@ -15,7 +15,6 @@ import { gitPlugin } from "./git/plugin";
 import { diskUsagePlugin } from "./diskUsage/plugin";
 import { cliLauncherPlugin } from "./cliLauncher/plugin";
 import { globalCommandsPlugin } from "./globalCommandsPlugin";
-import { panelLayoutPlugin } from "./panelLayout/plugin";
 import { TreeViewRegistry } from "./plugin/treeViewRegistry";
 import { createNativeTerminal } from "./terminals/nativeTerminal";
 
@@ -77,12 +76,7 @@ export async function activate(
     // composes them in this order. Feature plugins follow so their
     // disposable registrations land in a predictable slot. The
     // `globalCommands` plugin comes next so its commands can reach
-    // already-registered feature state. The `panelLayout` plugin is
-    // LAST because it restores the last-active TreeView — every
-    // other view plugin must have finished `createTreeView` so the
-    // restore focus call (`${viewId}.focus`) lands on a live view.
-    // A 50ms setTimeout inside `panelLayoutPlugin.activate` is a
-    // belt-and-suspenders fallback if this ordering is ever changed.
+    // already-registered feature state.
     const plugins: ExtensionPlugin[] = [
         treePreviewPlugin,
         todoPreviewPlugin,
@@ -95,7 +89,6 @@ export async function activate(
         diskUsagePlugin,
         cliLauncherPlugin,
         globalCommandsPlugin,
-        panelLayoutPlugin,
     ];
 
     // Store the in-flight activation as part of the runtime. If shutdown

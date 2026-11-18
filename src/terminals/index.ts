@@ -103,7 +103,6 @@ export function register(
     // panel will report its own `true`, which becomes the new active.
     const visibilitySub = registerViewVisibility(
         treeView,
-        "superset.terminals",
         (visible) => treeProvider.setVisible(visible)
     );
 

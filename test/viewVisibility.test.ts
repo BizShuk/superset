@@ -1,20 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as vscode from "vscode";
 
-const vscodeMocks = vi.hoisted(() => ({
-    executeCommand: vi.fn(),
-}));
-
-vi.mock("vscode", () => ({
-    commands: {
-        executeCommand: vscodeMocks.executeCommand,
-    },
-}));
+vi.mock("vscode", () => ({}));
 
 import { registerViewVisibility } from "../src/plugin/viewVisibility";
 
 describe("registerViewVisibility", () => {
-    it("forwards boolean lifecycle state and reports only visible events", () => {
+    it("forwards the initial and changed boolean visibility state", () => {
         let listener:
             | ((event: { readonly visible: boolean }) => void)
             | undefined;
@@ -35,21 +27,16 @@ describe("registerViewVisibility", () => {
                 vscode.TreeView<unknown>,
                 "visible" | "onDidChangeVisibility"
             >,
-            "superset.test",
             onVisibilityChange
         );
 
         expect(onVisibilityChange).toHaveBeenCalledWith(false);
 
-        listener?.({ visible: false });
-        expect(vscodeMocks.executeCommand).not.toHaveBeenCalled();
-
         listener?.({ visible: true });
         expect(onVisibilityChange).toHaveBeenLastCalledWith(true);
-        expect(vscodeMocks.executeCommand).toHaveBeenCalledWith(
-            "superset.reportViewVisible",
-            "superset.test"
-        );
+
+        listener?.({ visible: false });
+        expect(onVisibilityChange).toHaveBeenLastCalledWith(false);
 
         registration.dispose();
         expect(dispose).toHaveBeenCalledOnce();
