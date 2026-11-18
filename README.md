@@ -18,7 +18,6 @@ VSCode 擴充功能 (extension):在主側欄 (Primary Side Bar) 整合多個觀�
 | Markdown `tree` 預覽      | ` ```tree ` fenced block 渲染為 📁/📄 icon 結構             | 撰寫文件時想插入目錄樹狀圖           |
 | `README.todo` 預覽        | 摺疊/展開/過濾互動式檢視                                    | 想在 Markdown 預覽裡直接編輯 todo    |
 | Explorer GitHub URL       | 檔案右鍵複製固定 `master` branch 的 GitHub URL              | 分享 repository 檔案連結的人         |
-| Git Hooks 管理            | 補齊 `.githooks/`、設定 local `core.hooksPath` 與未連結提醒；push master 自動打 release tag 並交給 `inf deploy` 部署到 liva | 使用 repository-local hooks 的開發者 |
 | `Projects Setup`          | 建立 `~/projects` 並 clone BizShuk aggregation repositories | 初始化開發工作區的人                 |
 | `Disk Usage` Status Bar   | 顯示第一個 workspace 所在 volume 的已使用比例與容量 tooltip | 想隨時掌握工作磁碟空間的人           |
 | `CLI` 面板                | 以 `Repo Path` 與 Focus list 選 repository、啟動 agent CLI，並在 `Change` View 管理變更與檢視 Diff | 常在多個專案間切換跑 agent CLI 的人 |
@@ -322,19 +321,9 @@ URL 固定使用 `master` branch。Superset 只讀取本機 Git repository 與 G
 2. 點 `Copy GitHub URL`。
 3. URL 寫入 clipboard;GitHub `origin` remote 優先,沒有時使用第一個 GitHub remote。
 
-### 8. Git Hooks 安裝與連結
+### 8. Git Hooks
 
-`Superset: Install Git Hooks` 只在手動執行時,從 extension 內建模板補齊目前 VS Code 視窗第一個 opened folder 的 `.githooks/`。既有同名檔案不會被覆蓋;補齊成功後會設定 repository-local `core.hooksPath=.githooks`。
-
-內建 `pre-push` 模板在將新 commit 推送到 `master` 時自動建立 annotated release tag。版本取 `max(最高 Git tag 的下一個 patch, package.json.version, .claude-plugin/plugin.json.version)`；不存在的 manifest 會被忽略，且只接受純 `major.minor.patch` 版本。Hook 只讀 manifest，不會回寫版本。
-
-同一支 `pre-push` 也負責 liva 的部署：把這次 push 交給 `inf deploy hook`（`platform/inf`）。git 沒有 post-push，`inf` 在背景等 push 真的落地，再依 liva compose 判斷：業務服務在本機從該 commit build、推到 `docker-registry.local:5000`、ssh 進 liva 重建；`inf` 本身則 ssh 進 liva 重套 compose。不在部署範圍的 repo 什麼都不做，機器上沒有 `inf` 就略過，部署失敗也不會擋下 push。log 在 `~/.config/inf/logs/deploy-<repo>.log`。
-
-Install 不覆寫既有檔案：在這之前裝過的 repo 要先刪掉 `.githooks/pre-push` 再執行 Install，才會拿到含部署交接的新模板。
-
-只需要重新設定 Git config 時,執行 `Superset: Link Git Hooks`。若 opened folder 已有 `.githooks/`,但 local `core.hooksPath` 沒有值,左側 Status Bar 會顯示 `Git hooks not linked`;點擊只執行 Link,不安裝模板。
-
-Multi-root 視窗只處理第一個 folder。任何非空 local `core.hooksPath` 都視為已連結,Superset 不驗證它是否指向 `.githooks/`。
+Git hooks 由 `platform/inf` 擁有，Superset 不再安裝。在 repo 根目錄執行 `inf hooks install`。
 
 ---
 
@@ -663,7 +652,7 @@ terminal 的字串。
 | VSCode  | `^1.93.0`(需要 Shell Integration API 與 TabInputTerminal 穩定後的版本) |
 | Node.js | `>=20.0.0`(開發環境)                                                   |
 | npm     | 隨 Node 一起裝                                                         |
-| Git     | `Projects Setup`、Git Hooks 與 GitHub URL 功能                         |
+| Git     | `Projects Setup` 與 GitHub URL 功能                         |
 
 ---
 
@@ -713,8 +702,6 @@ code --install-extension superset-*.vsix
 | `Superset: Show Diagnostics`                    | —                   | 顯示 active plugins 與各 subsystem 的 live count                              |
 | `Superset: Show Diagnostic Logs`                | —                   | 開啟 Output Channel 看診斷 log                                                |
 | `Copy GitHub URL`                               | —                   | Explorer 檔案右鍵複製固定 `master` GitHub URL                                 |
-| `Superset: Install Git Hooks`                   | —                   | 補齊 `.githooks/` 模板並設定 local hooks path                                 |
-| `Superset: Link Git Hooks`                      | —                   | 只設定 local `core.hooksPath=.githooks`                                       |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
 | `Superset: Install Default Tools`               | —                   | 安裝十三個預設 Go CLI（含 `mdserver`、`vdl`、`video-utils` 等）             |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
@@ -767,7 +754,6 @@ npm run build:vsix
 | TUI app 跑著沒高亮                    | TUI 閒置時不耗 CPU,process tree 判定為沒有活動       | 確認該程式真的在工作;`Superset: Show Diagnostic Logs` 可看 activity lifecycle 紀錄                |
 | `mDNS` 面板空白                       | 網路環境無 mDNS 廣播,或被防火牆擋 UDP/5353           | 確認網段有 mDNS 服務(印表機、AirPlay 等);macOS 防火牆需允許 VSCode 接收 mDNS                      |
 | `Topology` 掃描逾時                   | `netstat` / `scutil` / `arp` 執行慢(尤其 VPN 環境)   | 暫時無法解決(10s 熔斷);手動跑命令驗證輸出                                                         |
-| `Git hooks not linked` 一直顯示       | local `core.hooksPath` 未設定或 Link 失敗            | 點 Status Bar 或執行 `Superset: Link Git Hooks`;用 `git config --local --get core.hooksPath` 檢查 |
 | Install 沒處理預期的 folder           | Multi-root 視窗只處理第一個 opened folder            | 將目標 folder 移到第一位,或在單一 folder 視窗執行                                                 |
 | `Projects Setup` 留下失敗 terminal    | clone/submodule 失敗或同名路徑不是 Git repository    | 查看 terminal 的 failure list；修正 Git access 或衝突路徑後重跑                                   |
 | F2 改名沒寫回檔案                     | `README.todo` 唯讀或無寫入權限                       | 確認檔案可寫;檢查 Output Channel 錯誤                                                             |

@@ -41,18 +41,7 @@ const manifest = JSON.parse(
     readFileSync(manifestPath, "utf8")
 ) as SupersetManifest;
 
-describe("Git hooks manifest contributions", () => {
-    it("publishes separate install and link commands", () => {
-        expect(manifest.contributes.commands).toContainEqual({
-            command: "superset.installGitHooks",
-            title: "Superset: Install Git Hooks",
-        });
-        expect(manifest.contributes.commands).toContainEqual({
-            command: "superset.linkGitHooks",
-            title: "Superset: Link Git Hooks",
-        });
-    });
-
+describe("Manifest assets", () => {
     it("uses only pkg/resources manifest assets", () => {
         expect(manifest.icon).toBe("pkg/resources/icon.png");
         for (const command of manifest.contributes.commands) {

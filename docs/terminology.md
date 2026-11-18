@@ -389,13 +389,6 @@ manifest View。文件應稱為 `inactive Projects module`，不得描述成目�
 | `GitHub Remote`              | 可解析為 GitHub owner/repository 的 fetch 或 push URL。                                                          |
 | `Origin Preference`          | 有 GitHub `origin` 時優先使用；否則選第一個可解析的 GitHub remote。                                              |
 | `Repository-relative Path`   | resource file 相對 repository root 的 path；root 本身或 root 外 path 不產生 URL。                                |
-| `Repository-local Git Hooks` | project 內 `.githooks/` 與 local Git config 的 hook setup。                                                      |
-| `Git Hooks Template`         | Extension 隨附於 `pkg/resources/git/githooks/` 的 hook files。                                                   |
-| `Install Git Hooks`          | copy-if-missing template 到第一個 opened folder 的 `.githooks/`，再執行 Link Git Hooks。既有同名檔不覆蓋。       |
-| `Link Git Hooks`             | 設定 repository-local `core.hooksPath=.githooks`，不複製 template。                                              |
-| `Hooks Linked`               | local `core.hooksPath` 為任意非空值；Superset 不驗證它是否實際指向 `.githooks/`。                                |
-| `Git Hooks Status Item`      | `.githooks/` 存在但 local `core.hooksPath` 為空時顯示的 Status Bar Item。                                        |
-| `First Opened Folder`        | Git hooks 功能唯一處理的 `workspaceFolders[0]`；multi-root 其餘 folders 不在 scope。                             |
 
 ## 安裝、操作與診斷術語
 

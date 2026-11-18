@@ -117,7 +117,6 @@ required_resources=(
     "extension/pkg/resources/config/.ignore"
     "extension/pkg/resources/config/install-default-project.sh"
     "extension/pkg/resources/config/setup-projects.sh"
-    "extension/pkg/resources/git/githooks/scripts/sync-plugin-version.sh"
 )
 
 for required in "${required_resources[@]}"; do

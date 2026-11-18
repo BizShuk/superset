@@ -308,14 +308,6 @@
                 "icon": "$(github)"
             },
             {
-                "command": "superset.installGitHooks",
-                "title": "Superset: Install Git Hooks"
-            },
-            {
-                "command": "superset.linkGitHooks",
-                "title": "Superset: Link Git Hooks"
-            },
-            {
                 "command": "superset.installLicense",
                 "title": "Superset: Install License",
                 "icon": "$(law)"

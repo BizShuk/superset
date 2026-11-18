@@ -1,15 +1,7 @@
-// Git integration: Explorer GitHub URL 與 repository-local hooks management。
+// Git integration: Explorer GitHub URL。
 
-import * as fs from "node:fs";
-import * as path from "node:path";
 import * as vscode from "vscode";
 import type { PluginContext } from "../plugin";
-import {
-    copyMissingTree,
-    isGitRepository,
-    linkGitHooks,
-    readLocalHooksPath,
-} from "./gitHooks";
 import {
     buildGitHubFileUrl,
     selectGitHubRemote,
@@ -32,121 +24,6 @@ interface GitApi {
 
 interface GitExtensionExports {
     getAPI(version: 1): GitApi;
-}
-
-const INSTALL_GIT_HOOKS_COMMAND = "superset.installGitHooks";
-const LINK_GIT_HOOKS_COMMAND = "superset.linkGitHooks";
-
-function firstOpenedFolder(): vscode.WorkspaceFolder | undefined {
-    return vscode.workspace.workspaceFolders?.[0];
-}
-
-async function requireOpenedGitFolder(): Promise<vscode.WorkspaceFolder | null> {
-    const folder = firstOpenedFolder();
-    if (!folder) {
-        await vscode.window.showErrorMessage(
-            "Superset: No opened folder in this VS Code window"
-        );
-        return null;
-    }
-    if (folder.uri.scheme !== "file") {
-        await vscode.window.showErrorMessage(
-            "Superset: Git hooks require a local opened folder"
-        );
-        return null;
-    }
-    if (!(await isGitRepository(folder.uri.fsPath))) {
-        await vscode.window.showErrorMessage(
-            "Superset: Opened folder is not a Git repository"
-        );
-        return null;
-    }
-    return folder;
-}
-
-async function refreshGitHooksStatus(
-    statusBar: vscode.StatusBarItem,
-    ctx: PluginContext
-): Promise<void> {
-    const folder = firstOpenedFolder();
-    if (!folder || folder.uri.scheme !== "file") {
-        statusBar.hide();
-        return;
-    }
-
-    const root = folder.uri.fsPath;
-    if (
-        !fs.existsSync(path.join(root, ".githooks")) ||
-        !(await isGitRepository(root))
-    ) {
-        statusBar.hide();
-        return;
-    }
-
-    try {
-        const hooksPath = await readLocalHooksPath(root);
-        if (hooksPath) {
-            statusBar.hide();
-        } else {
-            statusBar.show();
-        }
-    } catch (error) {
-        ctx.log(
-            `git: failed to inspect local core.hooksPath: ${error}`
-        );
-    }
-}
-
-async function linkOpenedFolderGitHooks(
-    statusBar: vscode.StatusBarItem,
-    ctx: PluginContext
-): Promise<void> {
-    const folder = await requireOpenedGitFolder();
-    if (!folder) return;
-
-    try {
-        await linkGitHooks(folder.uri.fsPath);
-        await refreshGitHooksStatus(statusBar, ctx);
-        await vscode.window.showInformationMessage(
-            "Superset: Linked Git hooks with local core.hooksPath=.githooks"
-        );
-    } catch (error) {
-        ctx.log(`git: link hooks failed: ${error}`);
-        await vscode.window.showErrorMessage(
-            `Superset: Failed to link Git hooks: ${error}`
-        );
-    }
-}
-
-async function installOpenedFolderGitHooks(
-    statusBar: vscode.StatusBarItem,
-    ctx: PluginContext
-): Promise<void> {
-    const folder = await requireOpenedGitFolder();
-    if (!folder) return;
-
-    const templateRoot = path.join(
-        ctx.extensionUri.fsPath,
-        "pkg",
-        "resources",
-        "git",
-        "githooks"
-    );
-    const targetRoot = path.join(folder.uri.fsPath, ".githooks");
-
-    try {
-        const result = await copyMissingTree(templateRoot, targetRoot);
-        await linkGitHooks(folder.uri.fsPath);
-        await refreshGitHooksStatus(statusBar, ctx);
-        await vscode.window.showInformationMessage(
-            `Superset: Git hooks installed (${result.copied} added, ${result.skipped} kept) and linked`
-        );
-    } catch (error) {
-        ctx.log(`git: install hooks failed: ${error}`);
-        await vscode.window.showErrorMessage(
-            `Superset: Failed to install Git hooks: ${error}`
-        );
-    }
 }
 
 async function getGitApi(): Promise<GitApi | null> {
@@ -212,34 +89,12 @@ async function copyGitHubUrl(
 }
 
 export function register(ctx: PluginContext): void {
-    const hookStatusBar = vscode.window.createStatusBarItem(
-        vscode.StatusBarAlignment.Left
-    );
-    hookStatusBar.text = "$(link) Git hooks not linked";
-    hookStatusBar.tooltip =
-        "This opened folder contains .githooks, but local core.hooksPath is not set.";
-    hookStatusBar.command = LINK_GIT_HOOKS_COMMAND;
-    hookStatusBar.hide();
-
-    for (const disposable of [
-        hookStatusBar,
+    ctx.registerDisposable(
         vscode.commands.registerCommand(
             "superset.copyGitHubUrl",
             (uri: vscode.Uri | undefined) => copyGitHubUrl(uri, ctx)
-        ),
-        vscode.commands.registerCommand(
-            INSTALL_GIT_HOOKS_COMMAND,
-            () => installOpenedFolderGitHooks(hookStatusBar, ctx)
-        ),
-        vscode.commands.registerCommand(
-            LINK_GIT_HOOKS_COMMAND,
-            () => linkOpenedFolderGitHooks(hookStatusBar, ctx)
-        ),
-    ]) {
-        ctx.registerDisposable(disposable);
-    }
-
-    void refreshGitHooksStatus(hookStatusBar, ctx);
+        )
+    );
 
     ctx.log("git: registered");
 }
