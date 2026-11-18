@@ -1,25 +1,24 @@
 #!/bin/bash
 #
-# pre-push dispatcher (由 `inf hooks install` 安裝, 來源 platform/inf svc/githooks/template)。
+# git hook dispatcher (由 `inf hooks install` 安裝, 來源 platform/inf svc/githooks/template)。
 #
-# git 每個 hook 名稱只跑一個檔, 所以本檔只負責分派: 依檔名順序執行
-# pre-push.d/*.sh, 每支都拿到同一份 stdin 與同樣的 args。
-#
-#   10-release-tag.sh  推 master 時自動建立並推送 release tag
-#   20-deploy.sh       交給 `inf deploy hook` 在背景部署到 liva
+# git 每個 hook 名稱只跑一個檔, 所以 .githooks/<hook> 只負責分派: 依檔名順序執行
+# .githooks/<hook>.d/*.sh, 每支都拿到同一份 stdin 與同樣的 args。哪些腳本在場
+# 由 `inf hooks install` 決定, `inf hooks list` 看全部可選項。
 #
 # 契約: stdin 只能讀一次, 這裡先整份收下再分給每支腳本。GIT_PUSH_PID 是
-# `git push` 本身的 pid ($PPID), 子腳本的 $PPID 會變成本 dispatcher。
-# 任何子腳本失敗都不 reject push: 本檔永遠 exit 0。
+# 呼叫本 hook 的 git process ($PPID), 子腳本的 $PPID 會變成本 dispatcher。
+# 任何子腳本失敗都不擋下 git: 本檔永遠 exit 0。
 
 set -uo pipefail
 
-updates="$(cat)"
+hook="$(basename "$0")"
+input="$(cat)"
 export GIT_PUSH_PID="$PPID"
 
-for script in "$(dirname "$0")"/pre-push.d/*.sh; do
+for script in "$0.d"/*.sh; do
 	[[ -x "$script" ]] || continue
-	printf '%s\n' "$updates" | "$script" "$@" || echo "pre-push: $(basename "$script") 失敗, 略過" >&2
+	printf '%s\n' "$input" | "$script" "$@" || echo "${hook}: $(basename "$script") 失敗, 略過" >&2
 done
 
 exit 0
