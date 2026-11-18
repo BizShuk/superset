@@ -343,44 +343,7 @@ Git hooks 由 `platform/inf` 擁有，Superset 不再安裝。在 repo 根目錄
 
 ---
 
-### 10. Default Tools — Go CLI 安裝
-
-`Superset: Install Default Tools` 會依序為目前使用者安裝十三個 BizShuk Go CLI。每個 CLI 都在獨立的 Run Terminal 執行，完成後 shell 自動關閉：
-
-- `pm2` — `github.com/bizshuk/pm2@master`
-- `skills` — `github.com/bizshuk/skills@master`
-- `dux` — `github.com/bizshuk/dux@master`
-- `port` — `github.com/bizshuk/port@master`
-- `sessiond` — `github.com/bizshuk/sessiond@master`
-- `autop` — `github.com/bizshuk/autop@master`
-- `auth` — `github.com/bizshuk/auth@master`
-- `proxy` — `github.com/bizshuk/proxy@master`
-- `mdserver` — `github.com/bizshuk/mdserver@master`
-- `vdl` — `github.com/bizshuk/vdl@master`
-- `video-utils` — `github.com/bizshuk/video-utils@master`
-- `gx` — `github.com/bizshuk/gx@master`
-- `img` — `github.com/bizshuk/img@master`
-
-若只需要安裝 skill repository，使用 `Superset: Install Skills`。Quick Pick 可直接選擇下列 repository；若清單沒有目標，選擇 `自訂 repository…`，再於 Input Box 輸入 `owner/repository`。確認後會執行 `skills add <repository>`：
-
-| 顯示名稱                             | 用途                                               | GitHub repository                         |
-| ------------------------------------ | -------------------------------------------------- | ----------------------------------------- |
-| `bizshuk/cc-plugin`（預設）          | AI 編碼代理的全域設定、Skills、Agents 與記憶工具   | `bizshuk/cc-plugin`                       |
-| `bizshuk/tools`                      | macOS 工具鏈與 pm2 / autop / proxy 等 CLI skills   | `bizshuk/tools`                           |
-| `bizshuk/platform`                   | Go 開發與本機基礎設施 plugin 目錄 (gosdk / inf / n8n) | `bizshuk/platform`                     |
-| `anthropics/claude-plugins-official` | Anthropic 維護的 Claude Code 高品質 Plugin 目錄    | `anthropics/claude-plugins-official`      |
-| `anthropics/skills`                  | Anthropic 的 Agent Skills 範例、規格與文件處理技能 | `anthropics/skills`                       |
-| `awesome-claude-code-subagents`      | 涵蓋多種開發任務的 Claude Code 專用 Subagents 合集 | `VoltAgent/awesome-claude-code-subagents` |
-| `superpowers`                        | 以 Skills 驅動規劃、TDD、除錯與協作的開發方法      | `obra/superpowers`                        |
-| `understand-anything`                | 把程式碼與文件轉成可搜尋、可提問的互動知識圖譜     | `Egonex-AI/Understand-Anything`           |
-| `last30days`                         | 彙整近 30 天社群與網路討論，產出有來源的研究摘要   | `mvanhorn/last30days-skill`               |
-| `ui-ux-pro-max-skill`                | 為多平台 UI/UX 產生設計系統、樣式與實作建議        | `nextlevelbuilder/ui-ux-pro-max-skill`    |
-
-自訂輸入會先去除頭尾空白，並以單一 shell argument 安全傳給 `skills add`。按 `Esc` 關閉 Quick Pick 或 Input Box 都不會建立 Run Terminal。
-
----
-
-### 11. Projects Setup — projects workspace 初始化
+### 10. Projects Setup — projects workspace 初始化
 
 `Superset: Projects Setup` 會建立固定的 `~/projects` root，並從 GitHub clone 下列 BizShuk repositories：
 
@@ -407,7 +370,7 @@ Git hooks 由 `platform/inf` 擁有，Superset 不再安裝。在 repo 根目錄
 
 ---
 
-### 12. Disk Usage — Status Bar 磁碟容量
+### 11. Disk Usage — Status Bar 磁碟容量
 
 啟用 Superset 後，Status Bar 右側會顯示第一個 workspace 所在 volume 的已使用比例，例如
 `$(database) Disk 80%`。Hover tooltip 會列出 used、free 與 total capacity；資料每 30 秒刷新一次。
@@ -416,7 +379,7 @@ Git hooks 由 `platform/inf` 擁有，Superset 不再安裝。在 repo 根目錄
 
 ---
 
-### 13. `CLI` — 路徑啟動器
+### 12. `CLI` — 路徑啟動器
 
 Activity Bar 上獨立的 `CLI` 圖示，container 內有 `Repo Path` 與 `Change` 兩個 View。
 `Repo Path` 以`兩層`樹狀列出 `~/projects` 底下的 Git repositories：
@@ -703,7 +666,6 @@ code --install-extension superset-*.vsix
 | `Superset: Show Diagnostic Logs`                | —                   | 開啟 Output Channel 看診斷 log                                                |
 | `Copy GitHub URL`                               | —                   | Explorer 檔案右鍵複製固定 `master` GitHub URL                                 |
 | `Superset: Install Default Project`             | —                   | 安裝 ignore files、預設 project directories 與 `AGENTS.md` symbolic link      |
-| `Superset: Install Default Tools`               | —                   | 安裝十三個預設 Go CLI（含 `mdserver`、`vdl`、`video-utils` 等）             |
 | `Superset: Projects Setup`                      | —                   | 建立 `~/projects` 並 clone 13 個 BizShuk repositories（含 submodules）        |
 | `CLI: Open with Claude` / `Codex` / `Grok`      | `Ctrl+2/3/4`(CLI 面板且已選 path) | 在選取路徑開 terminal 並執行對應 agent CLI                       |
 | `CLI: Open Terminal at Path`                    | `Ctrl+1`(CLI 面板且已選 path) | 只在選取路徑開 terminal,不執行命令                                      |

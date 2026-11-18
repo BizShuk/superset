@@ -62,16 +62,6 @@ describe("Projects Setup manifest contribution", () => {
     });
 });
 
-describe("Install Skills manifest contribution", () => {
-    it("uses the action-first plural command title", () => {
-        expect(manifest.contributes.commands).toContainEqual({
-            command: "superset.skillInstall",
-            title: "Superset: Install Skills",
-            icon: "$(add)",
-        });
-    });
-});
-
 describe("Removed SCM Graph reset", () => {
     it("declares no Proposed API", () => {
         expect(manifest.enabledApiProposals).toBeUndefined();

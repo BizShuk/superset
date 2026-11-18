@@ -1,6 +1,6 @@
 // spawnRunTerminal — opens a fresh native terminal and runs a
-// command in it. Used by the install commands (installDefaultTools,
-// skillInstall, projectsSetup, installDefaultProject) and anything else that needs
+// command in it. Used by the install commands (projectsSetup,
+// installDefaultProject) and anything else that needs
 // to dispatch work to a user-visible terminal without blocking the
 // command caller.
 //

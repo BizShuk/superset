@@ -49,7 +49,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | `src/git/` | Explorer GitHub URL | `gitPlugin` |
 | `src/diskUsage/` | 第一個 workspace volume 的 disk capacity Status Bar 顯示與週期刷新 | `diskUsagePlugin` |
 | `src/cliLauncher/` | 獨立「CLI」container：`Repo Path` 掃描與 agent terminals；`Change` 提供 grouped status、staging actions 與 Diff Editor | `cliLauncherPlugin` |
-| `src/installCommands.ts` | Default Project、Default Tools、Skill Install 與 Projects Setup commands | `registerInstallCommands` |
+| `src/installCommands.ts` | Default Project、License 與 Projects Setup commands | `registerInstallCommands` |
 | `src/treePreview/` | Markdown `tree` fence 渲染 | `treePreviewPlugin` |
 | `src/todoPreview/` | `README.todo` 預覽重組與 CSS 互動 | `todoPreviewPlugin` |
 | `src/panelLayout/` | TreeView layout persistence | `panelLayoutPlugin` |
@@ -105,7 +105,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 - `Connect Action` 必須先驗證 service type、DNS/IP target、port 與 SSH user。HTTP(S)/IPP(S) 只能走 `vscode.env.openExternal`；SSH 只能以 `cmd + args` plan 經 `joinShellCommand` 引用後進 terminal。mDNS payload 不得直接串接 shell command。
 - Git hooks 由 `platform/inf` 的 `inf hooks install` 擁有；本 repo 的 `.githooks/` 是它的產物，不在此修改。
 - Projects Setup 固定以 `~/projects` 為 root，不提供自訂路徑；13 個 repository（包含 `social`）的 ordered set 以 `pkg/resources/config/setup-projects.sh` 為 runtime source of truth。首次 clone 必須使用 `--recurse-submodules`，重跑只補做 recursive submodule sync/update，不 pull 或覆蓋既有 repository。
-- Extension 靜態資源統一放在 `pkg/resources/`；Git domain 模板放在 `pkg/resources/git/`。
+- Extension 靜態資源統一放在 `pkg/resources/`；bundled setup scripts 放在 `pkg/resources/config/`。
 - 純 domain logic 優先抽成無 `vscode` import 的函式或 store；VS Code-bound provider 以 pure renderer、contract test 或 activation test 覆蓋。
 
 ## 計劃與規格 (Plans vs Specs)

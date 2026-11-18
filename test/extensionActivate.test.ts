@@ -235,8 +235,6 @@ describe("extension activation via PluginManager", () => {
             "superset.focusView",
             "superset.showLogs",
             "superset.focusPanel",
-            "superset.installDefaultTools",
-            "superset.skillInstall",
             "superset.projectsSetup",
         ]) {
             expect(cmds.has(id), `missing global command: ${id}`).toBe(true);
