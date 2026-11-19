@@ -625,6 +625,72 @@ describe("WorkspaceTodoTreeProvider — per-project plans sub-section", () => {
             expect(plans, `${name} after 4 toggles`).toHaveLength(1);
         }
     });
+
+    it("suppresses a literal '## Plans' section in README.todo so only the synthetic title-reading Plans section appears", async () => {
+        const voiceDir = join(projectsDir, "voice");
+        mkdirSync(voiceDir);
+        writeFileSync(
+            join(voiceDir, "README.todo"),
+            [
+                "# Voice TODO",
+                "",
+                "## Core",
+                "- [ ] [P1] fix bug",
+                "",
+                "## Plans",
+                "- [plans/2026-07-21-a.md](plans/2026-07-21-a.md)",
+                "- [plans/2026-11-19-b.md](plans/2026-11-19-b.md)",
+                "",
+            ].join("\n"),
+        );
+        mkdirSync(join(voiceDir, "plans"));
+        writeFileSync(join(voiceDir, "plans", "2026-07-21-a.md"), "# Plan Title A\n");
+        writeFileSync(join(voiceDir, "plans", "2026-11-19-b.md"), "# Plan Title B\n");
+
+        // Project with `## Plans` in README.todo but no `plans/` folder on disk.
+        const emptyPlansDir = join(projectsDir, "empty-plans");
+        mkdirSync(emptyPlansDir);
+        writeFileSync(
+            join(emptyPlansDir, "README.todo"),
+            "# Empty\n\n## Core\n- [ ] task\n\n## Plans\n- [plans/stale.md](plans/stale.md)\n",
+        );
+
+        await store.loadWorkspaceTodos(projectsDir, 5, false);
+        const provider = new WorkspaceTodoTreeProvider(store, projectsDir);
+
+        for (const showCompleted of [false, true]) {
+            if (provider.isShowingCompleted() !== showCompleted) {
+                provider.toggleShowCompleted();
+            }
+            const roots = await provider.getChildren();
+            const voice = roots!.find((r) => r.text === "voice")!;
+            const planSections = voice.children!.filter((c) => c.text === "Plans");
+            expect(planSections).toHaveLength(1);
+            expect(planSections[0].children!.map((p) => p.kind)).toEqual(["plan", "plan"]);
+            expect(planSections[0].children!.map((p) => p.text)).toEqual([
+                "Plan Title A",
+                "Plan Title B",
+            ]);
+
+            const emptyPlans = roots!.find((r) => r.text === "empty-plans")!;
+            expect(emptyPlans.children!.find((c) => c.text === "Plans")).toBeUndefined();
+        }
+
+        // Priority & File views must not leak raw link lines from `## Plans`.
+        provider.setViewType("priority");
+        const priorityGroups = (await provider.getChildren())!;
+        const noneGroup = priorityGroups.find((g) => g.text === "None");
+        expect(
+            noneGroup?.children?.some((c) => c.text.includes("plans/2026-07-21-a.md")) ?? false,
+        ).toBe(false);
+
+        provider.setViewType("file");
+        const fileGroups = (await provider.getChildren())!;
+        const readmeGroup = fileGroups.find((g) => g.text === "README.todo");
+        expect(
+            readmeGroup?.children?.some((c) => c.text.includes("plans/2026-07-21-a.md")) ?? false,
+        ).toBe(false);
+    });
 });
 
 describe("WorkspaceTodoTreeProvider — Current Workspace section", () => {

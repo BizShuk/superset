@@ -8,6 +8,7 @@ import {
     basenameFallback,
     planInfoToTodoItem,
     makePlansSection,
+    excludeRawPlansSection,
     formatPlanCopyText,
     PLANS_DIR_NAME,
 } from "../src/todo/plansSource";
@@ -179,6 +180,21 @@ describe("plansSource", () => {
             expect(section.level).toBeUndefined();
             expect(section.children).toEqual(items);
             expect(section.description).toContain("plans");
+        });
+    });
+
+    describe("excludeRawPlansSection", () => {
+        it("drops markdown-authored Plans sections while keeping other sections and synthetic Plans", () => {
+            const synthetic = makePlansSection([]);
+            const input = [
+                { line: 2, text: "Core", kind: "section" as const, level: 2, checked: false, children: [] },
+                { line: 8, text: "Plans", kind: "section" as const, level: 2, checked: false, children: [] },
+                { line: 12, text: "plans", kind: "section" as const, level: 3, checked: false, children: [] },
+                synthetic,
+            ];
+            const out = excludeRawPlansSection(input);
+            expect(out.map((s) => s.text)).toEqual(["Core", "Plans"]);
+            expect(out[1]).toBe(synthetic);
         });
     });
 

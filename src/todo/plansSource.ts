@@ -155,6 +155,24 @@ export function makePlansSection(items: TodoItem[]): TodoItem {
 }
 
 /**
+ * Drop literal `## Plans` sections parsed from `README.todo`
+ * (`level !== undefined`). Tree providers append the synthetic
+ * `Plans` section from `scanPlans()` (which reads each plan file's H1
+ * title), so keeping the markdown-authored heading would show a
+ * duplicate `Plans` group with raw link paths.
+ */
+export function excludeRawPlansSection(items: TodoItem[]): TodoItem[] {
+    return items.filter(
+        (item) =>
+            !(
+                item.kind === "section" &&
+                item.level !== undefined &&
+                item.text.trim().toLowerCase() === "plans"
+            ),
+    );
+}
+
+/**
  * Format a plan row for the Copy command as two lines:
  *   <title>
  *   <absolute path>

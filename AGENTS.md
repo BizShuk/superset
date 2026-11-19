@@ -29,7 +29,7 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | 持續跑測試 | `npm run test:watch` |
 | 單獨打包 `.vsix` | `npm run build:vsix` |
 | 下載最新 GitHub Release 的 `superset.vsix` 並安裝到 `agy-ide` | `npm run deploy` |
-| 重新建置並把本地 `./superset-*.vsix` 安裝到 `agy-ide` | `npm run deploy:local` |
+| 重新建置並把本地 `./superset-*.vsix` 安裝到 `agy-ide` | `npm run install` |
 | 產生 Sessions 面板假資料 | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
 
 執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。現行設計與相容性問題集中於 [`docs/specs/2026-08-06-summary.md`](docs/specs/2026-08-06-summary.md)。

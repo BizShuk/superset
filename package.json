@@ -2,7 +2,7 @@
     "name": "superset",
     "displayName": "Superset",
     "description": "即時儀表板:偵測 VSCode 終端機事件(開關、切換、命令執行、輸出),彙整成結構化檢視;並提供 Markdown `tree` 區塊語法高亮與預覽渲染。",
-    "version": "0.53.0",
+    "version": "0.53.1",
     "scripts": {
         "dev": "tsc --watch",
         "test": "vitest run",
@@ -10,7 +10,7 @@
         "build": "npm run clean && npm ci && tsc && npm run build:vsix && bash scripts/verify-vsix.sh",
         "build:vsix": "vsce package",
         "deploy": "./scripts/deploy.sh",
-        "deploy:local": "npm run build && agy-ide --install-extension ./superset-*.vsix --force",
+        "install": "npm run build && agy-ide --install-extension ./superset-*.vsix --force",
         "clean": "rm -rf out && rm -f *.vsix",
         "run:setup": "./scripts/run.sh",
         "run:seed-sessions": "./scripts/seed-sessions.sh",

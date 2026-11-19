@@ -2,7 +2,12 @@ import * as vscode from "vscode";
 import type { TodoChange, TodoItem, TodoViewType } from "./types";
 import type { TodoStore } from "./todoStore";
 import { isArchivedSubsection, cleanTags, isArchivedTask } from "./parser";
-import { makePlansSection, planInfoToTodoItem } from "./plansSource";
+import {
+    PLANS_SECTION_LINE,
+    excludeRawPlansSection,
+    makePlansSection,
+    planInfoToTodoItem,
+} from "./plansSource";
 import { extractLink } from "../todoEngine/linkUtils";
 import {
     countPending,
@@ -250,7 +255,7 @@ export class TodoTreeProvider
         // plansSource.ts). Plans carry no priority / completed state
         // — render them with a file-code icon and a plain count
         // instead of the "N ◐" badge used by actionable sections.
-        if (element.text === "Plans") {
+        if (element.line === PLANS_SECTION_LINE && element.text === "Plans") {
             const item = new vscode.TreeItem(element.text);
             item.iconPath = new vscode.ThemeIcon("file-code");
             const planCount = element.children?.length ?? 0;
@@ -468,9 +473,11 @@ export class TodoTreeProvider
             return sortSiblings(element.children || []);
         }
 
-        const raw = this.store.getItems();
-        const completedFiltered = this.showCompleted ? raw : filterCompleted(raw);
-        const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
+        const filtered = filterStoreItems(
+            this.store.getItems(),
+            this.showCompleted,
+            this.enabledPriorities
+        );
 
         if (this.viewType === "priority") {
             // Plan items have no priority tag → fall through to the
@@ -497,6 +504,23 @@ export class TodoTreeProvider
         }
         return sortSiblings(filtered);
     }
+}
+
+/**
+ * Shared store-item filtering pipeline for both tree providers:
+ * strip any literal `## Plans` section from `README.todo`, apply
+ * completed hiding when inactive, and apply the active priority filter.
+ */
+export function filterStoreItems(
+    items: TodoItem[],
+    showCompleted: boolean,
+    enabledPriorities: Set<"P0" | "P1" | "P2">
+): TodoItem[] {
+    const withoutRawPlans = excludeRawPlansSection(items);
+    const completedFiltered = showCompleted
+        ? withoutRawPlans
+        : filterCompleted(withoutRawPlans);
+    return applyPriorityFilter(completedFiltered, enabledPriorities);
 }
 
 /**

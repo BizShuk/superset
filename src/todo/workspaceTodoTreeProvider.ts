@@ -3,8 +3,12 @@ import * as path from "path";
 import type { WorkspaceTodoItem } from "./types";
 import type { WorkspaceTodoStore } from "./workspaceTodoStore";
 import { isArchivedSubsection, cleanTags, isArchivedTask } from "./parser";
-import { filterCompleted, applyPriorityFilter } from "./todoTreeProvider";
-import { makePlansSection, planInfoToTodoItem } from "./plansSource";
+import { filterStoreItems } from "./todoTreeProvider";
+import {
+    PLANS_SECTION_LINE,
+    makePlansSection,
+    planInfoToTodoItem,
+} from "./plansSource";
 import {
     countPending,
     sortSiblings,
@@ -202,7 +206,7 @@ export class WorkspaceTodoTreeProvider
             // Synthetic "Plans" section: file-code icon and a plain
             // plan-count description (no `N ◐` badge since plans are
             // not actionable). Same handling as the local TODO panel.
-            if (element.text === "Plans") {
+            if (element.line === PLANS_SECTION_LINE && element.text === "Plans") {
                 const item = new vscode.TreeItem(element.text);
                 item.iconPath = new vscode.ThemeIcon("file-code");
                 const planCount = element.children?.length ?? 0;
@@ -370,10 +374,11 @@ export class WorkspaceTodoTreeProvider
             const projectName = this.workspaceRoot
                 ? path.relative(this.workspaceRoot, projectPath) || path.basename(projectPath)
                 : path.basename(projectPath);
-            const raw = store.getItems();
-
-            const completedFiltered = this.showCompleted ? raw : filterCompleted(raw);
-            const filtered = applyPriorityFilter(completedFiltered, this.enabledPriorities);
+            const filtered = filterStoreItems(
+                store.getItems(),
+                this.showCompleted,
+                this.enabledPriorities,
+            );
 
             // 附加 per-project Plans sub-section,語意對齊 `~/projects`
             // 一覽的同位置處理。
@@ -478,12 +483,9 @@ export class WorkspaceTodoTreeProvider
                 ? path.relative(this.workspaceRoot, projectPath) ||
                   path.basename(projectPath)
                 : path.basename(projectPath);
-            const raw = store.getItems();
-            const completedFiltered = this.showCompleted
-                ? raw
-                : filterCompleted(raw);
-            const filtered = applyPriorityFilter(
-                completedFiltered,
+            const filtered = filterStoreItems(
+                store.getItems(),
+                this.showCompleted,
                 this.enabledPriorities,
             );
             // Plan items survive filterCompleted / applyPriorityFilter
@@ -571,12 +573,9 @@ export class WorkspaceTodoTreeProvider
                 ? path.relative(this.workspaceRoot, projectPath) ||
                   path.basename(projectPath)
                 : path.basename(projectPath);
-            const raw = store.getItems();
-            const completedFiltered = this.showCompleted
-                ? raw
-                : filterCompleted(raw);
-            const filtered = applyPriorityFilter(
-                completedFiltered,
+            const filtered = filterStoreItems(
+                store.getItems(),
+                this.showCompleted,
                 this.enabledPriorities,
             );
             collectWorkspaceLeafItems(filtered, projectName, projectPath, flat);

@@ -819,4 +819,61 @@ describe("TodoTreeProvider View Type Groupings", () => {
         expect(root[1].children).toHaveLength(1);
         expect(root[1].children![0].text).toBe("Task with link [plans/abc.todo](plans/abc.todo)");
     });
+
+    it("suppresses a literal '## Plans' section in README.todo so only the synthetic Plans section appears", () => {
+        const store = makeStore([
+            {
+                line: 2,
+                text: "Core",
+                kind: "section",
+                level: 2,
+                checked: false,
+                children: [{ line: 3, text: "Task 1", kind: "checkbox", checked: false }],
+            },
+            {
+                line: 5,
+                text: "Plans",
+                kind: "section",
+                level: 2,
+                checked: false,
+                children: [
+                    { line: 6, text: "[plans/foo.md](plans/foo.md)", kind: "list", checked: false, parentSection: "Plans" },
+                ],
+            },
+        ]);
+        // @ts-ignore — private; test only
+        store.planItems = [
+            {
+                basename: "foo.md",
+                title: "Foo Plan Title",
+                filePath: "/tmp/todo-test/plans/foo.md",
+                mtimeMs: 0,
+            },
+        ];
+
+        const provider = new TodoTreeProvider(store);
+
+        for (const showCompleted of [false, true]) {
+            if (provider.isShowingCompleted() !== showCompleted) {
+                provider.toggleShowCompleted();
+            }
+            const root = provider.getChildren() as TodoItem[];
+            const planSections = root.filter((s) => s.text === "Plans");
+            expect(planSections).toHaveLength(1);
+            expect(planSections[0].children!.map((p) => p.kind)).toEqual(["plan"]);
+            expect(planSections[0].children!.map((p) => p.text)).toEqual(["Foo Plan Title"]);
+            expect(provider.getTreeItem(planSections[0]).contextValue).toBe("todoPlansSection");
+        }
+
+        // Priority & File views must not leak raw link items from `## Plans`.
+        provider.setViewType("priority");
+        const priorityGroups = provider.getChildren() as TodoItem[];
+        const noneGroup = priorityGroups.find((g) => g.text === "None");
+        expect(noneGroup?.children?.some((c) => c.text.includes("plans/foo.md")) ?? false).toBe(false);
+
+        provider.setViewType("file");
+        const fileGroups = provider.getChildren() as TodoItem[];
+        const readmeGroup = fileGroups.find((g) => g.text === "README.todo");
+        expect(readmeGroup?.children?.some((c) => c.text.includes("plans/foo.md")) ?? false).toBe(false);
+    });
 });
