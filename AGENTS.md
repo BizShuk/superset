@@ -20,17 +20,17 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 從 `superset/` 根目錄執行：
 
-| 動作 | 指令 |
-| --- | --- |
-| 依 lockfile 安裝相依套件 | `npm ci` |
-| 清理、編譯、打包並驗證 VSIX | `npm run build` |
-| 邊改邊編譯 | `npm run dev` |
-| 跑單元測試 | `npm test` |
-| 持續跑測試 | `npm run test:watch` |
-| 單獨打包 `.vsix` | `npm run build:vsix` |
-| 下載最新 GitHub Release 的 `superset.vsix` 並安裝到 `agy-ide` | `npm run deploy` |
-| 重新建置並把本地 `./superset-*.vsix` 安裝到 `agy-ide` | `npm run install` |
-| 產生 Sessions 面板假資料 | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
+| 動作                                                          | 指令                                                              |
+| ------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 依 lockfile 安裝相依套件                                      | `npm ci`                                                          |
+| 清理、編譯、打包並驗證 VSIX                                   | `npm run build`                                                   |
+| 邊改邊編譯                                                    | `npm run dev`                                                     |
+| 跑單元測試                                                    | `npm test`                                                        |
+| 持續跑測試                                                    | `npm run test:watch`                                              |
+| 單獨打包 `.vsix`                                              | `npm run build:vsix`                                              |
+| 下載最新 GitHub Release 的 `superset.vsix` 並安裝到 `agy-ide` | `npm run deploy`                                                  |
+| 重新建置並把本地 `./superset-*.vsix` 安裝到 `agy-ide`         | `npm run install`                                                 |
+| 產生 Sessions 面板假資料                                      | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
 
 執行環境以 `package.json#engines` 為準：VS Code `^1.93.0`、Node.js `>=20.0.0`。現行設計與相容性問題集中於 [`docs/specs/2026-08-06-summary.md`](docs/specs/2026-08-06-summary.md)。
 
@@ -38,22 +38,22 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 `src/extension.ts` 是 declarative composition root。它建立 active `PluginManager`、Tree View registry、diagnostic channel 與 native terminal capability，透過單一 `PluginContext` 注入所有 plugin；root `deactivate()` 反向停用 plugin 並釋放 root-owned resource。`PluginManager` 負責生命週期、錯誤隔離、disposable、reset handler、runtime diagnostics 與 Markdown extension 組合。Activation 不得主動 focus 或 reveal 任何 View —— 視窗開啟時保留 VS Code 自己恢復的 layout。
 
-| 模組 | 職責 | 主要入口 |
-| --- | --- | --- |
-| `src/plugin/` | Plugin lifecycle、context、TreeView registry、visibility boundary | `PluginManager` |
-| `src/diagnostics/` | Runtime metric keys 與 diagnostics Markdown renderer | `renderDiagnosticsMarkdown` |
-| `src/terminals/` | 終端機面板、高亮、群組、activity 偵測、原生 terminal 開啟 | `terminalsPlugin` |
-| `src/mermaid/` | Mermaid preview command（detection 已移除） | `registerMermaidPreviewCommand` |
-| `src/mdns/` | mDNS 服務發現與細節 | `mdnsPlugin` |
-| `src/topology/` | 網路拓撲掃描與 tree 轉換 | `topologyPlugin` |
-| `src/sessions/` | Agent session 清單與 summary markdown(讀 `sessiond` JSONL) | `sessionsPlugin` |
-| `src/todo/` | 當前 workspace 遞迴掃描的 `README.todo` 與 plans（含 workspace store / tree provider） | `todoPlugin` |
-| `src/git/` | Explorer GitHub URL | `gitPlugin` |
-| `src/diskUsage/` | 第一個 workspace volume 的 disk capacity Status Bar 顯示與週期刷新 | `diskUsagePlugin` |
-| `src/cliLauncher/` | 獨立「CLI」container：`Repo Path` 掃描與 agent terminals；`Change` 提供 grouped status、staging actions 與 Diff Editor | `cliLauncherPlugin` |
-| `src/installCommands.ts` | Default Project、License 與 Projects Setup commands | `registerInstallCommands` |
-| `src/treePreview/` | Markdown `tree` fence 渲染 | `treePreviewPlugin` |
-| `src/todoPreview/` | `README.todo` 預覽重組與 CSS 互動 | `todoPreviewPlugin` |
+| 模組                     | 職責                                                                                                                   | 主要入口                        |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `src/plugin/`            | Plugin lifecycle、context、TreeView registry、visibility boundary                                                      | `PluginManager`                 |
+| `src/diagnostics/`       | Runtime metric keys 與 diagnostics Markdown renderer                                                                   | `renderDiagnosticsMarkdown`     |
+| `src/terminals/`         | 終端機面板、高亮、群組、activity 偵測、原生 terminal 開啟                                                              | `terminalsPlugin`               |
+| `src/mermaid/`           | Mermaid preview command（detection 已移除）                                                                            | `registerMermaidPreviewCommand` |
+| `src/mdns/`              | mDNS 服務發現與細節                                                                                                    | `mdnsPlugin`                    |
+| `src/topology/`          | 網路拓撲掃描與 tree 轉換                                                                                               | `topologyPlugin`                |
+| `src/sessions/`          | Agent session 清單與 summary markdown(讀 `sessiond` JSONL)                                                             | `sessionsPlugin`                |
+| `src/todo/`              | 當前 workspace 遞迴掃描的 `README.todo` 與 plans（含 workspace store / tree provider）                                 | `todoPlugin`                    |
+| `src/git/`               | Explorer GitHub URL                                                                                                    | `gitPlugin`                     |
+| `src/diskUsage/`         | 第一個 workspace volume 的 disk capacity Status Bar 顯示與週期刷新                                                     | `diskUsagePlugin`               |
+| `src/cliLauncher/`       | 獨立「CLI」container：`Repo Path` 掃描與 agent terminals；`Change` 提供 grouped status、staging actions 與 Diff Editor | `cliLauncherPlugin`             |
+| `src/installCommands.ts` | Default Project、License 與 Projects Setup commands                                                                    | `registerInstallCommands`       |
+| `src/treePreview/`       | Markdown `tree` fence 渲染                                                                                             | `treePreviewPlugin`             |
+| `src/todoPreview/`       | `README.todo` 預覽重組與 CSS 互動                                                                                      | `todoPreviewPlugin`             |
 
 目前 module 行為、資料流與已遇到的問題集中於 [`docs/specs/2026-08-06-summary.md`](docs/specs/2026-08-06-summary.md)。
 
@@ -111,9 +111,9 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 
 ## 計劃與規格 (Plans vs Specs)
 
-| 目錄 | 狀態 | 規則 |
-| --- | --- | --- |
-| `plans/` | 未解問題 / 驗收中 | 目前集中於單一 dated `Refresh`；完成後刪除對應問題 |
+| 目錄          | 狀態                | 規則                                                            |
+| ------------- | ------------------- | --------------------------------------------------------------- |
+| `plans/`      | 未解問題 / 驗收中   | 目前集中於單一 dated `Refresh`；完成後刪除對應問題              |
 | `docs/specs/` | 現行設計 / 問題解法 | 目前集中於單一 dated `Summary`；被取代內容只由 Git history 追溯 |
 
 ## 測試 (Testing)
