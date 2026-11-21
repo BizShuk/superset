@@ -28,7 +28,8 @@ Superset 是 VS Code 擴充功能，提供終端機活動偵測與高亮、TODO 
 | 跑單元測試                                                    | `npm test`                                                        |
 | 持續跑測試                                                    | `npm run test:watch`                                              |
 | 單獨打包 `.vsix`                                              | `npm run build:vsix`                                              |
-| 下載最新 GitHub Release 的 `superset.vsix` 並安裝到 `agy-ide` | `npm run deploy`                                                  |
+| 重新建置並以 `$OVSX_API_TOKEN` 發佈 VSIX 到 Open VSX（`deploy` → `deploy:ovsx`） | `npm run deploy`                                                  |
+| 下載最新 GitHub Release 的 `superset.vsix` 並安裝到 `agy-ide` | `npm run install:remote`                                          |
 | 重新建置並把本地 `./superset-*.vsix` 安裝到 `agy-ide`         | `npm run install`                                                 |
 | 產生 Sessions 面板假資料                                      | `./scripts/seed-sessions.sh`（`-l` 只列出、`-c` 清除、`-h` 說明） |
 
